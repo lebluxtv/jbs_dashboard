@@ -17,10 +17,14 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
   background:linear-gradient(180deg,#111113,#0f0f10 60%);
 }
 .app-title{margin:0;font-size:20px;letter-spacing:.3px}
-.header-left{display:flex;align-items:center;gap:8px}
+.header-right{display:flex;align-items:center;gap:10px}
 .ws-status-text{color:var(--muted);font-size:14px}
-.header-right .legend{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
-.header-right .legend .dot{margin-right:3px}
+.icon-btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:28px;height:28px;border-radius:8px;border:1px solid var(--border);
+  background:var(--panel);color:#cfcfcf;cursor:pointer;transition:all .15s ease;
+}
+.icon-btn:hover{border-color:#3a3a3d;color:#fff;transform:translateY(-1px)}
 
 /* Tabs */
 .tabs{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:5}
@@ -47,49 +51,28 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .card.stretch{grid-column:span 12}
 .card h3{margin:0 0 8px 0;font-size:15px}
 
-/* KV + Logs */
-.kv{list-style:none;margin:0;padding:0;display:grid;gap:8px}
-.kv li{display:flex;align-items:center;justify-content:space-between;border-bottom:1px dashed #2a2a2d;padding:6px 0}
-.kv span{color:var(--muted)}
+/* Logs, lists, kv */
 .log{height:220px;overflow:auto;border:1px dashed #2a2a2d;padding:10px;border-radius:8px;font-family:var(--mono);font-size:12px;background:#121214}
 .log p{margin:0 0 6px 0;color:#cfd2d6}
+.qv-list{list-style:none;margin:0;padding:0;width:100%}
+.qv-list.big li{padding:8px 0}
+.qv-list li{padding:6px 0;border-bottom:1px dashed #2a2a2d}
+.qv-list li.ack{color:#777;background:rgba(255,255,255,0.03)}
+.qv-list.clickable li{cursor:pointer}
+.qv-kv{width:100%;display:grid;gap:10px}
+.qv-kv div{display:flex;align-items:center;justify-content:space-between}
+.qv-kv span{color:var(--muted)}
+.qv-ol{margin:6px 0 0 18px;padding:0}
+.qv-leader h3{margin:12px 0 8px 0;font-size:14px;color:#cfd2d6}
 
 /* Overview quick view grid */
-.overview-grid{
-  display:grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap:16px;
-}
-.qv-card{
-  grid-column: span 4;
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  box-shadow:var(--shadow);
-  cursor:pointer;
-  transition:transform .08s ease, border-color .12s ease;
-}
-.qv-card:hover{ transform: translateY(-2px); border-color:#3a3a3d; }
-.qv-head{
-  display:flex; align-items:center; justify-content:space-between;
-  padding:10px 12px; border-bottom:1px solid var(--border);
-}
-.qv-head h2{ margin:0; font-size:16px; }
-.qv-body{ padding:12px; min-height:220px; }
-.qv-foot{
-  padding:8px 12px; border-top:1px dashed var(--border);
-  text-align:center; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.6px;
-}
-.qv-list{ list-style:none; margin:0; padding:0; width:100%; }
-.qv-list.big li{ padding:8px 0; }
-.qv-list li{ padding:6px 0; border-bottom:1px dashed #2a2a2d; }
-.qv-list li.ack{ color:#777; background:rgba(255,255,255,0.03); }
-.qv-list.clickable li{ cursor:pointer; }
-.qv-kv{ width:100%; display:grid; gap:10px; }
-.qv-kv div{ display:flex; align-items:center; justify-content:space-between; }
-.qv-kv span{ color:var(--muted); }
-.qv-ol{ margin:6px 0 0 18px; padding:0; }
-.qv-leader h3{ margin:12px 0 8px 0; font-size:14px; color:#cfd2d6; }
+.overview-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+.qv-card{grid-column:span 4;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);cursor:pointer;transition:transform .08s ease,border-color .12s ease}
+.qv-card:hover{transform:translateY(-2px);border-color:#3a3a3d}
+.qv-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)}
+.qv-head h2{margin:0;font-size:16px}
+.qv-body{padding:12px;min-height:220px}
+.qv-foot{padding:8px 12px;border-top:1px dashed var(--border);text-align:center;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px}
 
 /* Text utils + footer */
 .muted{color:var(--muted)}
