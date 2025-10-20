@@ -38,9 +38,8 @@
     if (!listEl) return;
     const li = document.createElement('li');
     li.innerHTML = htmlText;
-    // click = griser / ack
+    // clic = griser / ack
     li.addEventListener('click', (ev) => {
-      // si on clique sur un lien dans le contenu, on ignore l'ack
       if ((ev.target.tagName || '').toLowerCase() === 'a') return;
       li.classList.toggle('ack');
       ev.stopPropagation();
@@ -50,7 +49,7 @@
       listEl.removeChild(listEl.firstElementChild);
     }
     listEl.prepend(li);
-    // garder une taille raisonnable (overview 10, pages 50)
+    // taille raisonnable (overview 10, pages 50)
     const limit = listEl.classList.contains('big') ? 50 : 10;
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
   }
@@ -60,7 +59,6 @@
     badgeEls.forEach(b=>{
       if (!b) return;
       b.textContent = String(v);
-      // sur l'overview, badge caché si 0
       if (b.id === 'qv-events-count') b.style.display = v>0 ? '' : 'none';
     });
   }
@@ -79,7 +77,15 @@
   const yearEl = $('#year');
   if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-  // ---------- Public API ----------
+  // ---------- Header WS ----------
+  function setWsIndicator(state){
+    const dot = $('#ws-dot');
+    const txt = $('#ws-status');
+    if (dot){ dot.classList.remove('on','off'); dot.classList.add(state ? 'on' : 'off'); }
+    if (txt) txt.textContent = state ? 'Connecté à Streamer.bot' : 'Déconnecté de Streamer.bot';
+  }
+
+  // ---------- Public API (Overview + pages) ----------
   window.DashboardStatus = {
     setStatus(name, isOn, count){
       setDot(`.dot-${name}`, !!isOn);
@@ -97,7 +103,6 @@
       }
       if (name==='tts'){
         const txt = $('#tts-status-text'); if (txt) txt.textContent = isOn ? 'Actif':'Inactif';
-        const st  = $('#tts-state');       if (st)  st.textContent  = isOn ? 'ON':'OFF';
       }
       if (name==='guess'){
         const txt = $('#guess-status-text'); if (txt) txt.textContent = isOn ? 'En cours':'En pause';
@@ -105,11 +110,10 @@
       }
     },
 
-    // Events (SUBS uniquement)
+    // Events = SUBS uniquement
     events: {
       addSub({user, tierLabel, months}){
         DashboardStatus.setStatus('events', true);
-        // compteur
         const badgeTab = $('.badge-events');
         const current = parseInt((badgeTab?.textContent || "0"), 10) || 0;
         incBadge([badgeTab, $('#events-counter'), $('#qv-events-count')], current+1);
@@ -122,7 +126,7 @@
       log(msg){ appendLog('#events-log', msg); }
     },
 
-    // TTS
+    // TTS lus
     tts: {
       addRead({user, message}){
         DashboardStatus.setStatus('tts', true);
@@ -150,7 +154,6 @@
         const a  = $('#guess-last-info'); if (a) a.textContent = text;
       },
       setLeaderboard(entries){
-        // entries: [{user, score}]
         const ol1 = $('#qv-guess-board');
         const ol2 = $('#guess-board');
         function fill(ol){
@@ -173,11 +176,11 @@
     showTab
   };
 
-  // ---------- WS password handling ----------
-  const PWD_KEY = "sb_ws_password_v1";
-  function getStoredPwd(){ try { return localStorage.getItem(PWD_KEY) || ""; } catch { return ""; } }
-  function setStoredPwd(p){ try { if (p) localStorage.setItem(PWD_KEY, p); } catch {} }
-  function clearStoredPwd(){ try { localStorage.removeItem(PWD_KEY); } catch {} }
+  // ---------- Mot de passe local ----------
+  const SB_PWD_KEY = "sb_ws_password_v1";
+  function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
+  function setStoredPwd(p){ try { if (p) localStorage.setItem(SB_PWD_KEY, p); } catch {} }
+  function clearStoredPwd(){ try { localStorage.removeItem(SB_PWD_KEY); } catch {} }
 
   (function checkResetPwd(){
     try {
@@ -190,7 +193,7 @@
     } catch {}
   })();
 
-  async function ensurePassword(){
+  async function ensureSbPassword(){
     let pwd = getStoredPwd();
     if (pwd && pwd.trim()) return pwd.trim();
     pwd = window.prompt("Entrez le mot de passe WebSocket de Streamer.bot :", "");
@@ -199,108 +202,101 @@
     return pwd.trim();
   }
 
-  // ---------- WebSocket ----------
-  const DEFAULT_WS = "ws://127.0.0.1:8080/"; // ta config locale actuelle
-  let ws = null;
-  let wsConnected = false;
-  let retryMs = 2000;
-  const MAX_RETRY = 10000;
+  // bouton cadenas → modifier le password
+  $('#pw-btn')?.addEventListener('click', async (e)=>{
+    e.stopPropagation();
+    clearStoredPwd();
+    setWsIndicator(false);
+    alert("Mot de passe effacé localement. La prochaine connexion va le redemander.");
+    // relance de la connexion
+    try { wsReconnectStop = true; } catch {}
+    initStreamerbotClient();
+  });
 
-  function setWsIndicator(state){
-    const dot = $('#ws-dot');
-    const txt = $('#ws-status');
-    if (dot){ dot.classList.remove('on','off'); dot.classList.add(state ? 'on' : 'off'); }
-    if (txt) txt.textContent = state ? 'Connecté à Streamer.bot' : 'Déconnecté de Streamer.bot';
-  }
+  // ---------- Connexion Streamer.bot (StreamerbotClient) ----------
+  let client = null;
+  let wsReconnectStop = false;
 
-  async function connectWS(){
-    let pwd = "";
-    try { pwd = await ensurePassword(); }
-    catch { setWsIndicator(false); return; }
-
+  async function initStreamerbotClient(){
+    let password;
     try {
-      ws = new WebSocket(DEFAULT_WS);
+      password = await ensureSbPassword();
+    } catch (e) {
+      setWsIndicator(false);
+      return;
+    }
 
-      ws.onopen = () => {
-        wsConnected = true;
+    client = new StreamerbotClient({
+      host:'127.0.0.1', port:8080, endpoint:'/', password,
+      subscribe:'*',
+
+      onConnect: async () => {
         setWsIndicator(true);
-        try { ws.send(JSON.stringify({ password: pwd })); } catch {}
-        DashboardStatus.tts.log("WS connecté");
-      };
 
-      ws.onmessage = (e) => {
-        let msg; try { msg = JSON.parse(e.data); } catch { return; }
-
-        // ------- TTS lus (payload existant) -------
-        if (msg.widget === "tts-reader-selection"){
-          const u = msg.selectedUser || msg.user || '';
-          const t = msg.message || '';
-          if (u && t) DashboardStatus.tts.addRead({ user: u, message: t });
-          else DashboardStatus.tts.log(`No selection: ${msg.reason || '—'}`);
-          return;
+        // viewers init (facultatif – gardé simple)
+        try {
+          const resp = await client.getActiveViewers();
+          const title = resp.viewers.map(v=>v.display).join(', ');
+          $('#ws-status').title = title || '';
+        } catch {
+          $('#ws-status').title = '';
         }
+      },
 
-        // ------- SUBS uniquement pour Events -------
-        // widgets possibles (défensif) : "sub", "twitch-sub", "twitch.subscription"
-        if (msg.widget === "sub" || msg.widget === "twitch-sub" || msg.widget === "twitch.subscription"){
-          // champs possibles selon tes scripts/action SB :
-          // user / userName / username
-          const user = msg.user || msg.userName || msg.username || '—';
+      onDisconnect: () => {
+        setWsIndicator(false);
+        if (!wsReconnectStop) setTimeout(initStreamerbotClient, 2000);
+      }
+    });
 
-          // tier: "1000" | "2000" | "3000" | "Prime" | 1/2/3
-          let tierRaw = (msg.tier ?? msg.plan ?? msg.tierId ?? msg.level ?? '').toString().toLowerCase();
+    // dispatcher des événements (préliminaire)
+    client.on('*', ({event,data}) => {
+      // console.log('[SB]', event, data);
+      // TTS lus (widget interne)
+      if (event.source === 'General' && data.widget === 'tts-reader-selection'){
+        const u = data.selectedUser || data.user || '';
+        const t = data.message || '';
+        if (u && t) DashboardStatus.tts.addRead({ user: u, message: t });
+        return;
+      }
+
+      // SUBS (Twitch)
+      if (event.source === 'Twitch'){
+        // on ne garde que les subs pour la “Events(n)”
+        if (event.type === 'Sub' || event.type === 'ReSub' || event.type === 'GiftSub'){
+          const user = data.displayName || data.user || data.userName || data.username || '—';
+          // tier (1000/2000/3000/Prime ou 1/2/3)
+          let tierRaw = (data.tier ?? data.plan ?? data.tierId ?? data.level ?? '').toString().toLowerCase();
           let tierLabel = 'T1';
           if (tierRaw.includes('3000') || tierRaw==='3') tierLabel='T3';
           else if (tierRaw.includes('2000') || tierRaw==='2') tierLabel='T2';
           else if (tierRaw.includes('prime')) tierLabel='Prime';
           else tierLabel='T1';
-
-          // mois cumulés: cumulativeMonths | months | streak | totalMonths
-          const months = Number(msg.cumulativeMonths ?? msg.months ?? msg.streak ?? msg.totalMonths ?? 0) || 0;
-
+          // mois cumulés
+          const months = Number(data.cumulativeMonths ?? data.months ?? data.streak ?? data.totalMonths ?? 0) || 0;
           DashboardStatus.events.addSub({ user, tierLabel, months });
           return;
         }
+      }
 
-        // ------- Guess (structure prête) -------
-        if (msg.widget === "guess-status"){
-          DashboardStatus.guess.setStatus(!!msg.running);
-          return;
-        }
-        if (msg.widget === "guess-found"){
-          DashboardStatus.guess.setLastFound({ by: msg.by, game: msg.game });
-          return;
-        }
-        if (msg.widget === "guess-leaderboard"){
-          const entries = Array.isArray(msg.entries) ? msg.entries : [];
+      // Guess — quand tu broadcastes :
+      if (event.source === 'General'){
+        if (data.widget === 'guess-status'){ DashboardStatus.guess.setStatus(!!data.running); return; }
+        if (data.widget === 'guess-found'){ DashboardStatus.guess.setLastFound({ by:data.by, game:data.game }); return; }
+        if (data.widget === 'guess-leaderboard'){
+          const entries = Array.isArray(data.entries) ? data.entries : [];
           DashboardStatus.guess.setLeaderboard(entries);
           return;
         }
-
-        // autres widgets → ignorer en overview préliminaire
-      };
-
-      ws.onclose = () => {
-        wsConnected = false;
-        setWsIndicator(false);
-        setTimeout(connectWS, retryMs);
-        retryMs = Math.min(retryMs * 2, MAX_RETRY);
-      };
-
-      ws.onerror = () => {
-        wsConnected = false;
-        setWsIndicator(false);
-        try { ws.close(); } catch {}
-      };
-
-    } catch (err){
-      wsConnected = false;
-      setWsIndicator(false);
-      setTimeout(connectWS, retryMs);
-      retryMs = Math.min(retryMs * 2, MAX_RETRY);
-    }
+      }
+    });
   }
 
-  connectWS();
+  function setWsIndicator(state){ setWsIndicator = setWsIndicator; } // no-op to avoid hoist issue
+  const setWsIndicatorRef = setWsIndicator; // keep ref
+  function setWsIndicator(state){ setWsIndicatorRef(state); }
+
+  // boot
+  initStreamerbotClient();
 
 })();
