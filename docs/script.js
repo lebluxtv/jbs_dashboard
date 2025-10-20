@@ -246,64 +246,101 @@
     reconnectTimer = setTimeout(initStreamerbotClient, delay);
   }
 
-  async function initStreamerbotClient(){
-    // UMD chargé ?
-    if (typeof StreamerbotClient === 'undefined'){
-      setWsIndicator(false);
-      const el = $('#ws-status'); if (el) el.textContent = 'Lib @streamerbot/client introuvable';
-      return;
-    }
+async function initStreamerbotClient(){
+  // Lib UMD du CDN chargée ?
+  if (typeof StreamerbotClient === 'undefined'){
+    setWsIndicator(false);
+    const el = $('#ws-status'); if (el) el.textContent = 'Lib @streamerbot/client introuvable';
+    return;
+  }
 
-    // mot de passe (localStorage/prompt)
-    let password;
-    try {
-      password = await ensureSbPassword();
-    } catch {
-      setWsIndicator(false);
-      return;
-    }
+  // 1) Récupération / saisie du mot de passe
+  let password;
+  try {
+    password = await ensureSbPassword(); // prompt si absent/forcé
+  } catch {
+    setWsIndicator(false);
+    $('#ws-status').textContent = 'Mot de passe requis';
+    return;
+  }
 
-    try {
-      // ferme proprement une ancienne instance si besoin
-      try { await client?.disconnect?.(); } catch {}
+  // 2) Ferme une session précédente si besoin
+  try { await client?.disconnect?.(); } catch {}
 
-      client = new StreamerbotClient({
-        // IMPORTANT : schéma WS clair comme la version d’origine
-        host: '127.0.0.1',
-        port: 8080,
-        endpoint: '/',
-        password,                 // auth gérée par la lib
-        subscribe: '*',           // s’abonner à tout (comme avant)
+  // 3) Branche des handlers détaillés pour diagnostiquer
+  const updateErrorInfo = (label, extra='') => {
+    const el = $('#ws-status');
+    if (el) el.textContent = label + (extra ? ` (${extra})` : '');
+  };
 
-        onConnect: async () => {
-          reconnectAttempts = 0;
-          setWsIndicator(true);
+  try {
+    client = new StreamerbotClient({
+      // >>> mêmes paramètres qu’avant, mais explicités
+      scheme: 'ws',
+      host  : '127.0.0.1',
+      port  : 8080,
+      endpoint: '/',
+      password,
+      subscribe: '*',
+      logLevel: 'warn', // baisse le bruit
 
-          // Option : afficher les viewers en tooltip
-          try {
-            const resp = await client.getActiveViewers();
-            $('#ws-status').title = (resp.viewers || []).map(v=>v.display).join(', ') || '';
-          } catch { const s = $('#ws-status'); if (s) s.title = ''; }
-        },
+      onConnect: async () => {
+        reconnectAttempts = 0;
+        setWsIndicator(true);
+        updateErrorInfo('Connecté à Streamer.bot');
 
-        onDisconnect: () => {
-          setWsIndicator(false);
-          reconnectAttempts++;
-          // après quelques échecs, on force une nouvelle saisie du mdp
-          if (reconnectAttempts >= 3) clearStoredPwd();
-          scheduleReconnect();
-        },
+        // petit ping info (comme avant)
+        try {
+          const resp = await client.getActiveViewers();
+          $('#ws-status').title = (resp.viewers || []).map(v=>v.display).join(', ') || '';
+        } catch { const s = $('#ws-status'); if (s) s.title=''; }
+      },
 
-        onError: (err) => {
-          console.warn('[Streamer.bot] onError', err);
+      onDisconnect: (evt) => {
+        setWsIndicator(false);
+        const extra = evt?.code ? `code ${evt.code}` : 'fermeture';
+        updateErrorInfo('Déconnecté', extra);
+
+        // Si on boucle trop -> on efface le mdp pour re-demander
+        reconnectAttempts++;
+        if (reconnectAttempts >= 3) {
+          clearStoredPwd();
+          updateErrorInfo('Re-saisie du mot de passe requise');
         }
-      });
+        scheduleReconnect();
+      },
 
-    } catch (e){
+      onError: (err) => {
+        // Erreur générique socket ; on essaie d’être plus utile
+        updateErrorInfo('Erreur WebSocket');
+        console.warn('[Streamer.bot] onError', err);
+      }
+    });
+
+    // 4) Teste la handshake/autorisation explicitement pour remonter l’info
+    //    -> si authent KO, on efface le mdp et on re-prompt 1 seule fois.
+    try {
+      // getInfo() passe si l’instance est accessible (auth ok ou auth non imposée)
+      const info = await client.getInfo();
+      if (info?.status !== 'ok') throw new Error('info-not-ok');
+    } catch (e) {
+      // Auth probablement requise et invalide
+      console.warn('[Streamer.bot] Problème d’authentification ou handshake', e);
       setWsIndicator(false);
-      reconnectAttempts++;
-      scheduleReconnect();
-      return;
+      updateErrorInfo('Échec authentification');
+
+      // On tente UNE re-saisie immédiate
+      try {
+        clearStoredPwd();
+        const newPwd = await ensureSbPassword(true);
+        // On relance proprement
+        await client.disconnect().catch(()=>{});
+        setTimeout(initStreamerbotClient, 50);
+        return;
+      } catch {
+        // utilisateur a annulé : on reste déconnecté
+        return;
+      }
     }
 
     // ---------------------- Dispatcher d’événements ----------------------
