@@ -1,7 +1,9 @@
-(function(){
+(function () {
   "use strict";
 
-  // ========== Helpers UI ==========
+  /* ========================================================================
+   * Helpers UI
+   * ===================================================================== */
   const $  = (s, root=document) => root.querySelector(s);
   const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
 
@@ -39,17 +41,20 @@
     const li = document.createElement('li');
     li.innerHTML = htmlText;
 
+    // clic = marquer comme lu (gris)
     li.addEventListener('click', (ev) => {
       if ((ev.target.tagName || '').toLowerCase() === 'a') return;
       li.classList.toggle('ack');
       ev.stopPropagation();
     });
 
+    // supprime le placeholder "muted" si présent
     if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')) {
       listEl.removeChild(listEl.firstElementChild);
     }
     listEl.prepend(li);
 
+    // limite d’items (10 par défaut, 50 pour les listes .big)
     const limit = listEl.classList.contains('big') ? 50 : 10;
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
   }
@@ -63,7 +68,9 @@
     });
   }
 
-  // ========== Tabs ==========
+  /* ========================================================================
+   * Tabs
+   * ===================================================================== */
   $$('.tab').forEach(btn => btn.addEventListener('click', () => showTab(btn.dataset.tab)));
   (function initTab(){
     let initial = 'overview';
@@ -71,12 +78,15 @@
     showTab(initial);
   })();
 
+  // cartes “quick view” → ouverture de l’onglet correspondant
   $$('.qv-card').forEach(c => c.addEventListener('click', () => showTab(c.dataset.goto)));
 
   const yearEl = $('#year');
   if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-  // ========== Header WS indicator ==========
+  /* ========================================================================
+   * En-tête : voyant WebSocket
+   * ===================================================================== */
   function setWsIndicator(state){
     const dot = $('#ws-dot');
     const txt = $('#ws-status');
@@ -84,10 +94,13 @@
     if (txt) txt.textContent = state ? 'Connecté à Streamer.bot' : 'Déconnecté de Streamer.bot';
   }
 
-  // ========== Public API (Overview + pages) ==========
+  /* ========================================================================
+   * API publique (utilisée par l’index + les sous-pages)
+   * ===================================================================== */
   window.DashboardStatus = {
     setStatus(name, isOn, count){
       setDot(`.dot-${name}`, !!isOn);
+
       if (name==='events'){
         const txt = $('#events-status-text'); if (txt) txt.textContent = isOn ? 'Actif':'Inactif';
         const badgeTab = $('.badge-events');
@@ -95,19 +108,23 @@
         const badgeQV  = $('#qv-events-count');
         if (typeof count === 'number') incBadge([badgeTab,badgeHdr,badgeQV], count);
       }
+
       if (name==='tts'){
         const txt = $('#tts-status-text'); if (txt) txt.textContent = isOn ? 'Actif':'Inactif';
       }
+
       if (name==='guess'){
         const txt = $('#guess-status-text'); if (txt) txt.textContent = isOn ? 'En cours':'En pause';
         const qv  = $('#qv-guess-status');   if (qv)  qv.textContent = isOn ? 'En cours':'En pause';
       }
     },
 
-    // Events = SUBS uniquement
+    // --------------------------- Events (SUBS) ---------------------------
     events: {
       addSub({user, tierLabel, months}){
         DashboardStatus.setStatus('events', true);
+
+        // incrémente badges
         const badgeTab = $('.badge-events');
         const current = parseInt((badgeTab?.textContent || "0"), 10) || 0;
         incBadge([badgeTab, $('#events-counter'), $('#qv-events-count')], current+1);
@@ -120,7 +137,7 @@
       log(msg){ appendLog('#events-log', msg); }
     },
 
-    // TTS lus
+    // --------------------------- TTS (derniers lus) ----------------------
     tts: {
       addRead({user, message}){
         DashboardStatus.setStatus('tts', true);
@@ -134,7 +151,7 @@
       log(msg){ appendLog('#tts-log', msg); }
     },
 
-    // Guess
+    // --------------------------- Guess The Game --------------------------
     guess: {
       setStatus(running){
         DashboardStatus.setStatus('guess', !!running);
@@ -170,7 +187,9 @@
     showTab
   };
 
-  // ========== Password local ==========
+  /* ========================================================================
+   * Password local (jamais en dur dans le code)
+   * ===================================================================== */
   const SB_PWD_KEY = "sb_ws_password_v1";
   const getQS = (name) => { try { return new URLSearchParams(location.search).get(name); } catch { return null; } };
 
@@ -178,7 +197,7 @@
   function setStoredPwd(p){ try { if (p) localStorage.setItem(SB_PWD_KEY, p); } catch {} }
   function clearStoredPwd(){ try { localStorage.removeItem(SB_PWD_KEY); } catch {} }
 
-  // Reset via URL
+  // Reset via URL (?resetpwd=1)
   (function checkResetPwd(){
     if (getQS('resetpwd') === '1'){
       clearStoredPwd();
@@ -194,6 +213,8 @@
     const input = window.prompt("Entrez le mot de passe WebSocket de Streamer.bot :", "");
     if (!input || !input.trim()) throw new Error("Aucun mot de passe fourni.");
     setStoredPwd(input.trim());
+    // retire le flag askpwd si présent
+    if (ask) history.replaceState(null, '', location.pathname);
     return input.trim();
   }
 
@@ -210,13 +231,17 @@
     } catch {}
   });
 
-  // ========== Connexion Streamer.bot (lib officielle, comme avant) ==========
+  /* ========================================================================
+   * Connexion Streamer.bot (lib officielle via CDN @streamerbot/client)
+   * NOTE : on reste en WS clair (ws://127.0.0.1:8080) — il faut autoriser
+   *        le “insecure content” pour votre domaine GitHub Pages une fois.
+   * ===================================================================== */
   let client = null;
   let reconnectAttempts = 0;
   let reconnectTimer = null;
 
   function scheduleReconnect(){
-    const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempts)); // 1s,2s,4s,...30s
+    const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempts)); // 1s, 2s, 4s … 30s
     if (reconnectTimer) clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(initStreamerbotClient, delay);
   }
@@ -225,10 +250,11 @@
     // UMD chargé ?
     if (typeof StreamerbotClient === 'undefined'){
       setWsIndicator(false);
-      $('#ws-status').textContent = 'Lib @streamerbot/client introuvable';
+      const el = $('#ws-status'); if (el) el.textContent = 'Lib @streamerbot/client introuvable';
       return;
     }
 
+    // mot de passe (localStorage/prompt)
     let password;
     try {
       password = await ensureSbPassword();
@@ -238,32 +264,41 @@
     }
 
     try {
+      // ferme proprement une ancienne instance si besoin
+      try { await client?.disconnect?.(); } catch {}
+
       client = new StreamerbotClient({
-        host:'127.0.0.1',
-        port:8080,
-        endpoint:'/',
-        password,          // <= auth gérée par la lib, comme ton ancien code
-        subscribe:'*',
+        // IMPORTANT : schéma WS clair comme la version d’origine
+        host: '127.0.0.1',
+        port: 8080,
+        endpoint: '/',
+        password,                 // auth gérée par la lib
+        subscribe: '*',           // s’abonner à tout (comme avant)
 
         onConnect: async () => {
           reconnectAttempts = 0;
           setWsIndicator(true);
 
-          // Optionnel : info viewers dans title
+          // Option : afficher les viewers en tooltip
           try {
             const resp = await client.getActiveViewers();
             $('#ws-status').title = (resp.viewers || []).map(v=>v.display).join(', ') || '';
-          } catch { $('#ws-status').title = ''; }
+          } catch { const s = $('#ws-status'); if (s) s.title = ''; }
         },
 
         onDisconnect: () => {
           setWsIndicator(false);
           reconnectAttempts++;
-          // si on boucle trop, on force une reprompt
+          // après quelques échecs, on force une nouvelle saisie du mdp
           if (reconnectAttempts >= 3) clearStoredPwd();
           scheduleReconnect();
+        },
+
+        onError: (err) => {
+          console.warn('[Streamer.bot] onError', err);
         }
       });
+
     } catch (e){
       setWsIndicator(false);
       reconnectAttempts++;
@@ -271,9 +306,9 @@
       return;
     }
 
-    // Dispatcher d'événements (même logique que ton implémentation)
-    client.on('*', ({event,data}) => {
-      // --- TTS lus ---
+    // ---------------------- Dispatcher d’événements ----------------------
+    client.on('*', ({event, data}) => {
+      // TTS lus (émis par tes actions : General / widget: 'tts-reader-selection')
       if (event.source === 'General' && data?.widget === 'tts-reader-selection'){
         const u = data.selectedUser || data.user || '';
         const t = data.message || '';
@@ -281,25 +316,33 @@
         return;
       }
 
-      // --- SUBS ---
+      // SUBS / RESUB / GIFTSUB (Twitch)
       if (event.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
         const d = data || {};
         const user = d.displayName || d.user || d.userName || d.username || '—';
-        let tierRaw = (d.tier ?? d.plan ?? d.tierId ?? d.level ?? '').toString().toLowerCase();
+
+        let raw = (d.tier ?? d.plan ?? d.tierId ?? d.level ?? '').toString().toLowerCase();
         let tierLabel = 'T1';
-        if (tierRaw.includes('3000') || tierRaw==='3') tierLabel='T3';
-        else if (tierRaw.includes('2000') || tierRaw==='2') tierLabel='T2';
-        else if (tierRaw.includes('prime')) tierLabel='Prime';
-        else tierLabel='T1';
+        if (raw.includes('3000') || raw==='3') tierLabel='T3';
+        else if (raw.includes('2000') || raw==='2') tierLabel='T2';
+        else if (raw.includes('prime')) tierLabel='Prime';
+
         const months = Number(d.cumulativeMonths ?? d.months ?? d.streak ?? d.totalMonths ?? 0) || 0;
+
         DashboardStatus.events.addSub({ user, tierLabel, months });
         return;
       }
 
-      // --- Guess (quand tu broadcastes ces events General) ---
+      // Guess (quand tes actions envoient ces événements General)
       if (event.source === 'General'){
-        if (data?.widget === 'guess-status'){ DashboardStatus.guess.setStatus(!!data.running); return; }
-        if (data?.widget === 'guess-found'){ DashboardStatus.guess.setLastFound({ by:data.by, game:data.game }); return; }
+        if (data?.widget === 'guess-status'){
+          DashboardStatus.guess.setStatus(!!data.running);
+          return;
+        }
+        if (data?.widget === 'guess-found'){
+          DashboardStatus.guess.setLastFound({ by: data.by, game: data.game });
+          return;
+        }
         if (data?.widget === 'guess-leaderboard'){
           const entries = Array.isArray(data.entries) ? data.entries : [];
           DashboardStatus.guess.setLeaderboard(entries);
@@ -309,7 +352,6 @@
     });
   }
 
-  // Démarrage
+  // Lancement
   initStreamerbotClient();
-
 })();
