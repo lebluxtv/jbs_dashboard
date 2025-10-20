@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>JBS - Dashboard</title>
+  <meta name="color-scheme" content="dark" />
+  <link rel="icon" href="favicon.ico" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <span id="ws-dot" class="dot off" aria-hidden="true"></span>
+      <span id="ws-status" class="ws-status-text">Déconnecté de Streamer.bot</span>
+    </div>
+    <h1 class="app-title">JBS - Dashboard</h1>
+    <div class="header-right">
+      <div class="legend">
+        <span class="dot on" aria-hidden="true"></span><span>Actif</span>
+        <span class="dot off" aria-hidden="true"></span><span>Inactif</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab active" data-tab="overview" role="tab" aria-selected="true" aria-controls="tab-overview">
+      <span>Overview</span>
+    </button>
+    <button class="tab" data-tab="events" role="tab" aria-selected="false" aria-controls="tab-events">
+      <span class="dot dot-events off" aria-hidden="true"></span>
+      <span>Events Checker</span>
+      <span class="badge badge-events" aria-label="Compteur d'événements" title="Compteur d'événements" style="display:none">0</span>
+    </button>
+    <button class="tab" data-tab="tts" role="tab" aria-selected="false" aria-controls="tab-tts">
+      <span class="dot dot-tts off" aria-hidden="true"></span>
+      <span>TTS Reader</span>
+    </button>
+    <button class="tab" data-tab="guess" role="tab" aria-selected="false" aria-controls="tab-guess">
+      <span class="dot dot-guess off" aria-hidden="true"></span>
+      <span>Guess The Game</span>
+    </button>
+  </nav>
+
+  <!-- Panels -->
+  <main class="tab-panels">
+    <!-- Overview (quick views) -->
+    <section id="tab-overview" class="tab-panel" role="tabpanel" style="display:block">
+      <div class="overview-grid">
+        <!-- EVENTS quick view -->
+        <article class="qv-card" data-goto="events" title="Ouvrir Events Checker">
+          <header class="qv-head">
+            <h2>Events <span id="qv-events-count" class="badge" style="display:none">0</span></h2>
+            <span class="dot dot-events off"></span>
+          </header>
+          <div class="qv-body">
+            <ul class="qv-list clickable" id="qv-events-list">
+              <li class="muted">Aucun sub récent</li>
+            </ul>
+          </div>
+          <footer class="qv-foot"><span>quick view</span></footer>
+        </article>
+
+        <!-- TTS quick view -->
+        <article class="qv-card" data-goto="tts" title="Ouvrir TTS Reader">
+          <header class="qv-head">
+            <h2>TTS</h2>
+            <span class="dot dot-tts off"></span>
+          </header>
+          <div class="qv-body">
+            <ul class="qv-list" id="qv-tts-list">
+              <li class="muted">Aucun TTS lu</li>
+            </ul>
+          </div>
+          <footer class="qv-foot"><span>quick view</span></footer>
+        </article>
+
+        <!-- Guess quick view -->
+        <article class="qv-card" data-goto="guess" title="Ouvrir Guess The Game">
+          <header class="qv-head">
+            <h2>Guess</h2>
+            <span class="dot dot-guess off"></span>
+          </header>
+          <div class="qv-body">
+            <div class="qv-kv">
+              <div><span>Statut :</span><strong id="qv-guess-status">En pause</strong></div>
+              <div><span>Dernier trouvé :</span><strong id="qv-guess-last">—</strong></div>
+            </div>
+            <div class="qv-leader">
+              <h3>Leaderboard</h3>
+              <ol id="qv-guess-board" class="qv-ol">
+                <li class="muted">Aucune donnée</li>
+              </ol>
+            </div>
+          </div>
+          <footer class="qv-foot"><span>quick view</span></footer>
+        </article>
+      </div>
+    </section>
+
+    <!-- Events Checker (placeholder à enrichir plus tard) -->
+    <section id="tab-events" class="tab-panel" role="tabpanel">
+      <div class="panel-head">
+        <h2>Events Checker</h2>
+        <div class="status-inline">
+          <span class="dot dot-events off" aria-hidden="true"></span>
+          <span id="events-status-text">Inactif</span>
+          <span class="badge badge-events" id="events-counter" title="Compteur d'événements">0</span>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="card stretch">
+          <h3>Subs récents</h3>
+          <ul class="qv-list clickable big" id="events-subs-list">
+            <li class="muted">Aucun sub</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- TTS Reader (léger mais fonctionnel) -->
+    <section id="tab-tts" class="tab-panel" role="tabpanel">
+      <div class="panel-head">
+        <h2>TTS Reader</h2>
+        <div class="status-inline">
+          <span class="dot dot-tts off" aria-hidden="true"></span>
+          <span id="tts-status-text">Inactif</span>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="card stretch">
+          <h3>TTS lus récemment</h3>
+          <ul class="qv-list big" id="tts-read-list">
+            <li class="muted">Aucun TTS</li>
+          </ul>
+        </div>
+        <div class="card stretch">
+          <h3>Journal</h3>
+          <div id="tts-log" class="log"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Guess The Game -->
+    <section id="tab-guess" class="tab-panel" role="tabpanel">
+      <div class="panel-head">
+        <h2>Guess The Game</h2>
+        <div class="status-inline">
+          <span class="dot dot-guess off" aria-hidden="true"></span>
+          <span id="guess-status-text">En pause</span>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <h3>Statut</h3>
+          <div id="guess-status-info" class="muted">En pause</div>
+        </div>
+        <div class="card">
+          <h3>Dernier jeu trouvé</h3>
+          <div id="guess-last-info" class="muted">—</div>
+        </div>
+        <div class="card stretch">
+          <h3>Leaderboard</h3>
+          <ol id="guess-board" class="qv-ol">
+            <li class="muted">Aucune donnée</li>
+          </ol>
+        </div>
+        <div class="card stretch">
+          <h3>Journal</h3>
+          <div id="guess-log" class="log"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <span class="muted">© <span id="year"></span> JBS</span>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
