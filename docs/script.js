@@ -85,10 +85,6 @@
   window.DashboardStatus = {
     setStatus(name, isOn, count){
       setDot(`.dot-${name}`, !!isOn);
-      if (name==='events') setDot(`#tab-overview .dot-events`, !!isOn);
-      if (name==='tts')    setDot(`#tab-overview .dot-tts`, !!isOn);
-      if (name==='guess')  setDot(`#tab-overview .dot-guess`, !!isOn);
-
       if (name==='events'){
         const txt = $('#events-status-text'); if (txt) txt.textContent = isOn ? 'Actif':'Inactif';
         const badgeTab = $('.badge-events');
@@ -111,7 +107,6 @@
         const badgeTab = $('.badge-events');
         const current = parseInt((badgeTab?.textContent || "0"), 10) || 0;
         incBadge([badgeTab, $('#events-counter'), $('#qv-events-count')], current+1);
-
         const txt = `<strong>${user}</strong> — ${tierLabel}${months>0 ? ` • ${months} mois` : ''}`;
         prependListItem($('#qv-events-list'), txt);
         prependListItem($('#events-subs-list'), txt);
@@ -170,44 +165,47 @@
 
   // ---------- password storage ----------
   const SB_PWD_KEY = "sb_ws_password_v1";
+  const getQS = (name) => { try { return new URLSearchParams(location.search).get(name); } catch { return null; } };
+
   function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
   function setStoredPwd(p){ try { if (p) localStorage.setItem(SB_PWD_KEY, p); } catch {} }
   function clearStoredPwd(){ try { localStorage.removeItem(SB_PWD_KEY); } catch {} }
 
+  // Reset via URL
   (function checkResetPwd(){
-    try {
-      const qs = new URLSearchParams(location.search);
-      if (qs.get('resetpwd') === '1'){
-        clearStoredPwd();
-        history.replaceState(null, '', location.pathname);
-        alert('Mot de passe Streamer.bot effacé localement. Rechargez et saisissez-le à nouveau.');
-      }
-    } catch {}
+    if (getQS('resetpwd') === '1'){
+      clearStoredPwd();
+      history.replaceState(null, '', location.pathname);
+      alert('Mot de passe Streamer.bot effacé localement. Rechargez et saisissez-le à nouveau.');
+    }
   })();
 
-  async function ensureSbPassword(){
+  async function ensureSbPassword(forcePrompt = false){
+    const ask = getQS('askpwd') === '1';
     let pwd = getStoredPwd();
-    if (pwd && pwd.trim()) return pwd.trim();
-    pwd = window.prompt("Entrez le mot de passe WebSocket de Streamer.bot :", "");
-    if (!pwd || !pwd.trim()) throw new Error("Aucun mot de passe fourni.");
-    setStoredPwd(pwd.trim());
-    return pwd.trim();
+    if (!forcePrompt && !ask && pwd && pwd.trim()) return pwd.trim();
+    const input = window.prompt("Entrez le mot de passe WebSocket de Streamer.bot :", "");
+    if (!input || !input.trim()) throw new Error("Aucun mot de passe fourni.");
+    setStoredPwd(input.trim());
+    return input.trim();
   }
 
+  // Bouton cadenas → redemande le mdp
   $('#pw-btn')?.addEventListener('click', async (e)=>{
     e.stopPropagation();
-    clearStoredPwd();
-    setWsIndicator(false);
-    alert("Mot de passe effacé localement. La prochaine connexion va le redemander.");
-    if (client) try { client.disconnect?.(); } catch {}
-    setTimeout(initStreamerbotClient, 100);
+    try {
+      clearStoredPwd();
+      const pwd = await ensureSbPassword(true);
+      try { client?.disconnect?.(); } catch {}
+      setWsIndicator(false);
+      setTimeout(initStreamerbotClient, 100);
+    } catch {}
   });
 
   // ---------- Streamer.bot client ----------
   let client = null;
 
   async function initStreamerbotClient(){
-    // lib présente ?
     if (typeof StreamerbotClient === 'undefined'){
       setWsIndicator(false);
       $('#ws-status').textContent = 'Lib @streamerbot/client introuvable';
@@ -223,7 +221,10 @@
     }
 
     client = new StreamerbotClient({
-      host:'127.0.0.1', port:8080, endpoint:'/', password,
+      host:'127.0.0.1',
+      port:8080,
+      endpoint:'/',
+      password,
       subscribe:'*',
 
       onConnect: async () => {
@@ -231,20 +232,22 @@
         try {
           const resp = await client.getActiveViewers();
           $('#ws-status').title = (resp.viewers || []).map(v=>v.display).join(', ') || '';
-        } catch {
-          $('#ws-status').title = '';
-        }
+        } catch { $('#ws-status').title = ''; }
       },
 
       onDisconnect: () => {
         setWsIndicator(false);
-        setTimeout(initStreamerbotClient, 2000);
+        // Force reprompt si la reconnexion échoue
+        setTimeout(async ()=>{
+          clearStoredPwd();
+          initStreamerbotClient();
+        }, 2000);
       }
     });
 
-    // events
+    // Events
     client.on('*', ({event,data}) => {
-      // TTS lus
+      // --- TTS lus ---
       if (event.source === 'General' && data.widget === 'tts-reader-selection'){
         const u = data.selectedUser || data.user || '';
         const t = data.message || '';
@@ -252,9 +255,9 @@
         return;
       }
 
-      // SUBS
+      // --- SUBS ---
       if (event.source === 'Twitch'){
-        if (event.type === 'Sub' || event.type === 'ReSub' || event.type === 'GiftSub'){
+        if (['Sub','ReSub','GiftSub'].includes(event.type)){
           const user = data.displayName || data.user || data.userName || data.username || '—';
           let tierRaw = (data.tier ?? data.plan ?? data.tierId ?? data.level ?? '').toString().toLowerCase();
           let tierLabel = 'T1';
@@ -268,7 +271,7 @@
         }
       }
 
-      // Guess (quand tu broadcastes)
+      // --- Guess ---
       if (event.source === 'General'){
         if (data.widget === 'guess-status'){ DashboardStatus.guess.setStatus(!!data.running); return; }
         if (data.widget === 'guess-found'){ DashboardStatus.guess.setLastFound({ by:data.by, game:data.game }); return; }
