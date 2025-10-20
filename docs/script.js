@@ -213,7 +213,6 @@
     const input = window.prompt("Entrez le mot de passe WebSocket de Streamer.bot :", "");
     if (!input || !input.trim()) throw new Error("Aucun mot de passe fourni.");
     setStoredPwd(input.trim());
-    // retire le flag askpwd si présent
     if (ask) history.replaceState(null, '', location.pathname);
     return input.trim();
   }
@@ -224,171 +223,140 @@
     try {
       clearStoredPwd();
       await ensureSbPassword(true);
-      try { client?.disconnect?.(); } catch {}
+      try { await client?.disconnect?.(); } catch {}
       setWsIndicator(false);
-      reconnectAttempts = 0;
-      setTimeout(initStreamerbotClient, 100);
-    } catch {}
+      initStreamerbotClient();
+    } catch {/* user canceled */}
   });
 
   /* ========================================================================
-   * Connexion Streamer.bot (lib officielle via CDN @streamerbot/client)
-   * NOTE : on reste en WS clair (ws://127.0.0.1:8080) — il faut autoriser
-   *        le “insecure content” pour votre domaine GitHub Pages une fois.
+   * Connexion Streamer.bot — CONFIG *strictement* conforme à la doc
+   * (host, port, endpoint, password, scheme, immediate, autoReconnect, retries,
+   *  subscribe, logLevel, logger, onConnect, onDisconnect, onError, onData)
    * ===================================================================== */
-  let client = null;
-  let reconnectAttempts = 0;
-  let reconnectTimer = null;
+  let client;
 
-  function scheduleReconnect(){
-    const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempts)); // 1s, 2s, 4s … 30s
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(initStreamerbotClient, delay);
-  }
+  async function initStreamerbotClient() {
+    if (typeof StreamerbotClient === 'undefined') {
+      setWsIndicator(false);
+      $('#ws-status').textContent = 'Lib @streamerbot/client introuvable';
+      return;
+    }
 
-async function initStreamerbotClient(){
-  // Lib UMD du CDN chargée ?
-  if (typeof StreamerbotClient === 'undefined'){
-    setWsIndicator(false);
-    const el = $('#ws-status'); if (el) el.textContent = 'Lib @streamerbot/client introuvable';
-    return;
-  }
+    // 1) Mot de passe Streamer.bot WebSocket (pas OBS)
+    let password;
+    try {
+      password = await ensureSbPassword();
+    } catch {
+      setWsIndicator(false);
+      $('#ws-status').textContent = 'Mot de passe requis';
+      return;
+    }
 
-  // 1) Récupération / saisie du mot de passe
-  let password;
-  try {
-    password = await ensureSbPassword(); // prompt si absent/forcé
-  } catch {
-    setWsIndicator(false);
-    $('#ws-status').textContent = 'Mot de passe requis';
-    return;
-  }
+    try { await client?.disconnect?.(); } catch {}
 
-  // 2) Ferme une session précédente si besoin
-  try { await client?.disconnect?.(); } catch {}
-
-  // 3) Branche des handlers détaillés pour diagnostiquer
-  const updateErrorInfo = (label, extra='') => {
-    const el = $('#ws-status');
-    if (el) el.textContent = label + (extra ? ` (${extra})` : '');
-  };
-
-  try {
+    // 2) Constructeur 100% conforme à la doc
     client = new StreamerbotClient({
-      // >>> mêmes paramètres qu’avant, mais explicités
-      scheme: 'ws',
-      host  : '127.0.0.1',
-      port  : 8080,
+      host: '127.0.0.1',
+      port: 8080,
       endpoint: '/',
       password,
-      subscribe: '*',
-      logLevel: 'warn', // baisse le bruit
+      scheme: 'ws',          // 'wss' si tu passes par un tunnel sécurisé
+      immediate: true,
+      autoReconnect: true,
+      retries: -1,           // infini
+      subscribe: '*',        // ou un objet fin si tu veux filtrer
+      logLevel: 'warn',
+      // logger: console,
 
-      onConnect: async () => {
-        reconnectAttempts = 0;
+      onConnect: (info) => {
         setWsIndicator(true);
-        updateErrorInfo('Connecté à Streamer.bot');
-
-        // petit ping info (comme avant)
-        try {
-          const resp = await client.getActiveViewers();
-          $('#ws-status').title = (resp.viewers || []).map(v=>v.display).join(', ') || '';
-        } catch { const s = $('#ws-status'); if (s) s.title=''; }
+        $('#ws-status').textContent = `Connecté à Streamer.bot (${info?.version || 'v?'})`;
+        // Optionnel: affiche les viewers dans le title
+        client.getActiveViewers().then(resp => {
+          $('#ws-status').title = (resp.viewers || []).map(v => v.display).join(', ') || '';
+        }).catch(() => { $('#ws-status').title = ''; });
       },
 
-      onDisconnect: (evt) => {
+      onDisconnect: (evt = {}) => {
         setWsIndicator(false);
-        const extra = evt?.code ? `code ${evt.code}` : 'fermeture';
-        updateErrorInfo('Déconnecté', extra);
+        const { code } = evt;
+        const msg = code === 1006
+          ? 'Déconnecté — 1006 (auth invalide ou mixed content)'
+          : `Déconnecté${code ? ' — code ' + code : ''}`;
+        $('#ws-status').textContent = msg;
 
-        // Si on boucle trop -> on efface le mdp pour re-demander
-        reconnectAttempts++;
-        if (reconnectAttempts >= 3) {
-          clearStoredPwd();
-          updateErrorInfo('Re-saisie du mot de passe requise');
+        // Si auth probablement invalide, force la re-saisie au prochain essai
+        if (code === 1006) {
+          try { clearStoredPwd(); } catch {}
         }
-        scheduleReconnect();
       },
 
       onError: (err) => {
-        // Erreur générique socket ; on essaie d’être plus utile
-        updateErrorInfo('Erreur WebSocket');
-        console.warn('[Streamer.bot] onError', err);
+        $('#ws-status').textContent = 'Erreur WebSocket';
+        console.warn('[Streamer.bot] Error', err);
+        if (location.protocol === 'https:') {
+          console.warn('Si la page est en HTTPS et tu utilises ws://, c’est peut-être du mixed content. Autorise “insecure content” ou utilise wss/tunnel.');
+        }
+      },
+
+      onData: (payload) => {
+        // Dispatcher unique
+        const { event, data } = payload || {};
+
+        // TTS lus (émis par tes actions : General / widget: 'tts-reader-selection')
+        if (event?.source === 'General' && data?.widget === 'tts-reader-selection'){
+          const u = data.selectedUser || data.user || '';
+          const t = data.message || '';
+          if (u && t) DashboardStatus.tts.addRead({ user: u, message: t });
+          return;
+        }
+
+        // SUBS / RESUB / GIFTSUB (Twitch)
+        if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
+          const d = data || {};
+          const user = d.displayName || d.user || d.userName || d.username || '—';
+
+          let raw = (d.tier ?? d.plan ?? d.tierId ?? d.level ?? '').toString().toLowerCase();
+          let tierLabel = raw.includes('3000') || raw==='3' ? 'T3'
+                        : raw.includes('2000') || raw==='2' ? 'T2'
+                        : raw.includes('prime') ? 'Prime' : 'T1';
+
+          const months = Number(d.cumulativeMonths ?? d.months ?? d.streak ?? d.totalMonths ?? 0) || 0;
+          DashboardStatus.events.addSub({ user, tierLabel, months });
+          return;
+        }
+
+        // Guess (événements General)
+        if (event?.source === 'General'){
+          if (data?.widget === 'guess-status'){ DashboardStatus.guess.setStatus(!!data.running); return; }
+          if (data?.widget === 'guess-found'){ DashboardStatus.guess.setLastFound({ by: data.by, game: data.game }); return; }
+          if (data?.widget === 'guess-leaderboard'){
+            const entries = Array.isArray(data.entries) ? data.entries : [];
+            DashboardStatus.guess.setLeaderboard(entries);
+            return;
+          }
+        }
       }
     });
 
-    // 4) Teste la handshake/autorisation explicitement pour remonter l’info
-    //    -> si authent KO, on efface le mdp et on re-prompt 1 seule fois.
+    // 3) Validation handshake (Requests API) pour lever l’ambiguïté auth
     try {
-      // getInfo() passe si l’instance est accessible (auth ok ou auth non imposée)
       const info = await client.getInfo();
       if (info?.status !== 'ok') throw new Error('info-not-ok');
     } catch (e) {
-      // Auth probablement requise et invalide
-      console.warn('[Streamer.bot] Problème d’authentification ou handshake', e);
       setWsIndicator(false);
-      updateErrorInfo('Échec authentification');
-
-      // On tente UNE re-saisie immédiate
+      $('#ws-status').textContent = 'Échec authentification — ressaisir le mot de passe';
       try {
         clearStoredPwd();
-        const newPwd = await ensureSbPassword(true);
-        // On relance proprement
-        await client.disconnect().catch(()=>{});
+        await ensureSbPassword(true);
+        await client.disconnect().catch(() => {});
         setTimeout(initStreamerbotClient, 50);
-        return;
-      } catch {
-        // utilisateur a annulé : on reste déconnecté
-        return;
-      }
+      } catch { /* annulé */ }
+      return;
     }
-
-    // ---------------------- Dispatcher d’événements ----------------------
-    client.on('*', ({event, data}) => {
-      // TTS lus (émis par tes actions : General / widget: 'tts-reader-selection')
-      if (event.source === 'General' && data?.widget === 'tts-reader-selection'){
-        const u = data.selectedUser || data.user || '';
-        const t = data.message || '';
-        if (u && t) DashboardStatus.tts.addRead({ user: u, message: t });
-        return;
-      }
-
-      // SUBS / RESUB / GIFTSUB (Twitch)
-      if (event.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
-        const d = data || {};
-        const user = d.displayName || d.user || d.userName || d.username || '—';
-
-        let raw = (d.tier ?? d.plan ?? d.tierId ?? d.level ?? '').toString().toLowerCase();
-        let tierLabel = 'T1';
-        if (raw.includes('3000') || raw==='3') tierLabel='T3';
-        else if (raw.includes('2000') || raw==='2') tierLabel='T2';
-        else if (raw.includes('prime')) tierLabel='Prime';
-
-        const months = Number(d.cumulativeMonths ?? d.months ?? d.streak ?? d.totalMonths ?? 0) || 0;
-
-        DashboardStatus.events.addSub({ user, tierLabel, months });
-        return;
-      }
-
-      // Guess (quand tes actions envoient ces événements General)
-      if (event.source === 'General'){
-        if (data?.widget === 'guess-status'){
-          DashboardStatus.guess.setStatus(!!data.running);
-          return;
-        }
-        if (data?.widget === 'guess-found'){
-          DashboardStatus.guess.setLastFound({ by: data.by, game: data.game });
-          return;
-        }
-        if (data?.widget === 'guess-leaderboard'){
-          const entries = Array.isArray(data.entries) ? data.entries : [];
-          DashboardStatus.guess.setLeaderboard(entries);
-          return;
-        }
-      }
-    });
   }
 
-  // Lancement
+  // Lancer
   initStreamerbotClient();
 })();
