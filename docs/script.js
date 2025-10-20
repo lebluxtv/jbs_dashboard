@@ -41,20 +41,17 @@
     const li = document.createElement('li');
     li.innerHTML = htmlText;
 
-    // clic = marquer comme lu (gris)
     li.addEventListener('click', (ev) => {
       if ((ev.target.tagName || '').toLowerCase() === 'a') return;
       li.classList.toggle('ack');
       ev.stopPropagation();
     });
 
-    // supprime le placeholder "muted" si présent
     if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')) {
       listEl.removeChild(listEl.firstElementChild);
     }
     listEl.prepend(li);
 
-    // limite d’items (10 par défaut, 50 pour les listes .big)
     const limit = listEl.classList.contains('big') ? 50 : 10;
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
   }
@@ -78,7 +75,6 @@
     showTab(initial);
   })();
 
-  // cartes “quick view” → ouverture de l’onglet correspondant
   $$('.qv-card').forEach(c => c.addEventListener('click', () => showTab(c.dataset.goto)));
 
   const yearEl = $('#year');
@@ -95,7 +91,7 @@
   }
 
   /* ========================================================================
-   * API publique (utilisée par l’index + les sous-pages)
+   * API publique
    * ===================================================================== */
   window.DashboardStatus = {
     setStatus(name, isOn, count){
@@ -119,12 +115,9 @@
       }
     },
 
-    // --------------------------- Events (SUBS) ---------------------------
     events: {
       addSub({user, tierLabel, months}){
         DashboardStatus.setStatus('events', true);
-
-        // incrémente badges
         const badgeTab = $('.badge-events');
         const current = parseInt((badgeTab?.textContent || "0"), 10) || 0;
         incBadge([badgeTab, $('#events-counter'), $('#qv-events-count')], current+1);
@@ -137,7 +130,6 @@
       log(msg){ appendLog('#events-log', msg); }
     },
 
-    // --------------------------- TTS (derniers lus) ----------------------
     tts: {
       addRead({user, message}){
         DashboardStatus.setStatus('tts', true);
@@ -151,7 +143,6 @@
       log(msg){ appendLog('#tts-log', msg); }
     },
 
-    // --------------------------- Guess The Game --------------------------
     guess: {
       setStatus(running){
         DashboardStatus.setStatus('guess', !!running);
@@ -188,9 +179,7 @@
   };
 
   /* ========================================================================
-   * Password local (jamais en dur dans le code)
-   *  - support ?pw=... pour injecter le mdp depuis l’URL
-   *  - ?resetpwd=1 pour purger le stockage local
+   * Gestion du mot de passe
    * ===================================================================== */
   const SB_PWD_KEY = "sb_ws_password_v1";
 
@@ -212,7 +201,6 @@
   })();
 
   async function ensureSbPassword(forcePrompt = false){
-    // priorité au ?pw=... pour test rapide depuis GitHub Pages
     const fromQS = getQS('pw');
     if (fromQS && fromQS.trim()) { setStoredPwd(fromQS.trim()); return fromQS.trim(); }
 
@@ -225,49 +213,38 @@
     return input.trim();
   }
 
-  // Bouton 🔒 → redemander le mdp et reconnecter
-  $('#pw-btn')?.addEventListener('click', async (e)=>{
-    e.stopPropagation();
-    try {
-      clearStoredPwd();
-      await ensureSbPassword(true);
-      try { await client?.disconnect?.(); } catch {}
-      setWsIndicator(false);
-      initStreamerbotClient();
-    } catch {/* user canceled */}
-  });
-
   /* ========================================================================
-   * Connexion Streamer.bot — Config conforme à la doc
+   * Connexion Streamer.bot
    * ===================================================================== */
   let client;
 
   async function initStreamerbotClient() {
     if (typeof StreamerbotClient === 'undefined') {
       setWsIndicator(false);
-      $('#ws-status')?.textContent = 'Lib @streamerbot/client introuvable';
+      const el = $('#ws-status');
+      if (el) el.textContent = 'Lib @streamerbot/client introuvable';
       return;
     }
 
-    // 1) password propre
     let password;
     try {
       password = (await ensureSbPassword()).trim();
     } catch {
       setWsIndicator(false);
-      $('#ws-status')?.textContent = 'Mot de passe requis';
+      const el = $('#ws-status');
+      if (el) el.textContent = 'Mot de passe requis';
       return;
     }
+
     if (!password) {
       setWsIndicator(false);
-      $('#ws-status')?.textContent = 'Mot de passe vide';
+      const el = $('#ws-status');
+      if (el) el.textContent = 'Mot de passe vide';
       return;
     }
 
-    // 2) déconnexion propre si existant
     try { await client?.disconnect?.(); } catch {}
 
-    // 3) connect — NOTE: host='localhost' volontaire (souvent mieux que 127.0.0.1)
     console.log(`[SB] Connecting: ws://localhost:8080/  | passLen=${password.length}`);
     client = new StreamerbotClient({
       host: 'localhost',
@@ -285,105 +262,44 @@
         setWsIndicator(true);
         const el = $('#ws-status');
         if (el) el.textContent = `Connecté à Streamer.bot (${info?.version || 'v?'})`;
-        client.getActiveViewers().then(r=>{
-          const t = (r.viewers||[]).map(v=>v.display).join(', ');
-          if (el) el.title = t;
-        }).catch(()=>{ if(el) el.title=''; });
       },
 
       onDisconnect: (evt = {}) => {
         setWsIndicator(false);
         const el = $('#ws-status');
-        const { code, reason } = evt;
-        const msg = code === 1006
+        const msg = evt.code === 1006
           ? 'Déconnecté — 1006 (auth invalide ?)'
-          : `Déconnecté${code ? ' — code '+code : ''}${reason ? ' — '+reason : ''}`;
+          : `Déconnecté${evt.code ? ' — code '+evt.code : ''}${evt.reason ? ' — '+evt.reason : ''}`;
         if (el) el.textContent = msg;
-
-        // si auth soupçonnée: on force re-saisie au prochain essai
-        if (code === 1006) clearStoredPwd();
-
-        // aide au diagnostic : test WS brut si demandé
-        if (getQS('autotest') === '1') {
-          setTimeout(rawWsSmokeTest, 200);
-        }
+        if (evt.code === 1006) clearStoredPwd();
       },
 
       onError: (err) => {
-        $('#ws-status')?.textContent = 'Erreur WebSocket';
+        const el = $('#ws-status');
+        if (el) el.textContent = 'Erreur WebSocket';
         console.warn('[SB] Error:', err);
-        if (getQS('autotest') === '1') {
-          setTimeout(rawWsSmokeTest, 200);
-        }
       },
 
       onData: ({event, data}) => {
-        // --- Dispatcher unique ---
         if (event?.source === 'General' && data?.widget === 'tts-reader-selection') {
           const u = data.selectedUser || data.user || '';
           const t = data.message || '';
           if (u && t) DashboardStatus.tts.addRead({ user: u, message: t });
-          return;
-        }
-        if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)) {
-          const d = data || {};
-          const user = d.displayName || d.user || d.userName || d.username || '—';
-          let raw = (d.tier ?? d.plan ?? d.tierId ?? d.level ?? '').toString().toLowerCase();
-          let tierLabel = raw.includes('3000') || raw==='3' ? 'T3'
-                        : raw.includes('2000') || raw==='2' ? 'T2'
-                        : raw.includes('prime') ? 'Prime' : 'T1';
-          const months = Number(d.cumulativeMonths ?? d.months ?? d.streak ?? d.totalMonths ?? 0) || 0;
-          DashboardStatus.events.addSub({ user, tierLabel, months });
-          return;
-        }
-        if (event?.source === 'General'){
-          if (data?.widget === 'guess-status'){ DashboardStatus.guess.setStatus(!!data.running); return; }
-          if (data?.widget === 'guess-found'){ DashboardStatus.guess.setLastFound({ by: data.by, game: data.game }); return; }
-          if (data?.widget === 'guess-leaderboard'){
-            const entries = Array.isArray(data.entries) ? data.entries : [];
-            DashboardStatus.guess.setLeaderboard(entries);
-            return;
-          }
         }
       }
     });
 
-    // 4) “smoke test” request : si ça plante ici → auth/handshake KO
     try {
       const info = await client.getInfo();
       if (info?.status !== 'ok') throw new Error('info-not-ok');
-    } catch (e) {
+    } catch {
       setWsIndicator(false);
-      $('#ws-status')?.textContent = 'Auth KO — ressaisis le mot de passe';
+      const el = $('#ws-status');
+      if (el) el.textContent = 'Auth KO — ressaisis le mot de passe';
       clearStoredPwd();
-      if (getQS('autotest') === '1') setTimeout(rawWsSmokeTest, 200);
-      return;
     }
   }
 
-  // Lancer la connexion
   initStreamerbotClient();
-
-  /* ========================================================================
-   * FONCTIONS DE TEST / DIAGNOSTIC
-   *  - ?pw=xxx => injecte le mot de passe sans prompt
-   *  - rawWsSmokeTest() => test WebSocket nu (sans client) pour isoler le problème
-   *  - ?autotest=1 => lance automatiquement le test si erreur/déconnexion
-   * ===================================================================== */
-  function rawWsSmokeTest() {
-    try {
-      console.log('[RAW TEST] Trying ws://localhost:8080/');
-      const s = new WebSocket('ws://localhost:8080/');
-      s.onopen = () => console.log('[RAW TEST] OPEN (OK: socket reachable)');
-      s.onclose = (e) => console.log('[RAW TEST] CLOSE', e.code, e.reason || '');
-      s.onerror = (e) => console.log('[RAW TEST] ERROR', e);
-      // NOTE: si page HTTPS, ce test peut aussi être bloqué par le navigateur.
-    } catch (e) {
-      console.warn('[RAW TEST] Exception', e);
-    }
-  }
-
-  // Expose le test dans la console (utile en manuel)
-  window.JBSDiag = { rawWsSmokeTest };
 
 })();
