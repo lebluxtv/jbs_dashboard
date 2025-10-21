@@ -21,7 +21,7 @@
     try { localStorage.setItem('jbs.activeTab', name); } catch {}
   }
 
-  // setDot => agit maintenant sur TOUS les éléments qui matchent le sélecteur
+  // setDot => agit sur TOUS les éléments qui matchent
   function setDot(selector, on){
     $$(selector).forEach(el=>{
       el.classList.remove('on','off');
@@ -39,8 +39,8 @@
     el.scrollTop = el.scrollHeight;
   }
 
-  function prependListItem(listEl, htmlText, onToggle, ack=false){
-    if (!listEl) return;
+  // ------ Items de liste ------
+  function makeItem(htmlText, onToggle, ack){
     const li = document.createElement('li');
     li.innerHTML = htmlText;
     if (ack) li.classList.add('ack');
@@ -51,6 +51,12 @@
       if (typeof onToggle === 'function') onToggle(li.classList.contains('ack'));
       ev.stopPropagation();
     });
+    return li;
+  }
+
+  function prependListItem(listEl, htmlText, onToggle, ack=false){
+    if (!listEl) return;
+    const li = makeItem(htmlText, onToggle, ack);
 
     if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')) {
       listEl.removeChild(listEl.firstElementChild);
@@ -61,6 +67,19 @@
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
   }
 
+  function appendListItem(listEl, htmlText, onToggle, ack=false){
+    if (!listEl) return;
+    const li = makeItem(htmlText, onToggle, ack);
+
+    if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')) {
+      listEl.removeChild(listEl.firstElementChild);
+    }
+    listEl.appendChild(li);
+
+    const limit = listEl.classList.contains('big') ? 50 : 10;
+    while (listEl.children.length > limit) listEl.removeChild(listEl.firstChild);
+  }
+
   // ============================ Tabs ============================
   $$('.tab').forEach(btn => btn.addEventListener('click', () => showTab(btn.dataset.tab)));
   (function initTab(){
@@ -69,7 +88,7 @@
     showTab(initial);
   })();
 
-  // Quick-view : seul le TITRE est cliquable
+  // Quick-view : seul le TITRE clique
   $$('.qv-card').forEach(card => {
     const title = card.querySelector('.qv-head h2');
     const target = card.dataset.goto;
@@ -105,7 +124,6 @@
     } catch {}
   }
 
-  // Store en mémoire
   let eventsStore = loadEvents(); // [{id,type,user,tierLabel,months,ack}]
   let qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
 
@@ -115,7 +133,6 @@
     b.textContent = String(qvUnreadEvents);
     b.style.display = qvUnreadEvents > 0 ? '' : 'none';
   }
-  // Voyant Events = vert s'il reste des non-lus
   function refreshEventsIndicators(){
     setDot('.dot-events', qvUnreadEvents > 0);
   }
@@ -134,9 +151,13 @@
       return;
     }
 
-    for (const e of [...eventsStore].reverse()){
+    // >>>> FIX ORDRE : on parcourt du plus récent au plus ancien ET on APPEND
+    // Ainsi, à la fin, le plus récent reste en haut (comme en live).
+    for (let i = eventsStore.length - 1; i >= 0; i--){
+      const e = eventsStore[i];
       const line = `<strong>${e.user}</strong> — <span class="mono">${e.type}</span> • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
-      prependListItem(qv, line, (isAck)=>{
+
+      appendListItem(qv, line, (isAck)=>{
         const idx = eventsStore.findIndex(x=>x.id===e.id);
         if (idx>=0){ eventsStore[idx].ack = isAck; saveEvents(eventsStore); }
         qvUnreadEvents += isAck ? -1 : +1;
@@ -145,7 +166,7 @@
         refreshEventsIndicators();
       }, e.ack);
 
-      prependListItem(full, line, null, e.ack);
+      appendListItem(full, line, null, e.ack);
     }
     refreshQvEventsBadge();
     refreshEventsIndicators();
@@ -165,7 +186,6 @@
           [badgeTab,badgeHdr].forEach(b=>{ if (b) b.textContent = String(Math.max(0,count|0)); });
           if (badgeTab) badgeTab.style.display = count>0 ? '' : 'none';
         }
-        // On laisse le voyant être piloté par le nombre de non-lus
         refreshEventsIndicators();
       }
 
@@ -181,7 +201,6 @@
 
     events: {
       addSub({type, user, tierLabel, months}){
-        // total (onglet + entête)
         const badgeTab = $('.badge-events');
         const badgeHdr = $('#events-counter');
         const current = parseInt((badgeTab && badgeTab.textContent || "0"), 10) || 0;
@@ -191,7 +210,6 @@
         const safeUser = displayNameFromAny(user);
         const line = `<strong>${safeUser}</strong> — <span class="mono">${type||'Sub'}</span> • ${tierLabel}${months>0 ? ` • ${months} mois` : ''}`;
 
-        // store
         const evObj = {
           id: Date.now() + Math.random().toString(16).slice(2),
           type: type || 'Sub',
@@ -203,7 +221,7 @@
         if (eventsStore.length > MAX_EVENTS) eventsStore = eventsStore.slice(-MAX_EVENTS);
         saveEvents(eventsStore);
 
-        // Quick-view (non-lus)
+        // Live: on garde le “nouveau en haut” => PREPEND
         prependListItem($('#qv-events-list'), line, (isAck)=>{
           evObj.ack = isAck; saveEvents(eventsStore);
           qvUnreadEvents += isAck ? -1 : +1;
@@ -215,7 +233,6 @@
         refreshQvEventsBadge();
         refreshEventsIndicators();
 
-        // Panneau Events
         prependListItem($('#events-subs-list'), line, null, false);
 
         appendLog('#events-log', `${type||'Sub'} ${tierLabel} ${safeUser}${months>0 ? ` (${months} mois)` : ''}`);
@@ -410,12 +427,10 @@
       },
 
       onData: ({event, data}) => {
-        // LIVE / OFFLINE
         if (event?.source === 'Twitch' && (event.type === 'StreamOnline' || event.type === 'StreamOffline')) {
           setLiveIndicator(event.type === 'StreamOnline'); return;
         }
 
-        // TTS lus
         if (event?.source === 'General' && data?.widget === 'tts-reader-selection') {
           const u = displayNameFromAny(data.selectedUser || data.user || '');
           const t = data.message || '';
@@ -423,7 +438,6 @@
           return;
         }
 
-        // SUBS / RESUB / GIFTSUB
         if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
           const d = data || {};
           const user = displayNameFromAny(
@@ -440,9 +454,7 @@
     try {
       const info = await client.getInfo();
       if (info?.status !== 'ok') throw new Error('info-not-ok');
-    } catch {
-      // on ne purge plus le mdp ici
-    }
+    } catch { /* ne purge pas le mdp */ }
   }
 
   initStreamerbotClient();
