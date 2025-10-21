@@ -265,6 +265,10 @@
         }
         fill(ol1); fill(ol2);
       },
+      setShot(url){
+        const img = $('#guess-shot');
+        if (img) img.src = url || '';
+      },
       log(msg){ appendLog('#guess-log', msg); }
     },
 
@@ -371,7 +375,6 @@
       const resp = await client.getGlobal("ttsAutoReaderEnabled");
       const isOn = resp && resp.status === "ok" ? !!resp.variable?.value : false;
       updateTtsSwitchUI(isOn);
-      // (pas de log ici : on ne log que les changements via le bouton)
     } catch {
       updateTtsSwitchUI(false);
     }
@@ -398,6 +401,216 @@
     ttsSwitchInput.addEventListener('change', () => setTtsAutoReader(!!ttsSwitchInput.checked));
   }
 
+  // ============================ Guess The Game (UI + Backend) ============================
+  // Références DOM
+  const guessGenreSel       = $('#guess-genre');
+  const guessExcludeInput   = $('#guess-exclude-input');
+  const guessDatalist       = $('#guess-genres-datalist');
+  const guessExcludeAddBtn  = $('#guess-exclude-add');
+  const guessExcludeChips   = $('#guess-exclude-chips');
+  const guessYearFromInput  = $('#guess-year-from');
+  const guessYearToInput    = $('#guess-year-to');
+  const guessBootstrapBtn   = $('#guess-bootstrap');
+  const guessStartBtn       = $('#guess-start');
+  const guessEndBtn         = $('#guess-end');
+  const guessMsg            = $('#guess-msg');
+  const guessShotImg        = $('#guess-shot');
+
+  let GTG_GENRES = [];            // [{id,name}]
+  let GTG_EXCLUDED = new Set();   // ids exclus
+
+  function setGuessMessage(msg){
+    if (guessMsg) guessMsg.textContent = msg || '';
+  }
+
+  function fillGenresUI(genres){
+    GTG_GENRES = Array.isArray(genres) ? genres : [];
+    // select (inclusion)
+    if (guessGenreSel){
+      guessGenreSel.innerHTML = `<option value="">— Aucun —</option>`;
+      for (const g of GTG_GENRES){
+        const opt = document.createElement('option');
+        opt.value = String(g.id);
+        opt.textContent = g.name || `#${g.id}`;
+        guessGenreSel.appendChild(opt);
+      }
+    }
+    // datalist (exclusions)
+    if (guessDatalist){
+      guessDatalist.innerHTML = '';
+      for (const g of GTG_GENRES){
+        const o = document.createElement('option');
+        o.value = g.name || `#${g.id}`;
+        o.dataset.id = String(g.id);
+        guessDatalist.appendChild(o);
+      }
+    }
+  }
+
+  function renderExcludeChips(){
+    if (!guessExcludeChips) return;
+    guessExcludeChips.innerHTML = '';
+    if (GTG_EXCLUDED.size === 0){
+      const span = document.createElement('span');
+      span.className = 'hint';
+      span.textContent = 'Aucun genre exclu';
+      guessExcludeChips.appendChild(span);
+      return;
+    }
+    for (const id of GTG_EXCLUDED){
+      const g = GTG_GENRES.find(x=>String(x.id)===String(id));
+      const label = g?.name || `#${id}`;
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.innerHTML = `${label} <button type="button" title="Retirer">×</button>`;
+      chip.querySelector('button').addEventListener('click', ()=>{
+        GTG_EXCLUDED.delete(id);
+        renderExcludeChips();
+      });
+      guessExcludeChips.appendChild(chip);
+    }
+  }
+
+  function idFromGenreInputText(txt){
+    if (!txt) return null;
+    // 1) essai par nom strict
+    const exact = GTG_GENRES.find(g => (g.name || '').toLowerCase() === txt.toLowerCase());
+    if (exact) return String(exact.id);
+    // 2) essai par datalist option
+    const opt = Array.from(guessDatalist?.children || []).find(o => (o.value||'').toLowerCase() === txt.toLowerCase());
+    if (opt?.dataset?.id) return String(opt.dataset.id);
+    // 3) essai si nombre
+    const n = Number(txt);
+    if (Number.isFinite(n) && n>0) return String(n);
+    // 4) essai par recherche partielle (premier match)
+    const partial = GTG_GENRES.find(g => (g.name||'').toLowerCase().includes(txt.toLowerCase()));
+    if (partial) return String(partial.id);
+    return null;
+  }
+
+  function collectFilters(){
+    // inclusion (unique / optionnel)
+    const includeGenreId = guessGenreSel?.value ? String(guessGenreSel.value) : "";
+    // exclusion (0..n)
+    const excludeGenreIds = Array.from(GTG_EXCLUDED);
+    // période
+    const yFrom = Number(guessYearFromInput?.value || 0) || null;
+    const yTo   = Number(guessYearToInput?.value   || 0) || null;
+    return { includeGenreId, excludeGenreIds, yearFrom: yFrom, yearTo: yTo };
+  }
+
+  async function gtgBootstrap(){
+    if (!client) return setGuessMessage('Client SB indisponible.');
+    setGuessMessage('Chargement des genres…');
+    try{
+      const res = await client.doAction({ name: "GTG Bootstrap Genres & Years" });
+      // On attend: {status:"ok", result:{ genres:[{id,name}], oldestYear:1981, newestYear:2025 }}
+      if (res?.status !== 'ok'){ throw new Error('bootstrap-failed'); }
+      const genres = res?.result?.genres || res?.genres || [];
+      const oldest = Number(res?.result?.oldestYear ?? res?.oldestYear ?? 1970);
+      const newest = Number(res?.result?.newestYear ?? res?.newestYear ?? (new Date().getFullYear()));
+
+      fillGenresUI(genres);
+
+      // borne année
+      if (guessYearFromInput){
+        guessYearFromInput.min = String(oldest);
+        guessYearFromInput.max = String(newest);
+      }
+      if (guessYearToInput){
+        guessYearToInput.min = String(oldest);
+        guessYearToInput.max = String(newest);
+      }
+
+      setGuessMessage(`Genres chargés (${genres.length}). Plage ${oldest} — ${newest}.`);
+      DashboardStatus.guess.log(`Genres: ${genres.length}, période: ${oldest}-${newest}`);
+    }catch(e){
+      console.error(e);
+      setGuessMessage('Erreur: impossible de charger la liste des genres.');
+      DashboardStatus.guess.log(`Erreur bootstrap genres`);
+    }
+  }
+
+  async function gtgStart(){
+    if (!client) return setGuessMessage('Client SB indisponible.');
+    const filters = collectFilters();
+    setGuessMessage('Sélection d’un jeu…');
+    DashboardStatus.setStatus('guess', true);
+    DashboardStatus.guess.setStatus(true);
+    try{
+      const res = await client.doAction({
+        name: "GTG Start",
+        args: {
+          includeGenreId: filters.includeGenreId || null,
+          excludeGenreIds: filters.excludeGenreIds || [],
+          yearFrom: filters.yearFrom,
+          yearTo: filters.yearTo
+        }
+      });
+      // On attend: {status:"ok", result:{ gameName, screenshotUrl } }
+      if (res?.status !== 'ok') throw new Error('gtg-start-failed');
+      const gameName = res?.result?.gameName || res?.gameName || '—';
+      const url      = res?.result?.screenshotUrl || res?.screenshotUrl || '';
+      if (guessShotImg) guessShotImg.src = url || '';
+      DashboardStatus.guess.setLastFound({ by: 'streamer', game: gameName });
+      DashboardStatus.guess.setStatus(true);
+      DashboardStatus.setStatus('guess', true);
+      DashboardStatus.guess.log(`Jeu sélectionné: ${gameName}`);
+      setGuessMessage(`OK — ${gameName}`);
+    }catch(e){
+      console.error(e);
+      setGuessMessage('Erreur: aucune sélection possible (réessaie).');
+      DashboardStatus.guess.log(`Erreur sélection jeu`);
+      DashboardStatus.guess.setStatus(false);
+      DashboardStatus.setStatus('guess', false);
+    }
+  }
+
+  async function gtgEnd(){
+    if (!client) return setGuessMessage('Client SB indisponible.');
+    try{
+      await client.doAction({ name: "GTG End" });
+    }catch{}
+    DashboardStatus.guess.setStatus(false);
+    DashboardStatus.setStatus('guess', false);
+    setGuessMessage('En pause');
+  }
+
+  // Exclusions — ajout
+  if (guessExcludeAddBtn){
+    guessExcludeAddBtn.addEventListener('click', ()=>{
+      const txt = (guessExcludeInput?.value || '').trim();
+      if (!txt){ return; }
+      const id = idFromGenreInputText(txt);
+      if (!id){ setGuessMessage(`Genre introuvable: “${txt}”`); return; }
+      GTG_EXCLUDED.add(String(id));
+      guessExcludeInput.value = '';
+      renderExcludeChips();
+      setGuessMessage('');
+    });
+  }
+
+  // Bootstrap / Start / End
+  guessBootstrapBtn?.addEventListener('click', gtgBootstrap);
+  guessStartBtn?.addEventListener('click', gtgStart);
+  guessEndBtn?.addEventListener('click', gtgEnd);
+
+  // Sync initiale (statut + screenshot) au connect
+  async function syncGuessFromBackend(){
+    try{
+      const run = await client.getGlobal("GTG_running");
+      const isRunning = run?.status === 'ok' ? !!run.variable?.value : false;
+      DashboardStatus.guess.setStatus(isRunning);
+      DashboardStatus.setStatus('guess', isRunning);
+    }catch{}
+    try{
+      const shot = await client.getGlobal("GTG_current_screenshot_url");
+      const url = (shot?.status === 'ok') ? (shot.variable?.value || '') : '';
+      if (url) DashboardStatus.guess.setShot(url);
+    }catch{}
+  }
+
+  // ============================ Connexion & events ============================
   async function initStreamerbotClient() {
     if (typeof StreamerbotClient === 'undefined') {
       setWsIndicator(false);
@@ -439,8 +652,9 @@
       onConnect: async (info) => {
         setWsIndicator(true);
         $('#ws-status') && ($('#ws-status').textContent = `Connecté à Streamer.bot (${info?.version || 'v?'})`);
-        // Sync état Auto-TTS au connect
+        // Sync états
         await syncTtsSwitchFromBackend();
+        await syncGuessFromBackend();
       },
 
       onDisconnect: (evt = {}) => {
@@ -452,6 +666,8 @@
         if (el) el.textContent = msg;
         if (evt.code === 1006) clearStoredPwd();
         updateTtsSwitchUI(false);
+        DashboardStatus.guess.setStatus(false);
+        DashboardStatus.setStatus('guess', false);
       },
 
       onError: (err) => {
@@ -484,6 +700,21 @@
           const months    = extractMonths(d);
           DashboardStatus.events.addSub({ type: event.type, user, tierLabel, months });
           return;
+        }
+
+        // (Optionnel) Si tu envoies un event côté SB pour GTG (par ex. widget='gtg')
+        if (event?.source === 'General' && data?.widget === 'gtg'){
+          if (typeof data.running === 'boolean'){
+            DashboardStatus.guess.setStatus(!!data.running);
+            DashboardStatus.setStatus('guess', !!data.running);
+          }
+          if (data.screenshotUrl){
+            DashboardStatus.guess.setShot(data.screenshotUrl);
+          }
+          if (data.gameName){
+            DashboardStatus.guess.setLastFound({ by: data.by || '—', game: data.gameName });
+          }
+          if (data.log){ DashboardStatus.guess.log(String(data.log)); }
         }
       }
     });
