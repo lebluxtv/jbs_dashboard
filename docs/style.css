@@ -67,12 +67,17 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 
 /* Overview quick view grid */
 .overview-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
-.qv-card{grid-column:span 4;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);cursor:pointer;transition:transform .08s ease,border-color .12s ease}
+
+/* Quick view cards: plus cliquables en entier */
+.qv-card{grid-column:span 4;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);cursor:default;transition:transform .08s ease,border-color .12s ease}
 .qv-card:hover{transform:translateY(-2px);border-color:#3a3a3d}
 .qv-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)}
-.qv-head h2{margin:0;font-size:16px}
+.qv-head h2{margin:0;font-size:16px;cursor:pointer} /* seul le titre est cliquable */
 .qv-body{padding:12px;min-height:220px}
 .qv-foot{padding:8px 12px;border-top:1px dashed var(--border);text-align:center;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px}
+
+/* Events quick-view: expand puis scroll */
+#qv-events-list{max-height:300px;overflow:auto}
 
 /* Text utils + footer */
 .muted{color:var(--muted)}
