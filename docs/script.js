@@ -21,7 +21,6 @@
     try { localStorage.setItem('jbs.activeTab', name); } catch {}
   }
 
-  // agit sur TOUS les éléments qui matchent
   function setDot(selector, on){
     $$(selector).forEach(el=>{
       el.classList.remove('on','off');
@@ -127,22 +126,17 @@
   let eventsStore = loadEvents();                // [{id,type,user,tierLabel,months,ack}]
   let qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
 
-  // -------- counters/status centralisés (UNREAD) --------
   function syncEventsStatusUI(){
-    // Voyant global Events (tous les points .dot-events)
     setDot('.dot-events', qvUnreadEvents > 0);
 
-    // Badge “quick view” (Overview)
     const bQV = $('#qv-events-count');
     if (bQV){ bQV.textContent = String(qvUnreadEvents); bQV.style.display = qvUnreadEvents>0?'':'none'; }
 
-    // Badge sur l’onglet + badge dans l’entête du panneau
     const bTab  = $('.badge-events');
     const bHead = $('#events-counter');
     if (bTab){  bTab.textContent = String(qvUnreadEvents);  bTab.style.display  = qvUnreadEvents>0?'':'none'; }
     if (bHead){ bHead.textContent = String(qvUnreadEvents); }
 
-    // Libellé “Actif/Inactif” dans Events Checker
     const txt = $('#events-status-text');
     if (txt) txt.textContent = qvUnreadEvents>0 ? 'Actif' : 'Inactif';
   }
@@ -160,7 +154,6 @@
       return;
     }
 
-    // Ordre conservé: plus récents en haut (append du plus récent au plus ancien)
     for (let i = eventsStore.length - 1; i >= 0; i--){
       const e = eventsStore[i];
       const line = `<strong>${e.user}</strong> — <span class="mono">${e.type}</span> • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
@@ -181,13 +174,10 @@
 
   // ============================ API publique (UI) ============================
   window.DashboardStatus = {
-    setStatus(name, isOn/*, count*/){
+    setStatus(name, isOn){
       setDot(`.dot-${name}`, !!isOn);
 
-      if (name==='events'){
-        // Le statut Events est piloté par le nombre de NON-LUS
-        syncEventsStatusUI();
-      }
+      if (name==='events') syncEventsStatusUI();
 
       if (name==='tts'){
         const txt = $('#tts-status-text'); if (txt) txt.textContent = isOn ? 'Actif':'Inactif';
@@ -205,7 +195,6 @@
         const safeUser = displayNameFromAny(user);
         const line = `<strong>${safeUser}</strong> — <span class="mono">${type||'Sub'}</span> • ${tierLabel}${months>0 ? ` • ${months} mois` : ''}`;
 
-        // store
         const evObj = {
           id: Date.now() + Math.random().toString(16).slice(2),
           type: type || 'Sub',
@@ -217,7 +206,6 @@
         if (eventsStore.length > MAX_EVENTS) eventsStore = eventsStore.slice(-MAX_EVENTS);
         saveEvents(eventsStore);
 
-        // Quick-view (non-lu par défaut)
         prependListItem($('#qv-events-list'), line, (isAck)=>{
           evObj.ack = isAck; saveEvents(eventsStore);
           qvUnreadEvents += isAck ? -1 : +1;
@@ -225,10 +213,8 @@
           syncEventsStatusUI();
         }, false);
 
-        // Panneau Events
         prependListItem($('#events-subs-list'), line, null, false);
 
-        // Comptes/états
         qvUnreadEvents += 1;
         syncEventsStatusUI();
 
@@ -351,7 +337,6 @@
     return input.trim();
   }
 
-  // 🔒 Cadenas
   $('#pw-btn')?.addEventListener('click', async (e)=>{
     e.stopPropagation();
     try {
@@ -365,6 +350,50 @@
 
   // ============================ Connexion Streamer.bot ============================
   let client;
+
+  // ---- TTS Switch helpers ----
+  const ttsSwitchInput = $('#tts-switch');
+  const ttsSwitchLabel = $('#tts-switch-label');
+  const ttsSwitchLabelText = $('.switch-label-text', ttsSwitchLabel);
+
+  function updateTtsSwitchUI(on){
+    if (!ttsSwitchInput) return;
+    const val = !!on;
+    ttsSwitchInput.checked = val;
+    if (ttsSwitchLabelText) ttsSwitchLabelText.textContent = val ? 'TTS ON' : 'TTS OFF';
+    if (ttsSwitchLabel) ttsSwitchLabel.style.opacity = val ? '1' : '0.6';
+    // Voyants & libellé
+    DashboardStatus.setStatus('tts', val);
+  }
+
+  async function syncTtsSwitchFromBackend(){
+    try {
+      const resp = await client.getGlobal("ttsAutoReaderEnabled");
+      const isOn = resp && resp.status === "ok" ? !!resp.variable?.value : false;
+      updateTtsSwitchUI(isOn);
+    } catch {
+      updateTtsSwitchUI(false);
+    }
+  }
+
+  async function setTtsAutoReader(enabled){
+    try {
+      await client.doAction({
+        name: "TTS Auto Message Reader Switch ON OFF",
+        args: { mode: enabled ? "on" : "off" }
+      });
+      updateTtsSwitchUI(enabled);
+    } catch (e){
+      // rollback visuel
+      updateTtsSwitchUI(!enabled);
+      alert("Impossible de changer l’état de l’auto TTS.");
+      console.error(e);
+    }
+  }
+
+  if (ttsSwitchInput){
+    ttsSwitchInput.addEventListener('change', () => setTtsAutoReader(!!ttsSwitchInput.checked));
+  }
 
   async function initStreamerbotClient() {
     if (typeof StreamerbotClient === 'undefined') {
@@ -407,6 +436,8 @@
       onConnect: async (info) => {
         setWsIndicator(true);
         $('#ws-status') && ($('#ws-status').textContent = `Connecté à Streamer.bot (${info?.version || 'v?'})`);
+        // Sync état Auto-TTS au connect
+        await syncTtsSwitchFromBackend();
       },
 
       onDisconnect: (evt = {}) => {
@@ -417,6 +448,7 @@
           : `Déconnecté${evt.code ? ' — code '+evt.code : ''}${evt.reason ? ' — '+evt.reason : ''}`;
         if (el) el.textContent = msg;
         if (evt.code === 1006) clearStoredPwd();
+        updateTtsSwitchUI(false);
       },
 
       onError: (err) => {
@@ -456,7 +488,7 @@
     try {
       const info = await client.getInfo();
       if (info?.status !== 'ok') throw new Error('info-not-ok');
-    } catch { /* ne purge pas le mdp */ }
+    } catch {}
   }
 
   initStreamerbotClient();
