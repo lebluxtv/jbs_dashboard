@@ -45,6 +45,15 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .panel-head h2{margin:0;font-size:18px}
 .status-inline{display:flex;align-items:center;gap:10px;color:var(--muted);font-weight:600}
 
+/* Switch (TTS Reader only) */
+.switch{display:inline-flex;align-items:center;gap:8px;padding:4px 6px;border:1px solid var(--border);border-radius:10px;background:var(--panel)}
+.switch input{display:none}
+.switch .slider{width:36px;height:20px;border-radius:12px;background:#555;position:relative;transition:background .15s}
+.switch .slider::before{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#ffd64d;transition:transform .15s}
+.switch input:checked + .slider{background:#22c780}
+.switch input:checked + .slider::before{transform:translateX(16px)}
+.switch .switch-label-text{font-size:12px;color:#cfd2d6}
+
 /* Cards & grid */
 .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
 .card{grid-column:span 4;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:12px;box-shadow:var(--shadow)}
