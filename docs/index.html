@@ -121,7 +121,7 @@
       <div class="grid">
         <div class="card stretch">
           <h3>Subs récents</h3>
-          <ul class="qv-list clickable big" id="events-subs-list">
+          <ul class="qv-list big" id="events-subs-list">
             <li class="muted">Aucun sub</li>
           </ul>
         </div>
@@ -135,6 +135,13 @@
         <div class="status-inline">
           <span class="dot dot-tts off" aria-hidden="true"></span>
           <span id="tts-status-text">Inactif</span>
+          <!-- ▼▼ Switch uniquement ici ▼▼ -->
+          <label class="switch" id="tts-switch-label" title="Activer/Désactiver l'auto TTS">
+            <input type="checkbox" id="tts-switch" />
+            <span class="slider"></span>
+            <span class="switch-label-text">TTS OFF</span>
+          </label>
+          <!-- ▲▲ -->
         </div>
       </div>
       <div class="grid">
@@ -187,7 +194,7 @@
     <span class="muted">© <span id="year"></span> leblux Corp.</span>
   </footer>
 
-  <!-- 1) Streamer.bot client UMD (version épinglée stable) -->
+  <!-- 1) Streamer.bot client UMD -->
   <script src="https://cdn.jsdelivr.net/npm/@streamerbot/client@1.12.2/dist/streamerbot-client.js"></script>
   <!-- 2) App -->
   <script src="script.js"></script>
