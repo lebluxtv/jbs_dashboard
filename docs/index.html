@@ -163,4 +163,33 @@
       <div class="grid">
         <div class="card">
           <h3>Statut</h3>
-          <div id="guess-status-info" class="m
+          <div id="guess-status-info" class="muted">En pause</div>
+        </div>
+        <div class="card">
+          <h3>Dernier jeu trouvé</h3>
+          <div id="guess-last-info" class="muted">—</div>
+        </div>
+        <div class="card stretch">
+          <h3>Leaderboard</h3>
+          <ol id="guess-board" class="qv-ol">
+            <li class="muted">Aucune donnée</li>
+          </ol>
+        </div>
+        <div class="card stretch">
+          <h3>Journal</h3>
+          <div id="guess-log" class="log"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <span class="muted">© <span id="year"></span> JBS</span>
+  </footer>
+
+  <!-- 1) Streamer.bot client UMD (version épinglée stable) -->
+  <script src="https://cdn.jsdelivr.net/npm/@streamerbot/client@1.12.2/dist/streamerbot-client.js"></script>
+  <!-- 2) App -->
+  <script src="script.js"></script>
+</body>
+</html>
