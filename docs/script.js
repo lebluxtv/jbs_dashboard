@@ -1,9 +1,7 @@
 (function () {
   "use strict";
 
-  /* ========================================================================
-   * Helpers UI
-   * ===================================================================== */
+  // ============================ Helpers ============================
   const $  = (s, root=document) => root.querySelector(s);
   const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
 
@@ -36,38 +34,31 @@
     el.scrollTop = el.scrollHeight;
   }
 
-  function prependListItem(listEl, htmlText){
+  // insère un <li> et branche le toggle ACK (marquer lu)
+  function prependListItem(listEl, htmlText, onToggle){
     if (!listEl) return;
     const li = document.createElement('li');
     li.innerHTML = htmlText;
 
     li.addEventListener('click', (ev) => {
-      if ((ev.target.tagName || '').toLowerCase() === 'a') return;
+      if ((ev.target.tagName || '').toLowerCase() === 'a') return; // liens cliquables OK
       li.classList.toggle('ack');
+      if (typeof onToggle === 'function') onToggle(li.classList.contains('ack'));
       ev.stopPropagation();
     });
 
+    // supprime placeholder muted
     if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')) {
       listEl.removeChild(listEl.firstElementChild);
     }
     listEl.prepend(li);
 
+    // limite taille (10 par défaut, 50 pour .big)
     const limit = listEl.classList.contains('big') ? 50 : 10;
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
   }
 
-  function incBadge(badgeEls, value){
-    const v = Math.max(0, value|0);
-    badgeEls.forEach(b=>{
-      if (!b) return;
-      b.textContent = String(v);
-      if (b.id === 'qv-events-count') b.style.display = v>0 ? '' : 'none';
-    });
-  }
-
-  /* ========================================================================
-   * Tabs
-   * ===================================================================== */
+  // ============================ Tabs ============================
   $$('.tab').forEach(btn => btn.addEventListener('click', () => showTab(btn.dataset.tab)));
   (function initTab(){
     let initial = 'overview';
@@ -75,14 +66,17 @@
     showTab(initial);
   })();
 
-  $$('.qv-card').forEach(c => c.addEventListener('click', () => showTab(c.dataset.goto)));
+  // Quick-view : seul le TITRE est cliquable (ouvre l’onglet)
+  $$('.qv-card').forEach(card => {
+    const title = card.querySelector('.qv-head h2');
+    const target = card.dataset.goto;
+    if (title && target) title.addEventListener('click', () => showTab(target));
+  });
 
   const yearEl = $('#year');
   if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-  /* ========================================================================
-   * En-tête : voyant WebSocket
-   * ===================================================================== */
+  // ============================ Header : voyant WS ============================
   function setWsIndicator(state){
     const dot = $('#ws-dot');
     const txt = $('#ws-status');
@@ -90,19 +84,28 @@
     if (txt) txt.textContent = state ? 'Connecté à Streamer.bot' : 'Déconnecté de Streamer.bot';
   }
 
-  /* ========================================================================
-   * API publique
-   * ===================================================================== */
+  // ============================ API publique (UI) ============================
+  // compteur UNREAD pour le quick-view Events (seuls les non gris)
+  let qvUnreadEvents = 0;
+  function refreshQvEventsBadge(){
+    const b = $('#qv-events-count');
+    if (!b) return;
+    b.textContent = String(qvUnreadEvents);
+    b.style.display = qvUnreadEvents > 0 ? '' : 'none';
+  }
+
   window.DashboardStatus = {
     setStatus(name, isOn, count){
       setDot(`.dot-${name}`, !!isOn);
 
       if (name==='events'){
         const txt = $('#events-status-text'); if (txt) txt.textContent = isOn ? 'Actif':'Inactif';
+        // badges "globaux" (onglet + header) = total events (pas "non-lus")
         const badgeTab = $('.badge-events');
         const badgeHdr = $('#events-counter');
-        const badgeQV  = $('#qv-events-count');
-        if (typeof count === 'number') incBadge([badgeTab,badgeHdr,badgeQV], count);
+        if (typeof count === 'number'){
+          [badgeTab,badgeHdr].forEach(b=>{ if (b) b.textContent = String(Math.max(0,count|0)); });
+        }
       }
 
       if (name==='tts'){
@@ -115,21 +118,37 @@
       }
     },
 
+    // --------------------------- Events (SUBS) ---------------------------
     events: {
       addSub({user, tierLabel, months}){
         DashboardStatus.setStatus('events', true);
+
+        // total (onglet + entête)
         const badgeTab = $('.badge-events');
-        const current = parseInt((badgeTab?.textContent || "0"), 10) || 0;
-        incBadge([badgeTab, $('#events-counter'), $('#qv-events-count')], current+1);
+        const badgeHdr = $('#events-counter');
+        const current = parseInt((badgeTab && badgeTab.textContent || "0"), 10) || 0;
+        [badgeTab,badgeHdr].forEach(b=>{ if (b) b.textContent = String(current+1); });
 
         const txt = `<strong>${user}</strong> — ${tierLabel}${months>0 ? ` • ${months} mois` : ''}`;
-        prependListItem($('#qv-events-list'), txt);
+
+        // Quick-view (compte "non lus")
+        prependListItem($('#qv-events-list'), txt, (isAck)=>{
+          qvUnreadEvents += isAck ? -1 : +1;
+          qvUnreadEvents = Math.max(0, qvUnreadEvents);
+          refreshQvEventsBadge();
+        });
+        qvUnreadEvents += 1;
+        refreshQvEventsBadge();
+
+        // Panneau Events (liste principale)
         prependListItem($('#events-subs-list'), txt);
+
         appendLog('#events-log', `SUB ${tierLabel} ${user}${months>0 ? ` (${months} mois)` : ''}`);
       },
       log(msg){ appendLog('#events-log', msg); }
     },
 
+    // --------------------------- TTS ---------------------------
     tts: {
       addRead({user, message}){
         DashboardStatus.setStatus('tts', true);
@@ -143,6 +162,7 @@
       log(msg){ appendLog('#tts-log', msg); }
     },
 
+    // --------------------------- Guess --------------------------
     guess: {
       setStatus(running){
         DashboardStatus.setStatus('guess', !!running);
@@ -178,15 +198,9 @@
     showTab
   };
 
-  /* ========================================================================
-   * Gestion du mot de passe
-   * ===================================================================== */
+  // ============================ Password local ============================
   const SB_PWD_KEY = "sb_ws_password_v1";
-
-  function getQS(name) {
-    try { return new URLSearchParams(location.search).get(name); }
-    catch { return null; }
-  }
+  const getQS = (name) => { try { return new URLSearchParams(location.search).get(name); } catch { return null; } };
 
   function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
   function setStoredPwd(p){ try { if (p) localStorage.setItem(SB_PWD_KEY, p); } catch {} }
@@ -213,9 +227,19 @@
     return input.trim();
   }
 
-  /* ========================================================================
-   * Connexion Streamer.bot
-   * ===================================================================== */
+  // 🔒 Cadenas = ressaisir mdp + reconnexion
+  $('#pw-btn')?.addEventListener('click', async (e)=>{
+    e.stopPropagation();
+    try {
+      clearStoredPwd();
+      await ensureSbPassword(true);
+      try { await client?.disconnect?.(); } catch {}
+      setWsIndicator(false);
+      initStreamerbotClient();
+    } catch {/* user canceled */}
+  });
+
+  // ============================ Connexion Streamer.bot ============================
   let client;
 
   async function initStreamerbotClient() {
@@ -235,7 +259,6 @@
       if (el) el.textContent = 'Mot de passe requis';
       return;
     }
-
     if (!password) {
       setWsIndicator(false);
       const el = $('#ws-status');
@@ -245,7 +268,7 @@
 
     try { await client?.disconnect?.(); } catch {}
 
-    console.log(`[SB] Connecting: ws://localhost:8080/  | passLen=${password.length}`);
+    // NOTE: garde 'localhost' si ça marche chez toi; sinon remets '127.0.0.1'
     client = new StreamerbotClient({
       host: 'localhost',
       port: 8080,
@@ -285,6 +308,18 @@
           const u = data.selectedUser || data.user || '';
           const t = data.message || '';
           if (u && t) DashboardStatus.tts.addRead({ user: u, message: t });
+          return;
+        }
+        if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
+          const d = data || {};
+          const user = d.displayName || d.user || d.userName || d.username || '—';
+          let raw = (d.tier ?? d.plan ?? d.tierId ?? d.level ?? '').toString().toLowerCase();
+          let tierLabel = raw.includes('3000') || raw==='3' ? 'T3'
+                        : raw.includes('2000') || raw==='2' ? 'T2'
+                        : raw.includes('prime') ? 'Prime' : 'T1';
+          const months = Number(d.cumulativeMonths ?? d.months ?? d.streak ?? d.totalMonths ?? 0) || 0;
+          DashboardStatus.events.addSub({ user, tierLabel, months });
+          return;
         }
       }
     });
