@@ -6,7 +6,7 @@
   const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
 
   const SB_PWD_KEY     = "sb_ws_password_v1";
-  const EVENTS_KEY     = "jbs.events.v1";     // persistance des events
+  const EVENTS_KEY     = "jbs.events.v1";
   const MAX_EVENTS     = 200;
 
   function showTab(name){
@@ -21,11 +21,12 @@
     try { localStorage.setItem('jbs.activeTab', name); } catch {}
   }
 
+  // setDot => agit maintenant sur TOUS les éléments qui matchent le sélecteur
   function setDot(selector, on){
-    const el = $(selector);
-    if (!el) return;
-    el.classList.remove('on','off');
-    el.classList.add(on ? 'on' : 'off');
+    $$(selector).forEach(el=>{
+      el.classList.remove('on','off');
+      el.classList.add(on ? 'on' : 'off');
+    });
   }
 
   function appendLog(sel, text){
@@ -38,7 +39,6 @@
     el.scrollTop = el.scrollHeight;
   }
 
-  // UI util
   function prependListItem(listEl, htmlText, onToggle, ack=false){
     if (!listEl) return;
     const li = document.createElement('li');
@@ -105,7 +105,7 @@
     } catch {}
   }
 
-  // Remplit l’UI à partir du store
+  // Store en mémoire
   let eventsStore = loadEvents(); // [{id,type,user,tierLabel,months,ack}]
   let qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
 
@@ -115,11 +115,14 @@
     b.textContent = String(qvUnreadEvents);
     b.style.display = qvUnreadEvents > 0 ? '' : 'none';
   }
+  // Voyant Events = vert s'il reste des non-lus
+  function refreshEventsIndicators(){
+    setDot('.dot-events', qvUnreadEvents > 0);
+  }
 
   function renderStoredEventsIntoUI(){
     const qv = $('#qv-events-list');
     const full = $('#events-subs-list');
-    // reset
     if (qv){ qv.innerHTML = ''; }
     if (full){ full.innerHTML = ''; }
 
@@ -127,23 +130,25 @@
       if (qv){ qv.innerHTML = '<li class="muted">Aucun sub récent</li>'; }
       if (full){ full.innerHTML = '<li class="muted">Aucun sub</li>'; }
       refreshQvEventsBadge();
+      refreshEventsIndicators();
       return;
     }
 
-    for (const e of [...eventsStore].reverse()){ // plus récents en haut
+    for (const e of [...eventsStore].reverse()){
       const line = `<strong>${e.user}</strong> — <span class="mono">${e.type}</span> • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
       prependListItem(qv, line, (isAck)=>{
-        // MAJ store
         const idx = eventsStore.findIndex(x=>x.id===e.id);
         if (idx>=0){ eventsStore[idx].ack = isAck; saveEvents(eventsStore); }
         qvUnreadEvents += isAck ? -1 : +1;
         qvUnreadEvents = Math.max(0, qvUnreadEvents);
         refreshQvEventsBadge();
+        refreshEventsIndicators();
       }, e.ack);
 
       prependListItem(full, line, null, e.ack);
     }
     refreshQvEventsBadge();
+    refreshEventsIndicators();
   }
   renderStoredEventsIntoUI();
 
@@ -160,6 +165,8 @@
           [badgeTab,badgeHdr].forEach(b=>{ if (b) b.textContent = String(Math.max(0,count|0)); });
           if (badgeTab) badgeTab.style.display = count>0 ? '' : 'none';
         }
+        // On laisse le voyant être piloté par le nombre de non-lus
+        refreshEventsIndicators();
       }
 
       if (name==='tts'){
@@ -172,11 +179,8 @@
       }
     },
 
-    // --------------------------- Events (SUBS) ---------------------------
     events: {
       addSub({type, user, tierLabel, months}){
-        DashboardStatus.setStatus('events', true);
-
         // total (onglet + entête)
         const badgeTab = $('.badge-events');
         const badgeHdr = $('#events-counter');
@@ -199,17 +203,19 @@
         if (eventsStore.length > MAX_EVENTS) eventsStore = eventsStore.slice(-MAX_EVENTS);
         saveEvents(eventsStore);
 
-        // Quick-view (compte "non lus")
+        // Quick-view (non-lus)
         prependListItem($('#qv-events-list'), line, (isAck)=>{
           evObj.ack = isAck; saveEvents(eventsStore);
           qvUnreadEvents += isAck ? -1 : +1;
           qvUnreadEvents = Math.max(0, qvUnreadEvents);
           refreshQvEventsBadge();
+          refreshEventsIndicators();
         }, false);
         qvUnreadEvents += 1;
         refreshQvEventsBadge();
+        refreshEventsIndicators();
 
-        // Panneau Events (liste principale)
+        // Panneau Events
         prependListItem($('#events-subs-list'), line, null, false);
 
         appendLog('#events-log', `${type||'Sub'} ${tierLabel} ${safeUser}${months>0 ? ` (${months} mois)` : ''}`);
@@ -217,10 +223,8 @@
       log(msg){ appendLog('#events-log', msg); }
     },
 
-    // --------------------------- TTS ---------------------------
     tts: {
       addRead({user, message}){
-        DashboardStatus.setStatus('tts', true);
         const safeUser = displayNameFromAny(user);
         const safeMsg  = message || '';
         const html = `<strong>${safeUser}</strong> — ${safeMsg}`;
@@ -231,10 +235,8 @@
       log(msg){ appendLog('#tts-log', msg); }
     },
 
-    // --------------------------- Guess --------------------------
     guess: {
       setStatus(running){
-        DashboardStatus.setStatus('guess', !!running);
         const s = running ? 'En cours' : 'En pause';
         const a = $('#guess-status-info'); if (a) a.textContent = s;
       },
@@ -267,7 +269,7 @@
     showTab
   };
 
-  // ============================ Normalisation des noms/tiers ============================
+  // ============================ Normalisation ============================
   function displayNameFromAny(val){
     if (!val) return '—';
     if (typeof val === 'string') return val;
@@ -286,30 +288,20 @@
   }
 
   function parseTierLabelFromPayload(d){
-    // prime explicite ?
     if (d?.isPrime === true || d?.prime === true || (typeof d?.subPlanName === 'string' && /prime/i.test(d.subPlanName))) {
       return 'Prime';
     }
-
     const raw0 =
       d?.tier ?? d?.plan ?? d?.tierId ?? d?.level ??
       d?.subTier ?? d?.subscriptionPlan ?? d?.subscription?.plan ?? '';
-
-    const s = String(raw0).toLowerCase().replace(/\s+/g,''); // "Tier 2" -> "tier2"
-
+    const s = String(raw0).toLowerCase().replace(/\s+/g,'');
     if (/prime/.test(s)) return 'Prime';
     if (/(3000|tier3|t3|\b3\b)/.test(s)) return 'T3';
     if (/(2000|tier2|t2|\b2\b)/.test(s)) return 'T2';
     if (/(1000|tier1|t1|\b1\b)/.test(s)) return 'T1';
-
-    if (typeof raw0 === 'number'){
-      if (raw0 === 3) return 'T3';
-      if (raw0 === 2) return 'T2';
-      if (raw0 === 1) return 'T1';
-    }
+    if (typeof raw0 === 'number'){ if (raw0===3) return 'T3'; if (raw0===2) return 'T2'; if (raw0===1) return 'T1'; }
     return 'T1';
   }
-
   function extractMonths(d){
     return Number(
       d?.cumulativeMonths ?? d?.months ?? d?.streak ?? d?.totalMonths ?? d?.subscription?.months ?? 0
@@ -318,7 +310,6 @@
 
   // ============================ Password local ============================
   const getQS = (name) => { try { return new URLSearchParams(location.search).get(name); } catch { return null; } };
-
   function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
   function setStoredPwd(p){ try { if (p) localStorage.setItem(SB_PWD_KEY, p); } catch {} }
   function clearStoredPwd(){ try { localStorage.removeItem(SB_PWD_KEY); } catch {} }
@@ -344,7 +335,7 @@
     return input.trim();
   }
 
-  // 🔒 Cadenas = ressaisir mdp + reconnexion
+  // 🔒 Cadenas
   $('#pw-btn')?.addEventListener('click', async (e)=>{
     e.stopPropagation();
     try {
@@ -353,7 +344,7 @@
       try { await client?.disconnect?.(); } catch {}
       setWsIndicator(false);
       initStreamerbotClient();
-    } catch {/* user canceled */}
+    } catch {}
   });
 
   // ============================ Connexion Streamer.bot ============================
@@ -386,7 +377,7 @@
     try { await client?.disconnect?.(); } catch {}
 
     client = new StreamerbotClient({
-      host: '127.0.0.1', // ou 'localhost' si ça marche chez toi
+      host: '127.0.0.1',
       port: 8080,
       endpoint: '/',
       scheme: 'ws',
@@ -409,8 +400,6 @@
           ? 'Déconnecté — 1006 (auth invalide ?)'
           : `Déconnecté${evt.code ? ' — code '+evt.code : ''}${evt.reason ? ' — '+evt.reason : ''}`;
         if (el) el.textContent = msg;
-
-        // On ne nettoie PAS le mdp sauf code 1006 (auth invalidée)
         if (evt.code === 1006) clearStoredPwd();
       },
 
@@ -421,13 +410,12 @@
       },
 
       onData: ({event, data}) => {
-        // ----- LIVE / OFFLINE -----
+        // LIVE / OFFLINE
         if (event?.source === 'Twitch' && (event.type === 'StreamOnline' || event.type === 'StreamOffline')) {
-          setLiveIndicator(event.type === 'StreamOnline');
-          return;
+          setLiveIndicator(event.type === 'StreamOnline'); return;
         }
 
-        // ----- TTS lus -----
+        // TTS lus
         if (event?.source === 'General' && data?.widget === 'tts-reader-selection') {
           const u = displayNameFromAny(data.selectedUser || data.user || '');
           const t = data.message || '';
@@ -435,7 +423,7 @@
           return;
         }
 
-        // ----- SUBS / RESUB / GIFTSUB -----
+        // SUBS / RESUB / GIFTSUB
         if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
           const d = data || {};
           const user = displayNameFromAny(
@@ -449,13 +437,11 @@
       }
     });
 
-    // "Smoke test" non destructif : ne nettoie pas le mdp si ça échoue
     try {
       const info = await client.getInfo();
       if (info?.status !== 'ok') throw new Error('info-not-ok');
     } catch {
-      // On n'efface plus le mdp ici (évite le prompt à chaque reload).
-      // L'utilisateur garde son mdp tant qu'une vraie erreur 1006 n’arrive pas.
+      // on ne purge plus le mdp ici
     }
   }
 
