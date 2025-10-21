@@ -371,6 +371,7 @@
       const resp = await client.getGlobal("ttsAutoReaderEnabled");
       const isOn = resp && resp.status === "ok" ? !!resp.variable?.value : false;
       updateTtsSwitchUI(isOn);
+      // (pas de log ici : on ne log que les changements via le bouton)
     } catch {
       updateTtsSwitchUI(false);
     }
@@ -383,9 +384,11 @@
         args: { mode: enabled ? "on" : "off" }
       });
       updateTtsSwitchUI(enabled);
+      appendLog('#tts-log', `Auto TTS ${enabled ? 'ON' : 'OFF'} (via bouton)`);
     } catch (e){
       // rollback visuel
       updateTtsSwitchUI(!enabled);
+      appendLog('#tts-log', `Erreur: impossible de changer l’état de l’auto TTS`);
       alert("Impossible de changer l’état de l’auto TTS.");
       console.error(e);
     }
