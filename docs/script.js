@@ -5,6 +5,10 @@
   const $  = (s, root=document) => root.querySelector(s);
   const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
 
+  const SB_PWD_KEY     = "sb_ws_password_v1";
+  const EVENTS_KEY     = "jbs.events.v1";     // persistance des events
+  const MAX_EVENTS     = 200;
+
   function showTab(name){
     $$('.tab').forEach(btn=>{
       const act = btn.dataset.tab===name;
@@ -34,26 +38,25 @@
     el.scrollTop = el.scrollHeight;
   }
 
-  // insère un <li> et branche le toggle ACK (marquer lu)
-  function prependListItem(listEl, htmlText, onToggle){
+  // UI util
+  function prependListItem(listEl, htmlText, onToggle, ack=false){
     if (!listEl) return;
     const li = document.createElement('li');
     li.innerHTML = htmlText;
+    if (ack) li.classList.add('ack');
 
     li.addEventListener('click', (ev) => {
-      if ((ev.target.tagName || '').toLowerCase() === 'a') return; // liens OK
+      if ((ev.target.tagName || '').toLowerCase() === 'a') return;
       li.classList.toggle('ack');
       if (typeof onToggle === 'function') onToggle(li.classList.contains('ack'));
       ev.stopPropagation();
     });
 
-    // supprime placeholder muted
     if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')) {
       listEl.removeChild(listEl.firstElementChild);
     }
     listEl.prepend(li);
 
-    // limite taille (10 par défaut, 50 pour .big)
     const limit = listEl.classList.contains('big') ? 50 : 10;
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
   }
@@ -66,7 +69,7 @@
     showTab(initial);
   })();
 
-  // Quick-view : seul le TITRE est cliquable (ouvre l’onglet)
+  // Quick-view : seul le TITRE est cliquable
   $$('.qv-card').forEach(card => {
     const title = card.querySelector('.qv-head h2');
     const target = card.dataset.goto;
@@ -76,17 +79,36 @@
   const yearEl = $('#year');
   if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-  // ============================ Header : voyant WS ============================
+  // ============================ Voyants ============================
   function setWsIndicator(state){
-    const dot = $('#ws-dot');
+    setDot('#ws-dot', state);
     const txt = $('#ws-status');
-    if (dot){ dot.classList.remove('on','off'); dot.classList.add(state ? 'on' : 'off'); }
     if (txt) txt.textContent = state ? 'Connecté à Streamer.bot' : 'Déconnecté de Streamer.bot';
   }
+  function setLiveIndicator(isLive){
+    setDot('#live-dot', !!isLive);
+    const t = $('#live-status'); if (t) t.textContent = isLive ? 'Live' : 'Offline';
+  }
 
-  // ============================ API publique (UI) ============================
-  // compteur UNREAD pour le quick-view Events (seuls les non gris)
-  let qvUnreadEvents = 0;
+  // ============================ Persistance Events ============================
+  function loadEvents(){
+    try {
+      const raw = localStorage.getItem(EVENTS_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+  }
+  function saveEvents(list){
+    try {
+      const trimmed = (list||[]).slice(0, MAX_EVENTS);
+      localStorage.setItem(EVENTS_KEY, JSON.stringify(trimmed));
+    } catch {}
+  }
+
+  // Remplit l’UI à partir du store
+  let eventsStore = loadEvents(); // [{id,type,user,tierLabel,months,ack}]
+  let qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
+
   function refreshQvEventsBadge(){
     const b = $('#qv-events-count');
     if (!b) return;
@@ -94,17 +116,49 @@
     b.style.display = qvUnreadEvents > 0 ? '' : 'none';
   }
 
+  function renderStoredEventsIntoUI(){
+    const qv = $('#qv-events-list');
+    const full = $('#events-subs-list');
+    // reset
+    if (qv){ qv.innerHTML = ''; }
+    if (full){ full.innerHTML = ''; }
+
+    if (!eventsStore.length){
+      if (qv){ qv.innerHTML = '<li class="muted">Aucun sub récent</li>'; }
+      if (full){ full.innerHTML = '<li class="muted">Aucun sub</li>'; }
+      refreshQvEventsBadge();
+      return;
+    }
+
+    for (const e of [...eventsStore].reverse()){ // plus récents en haut
+      const line = `<strong>${e.user}</strong> — <span class="mono">${e.type}</span> • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
+      prependListItem(qv, line, (isAck)=>{
+        // MAJ store
+        const idx = eventsStore.findIndex(x=>x.id===e.id);
+        if (idx>=0){ eventsStore[idx].ack = isAck; saveEvents(eventsStore); }
+        qvUnreadEvents += isAck ? -1 : +1;
+        qvUnreadEvents = Math.max(0, qvUnreadEvents);
+        refreshQvEventsBadge();
+      }, e.ack);
+
+      prependListItem(full, line, null, e.ack);
+    }
+    refreshQvEventsBadge();
+  }
+  renderStoredEventsIntoUI();
+
+  // ============================ API publique (UI) ============================
   window.DashboardStatus = {
     setStatus(name, isOn, count){
       setDot(`.dot-${name}`, !!isOn);
 
       if (name==='events'){
         const txt = $('#events-status-text'); if (txt) txt.textContent = isOn ? 'Actif':'Inactif';
-        // badges "globaux" (onglet + header) = total events (pas "non-lus")
         const badgeTab = $('.badge-events');
         const badgeHdr = $('#events-counter');
         if (typeof count === 'number'){
           [badgeTab,badgeHdr].forEach(b=>{ if (b) b.textContent = String(Math.max(0,count|0)); });
+          if (badgeTab) badgeTab.style.display = count>0 ? '' : 'none';
         }
       }
 
@@ -120,7 +174,7 @@
 
     // --------------------------- Events (SUBS) ---------------------------
     events: {
-      addSub({user, tierLabel, months}){
+      addSub({type, user, tierLabel, months}){
         DashboardStatus.setStatus('events', true);
 
         // total (onglet + entête)
@@ -128,23 +182,37 @@
         const badgeHdr = $('#events-counter');
         const current = parseInt((badgeTab && badgeTab.textContent || "0"), 10) || 0;
         [badgeTab,badgeHdr].forEach(b=>{ if (b) b.textContent = String(current+1); });
+        if (badgeTab) badgeTab.style.display = '';
 
         const safeUser = displayNameFromAny(user);
-        const txt = `<strong>${safeUser}</strong> — ${tierLabel}${months>0 ? ` • ${months} mois` : ''}`;
+        const line = `<strong>${safeUser}</strong> — <span class="mono">${type||'Sub'}</span> • ${tierLabel}${months>0 ? ` • ${months} mois` : ''}`;
+
+        // store
+        const evObj = {
+          id: Date.now() + Math.random().toString(16).slice(2),
+          type: type || 'Sub',
+          user: safeUser,
+          tierLabel, months,
+          ack: false
+        };
+        eventsStore.push(evObj);
+        if (eventsStore.length > MAX_EVENTS) eventsStore = eventsStore.slice(-MAX_EVENTS);
+        saveEvents(eventsStore);
 
         // Quick-view (compte "non lus")
-        prependListItem($('#qv-events-list'), txt, (isAck)=>{
+        prependListItem($('#qv-events-list'), line, (isAck)=>{
+          evObj.ack = isAck; saveEvents(eventsStore);
           qvUnreadEvents += isAck ? -1 : +1;
           qvUnreadEvents = Math.max(0, qvUnreadEvents);
           refreshQvEventsBadge();
-        });
+        }, false);
         qvUnreadEvents += 1;
         refreshQvEventsBadge();
 
         // Panneau Events (liste principale)
-        prependListItem($('#events-subs-list'), txt);
+        prependListItem($('#events-subs-list'), line, null, false);
 
-        appendLog('#events-log', `SUB ${tierLabel} ${safeUser}${months>0 ? ` (${months} mois)` : ''}`);
+        appendLog('#events-log', `${type||'Sub'} ${tierLabel} ${safeUser}${months>0 ? ` (${months} mois)` : ''}`);
       },
       log(msg){ appendLog('#events-log', msg); }
     },
@@ -199,12 +267,10 @@
     showTab
   };
 
-  // ============================ Normalisation des noms et tiers ============================
+  // ============================ Normalisation des noms/tiers ============================
   function displayNameFromAny(val){
     if (!val) return '—';
     if (typeof val === 'string') return val;
-
-    // si c’est un objet, cherche dans ses propriétés usuelles
     if (typeof val === 'object'){
       const cands = [
         val.displayName, val.userName, val.username, val.name,
@@ -220,26 +286,27 @@
   }
 
   function parseTierLabelFromPayload(d){
-    // collecte toutes les sources possibles
+    // prime explicite ?
+    if (d?.isPrime === true || d?.prime === true || (typeof d?.subPlanName === 'string' && /prime/i.test(d.subPlanName))) {
+      return 'Prime';
+    }
+
     const raw0 =
       d?.tier ?? d?.plan ?? d?.tierId ?? d?.level ??
-      d?.subPlan ?? d?.subscriptionPlan ?? d?.subscription?.plan ?? '';
+      d?.subTier ?? d?.subscriptionPlan ?? d?.subscription?.plan ?? '';
 
-    const s = String(raw0).toLowerCase().replace(/\s+/g,''); // normalise
+    const s = String(raw0).toLowerCase().replace(/\s+/g,''); // "Tier 2" -> "tier2"
 
-    if (s.includes('prime')) return 'Prime';
+    if (/prime/.test(s)) return 'Prime';
     if (/(3000|tier3|t3|\b3\b)/.test(s)) return 'T3';
     if (/(2000|tier2|t2|\b2\b)/.test(s)) return 'T2';
     if (/(1000|tier1|t1|\b1\b)/.test(s)) return 'T1';
 
-    // si c’est un nombre brut
     if (typeof raw0 === 'number'){
       if (raw0 === 3) return 'T3';
       if (raw0 === 2) return 'T2';
       if (raw0 === 1) return 'T1';
     }
-
-    // défaut raisonnable
     return 'T1';
   }
 
@@ -250,7 +317,6 @@
   }
 
   // ============================ Password local ============================
-  const SB_PWD_KEY = "sb_ws_password_v1";
   const getQS = (name) => { try { return new URLSearchParams(location.search).get(name); } catch { return null; } };
 
   function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
@@ -319,9 +385,8 @@
 
     try { await client?.disconnect?.(); } catch {}
 
-    // Remets '127.0.0.1' si besoin.
     client = new StreamerbotClient({
-      host: '127.0.0.1',
+      host: '127.0.0.1', // ou 'localhost' si ça marche chez toi
       port: 8080,
       endpoint: '/',
       scheme: 'ws',
@@ -332,10 +397,9 @@
       subscribe: '*',
       logLevel: 'warn',
 
-      onConnect: (info) => {
+      onConnect: async (info) => {
         setWsIndicator(true);
-        const el = $('#ws-status');
-        if (el) el.textContent = `Connecté à Streamer.bot (${info?.version || 'v?'})`;
+        $('#ws-status') && ($('#ws-status').textContent = `Connecté à Streamer.bot (${info?.version || 'v?'})`);
       },
 
       onDisconnect: (evt = {}) => {
@@ -345,6 +409,8 @@
           ? 'Déconnecté — 1006 (auth invalide ?)'
           : `Déconnecté${evt.code ? ' — code '+evt.code : ''}${evt.reason ? ' — '+evt.reason : ''}`;
         if (el) el.textContent = msg;
+
+        // On ne nettoie PAS le mdp sauf code 1006 (auth invalidée)
         if (evt.code === 1006) clearStoredPwd();
       },
 
@@ -355,7 +421,13 @@
       },
 
       onData: ({event, data}) => {
-        // TTS lus
+        // ----- LIVE / OFFLINE -----
+        if (event?.source === 'Twitch' && (event.type === 'StreamOnline' || event.type === 'StreamOffline')) {
+          setLiveIndicator(event.type === 'StreamOnline');
+          return;
+        }
+
+        // ----- TTS lus -----
         if (event?.source === 'General' && data?.widget === 'tts-reader-selection') {
           const u = displayNameFromAny(data.selectedUser || data.user || '');
           const t = data.message || '';
@@ -363,33 +435,27 @@
           return;
         }
 
-        // SUBS / RESUB / GIFTSUB
+        // ----- SUBS / RESUB / GIFTSUB -----
         if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
           const d = data || {};
-
-          // nom utilisateur (accepte string ou objets imbriqués)
           const user = displayNameFromAny(
             d.displayName ?? d.user ?? d.userName ?? d.username ?? d.sender ?? d.gifter ?? d.userInfo
           );
-
-          // tier + mois robustes
           const tierLabel = parseTierLabelFromPayload(d);
-          const months = extractMonths(d);
-
-          DashboardStatus.events.addSub({ user, tierLabel, months });
+          const months    = extractMonths(d);
+          DashboardStatus.events.addSub({ type: event.type, user, tierLabel, months });
           return;
         }
       }
     });
 
+    // "Smoke test" non destructif : ne nettoie pas le mdp si ça échoue
     try {
       const info = await client.getInfo();
       if (info?.status !== 'ok') throw new Error('info-not-ok');
     } catch {
-      setWsIndicator(false);
-      const el = $('#ws-status');
-      if (el) el.textContent = 'Auth KO — ressaisis le mot de passe';
-      clearStoredPwd();
+      // On n'efface plus le mdp ici (évite le prompt à chaque reload).
+      // L'utilisateur garde son mdp tant qu'une vraie erreur 1006 n’arrive pas.
     }
   }
 
