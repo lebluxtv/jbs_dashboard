@@ -5,9 +5,9 @@
   const $  = (s, root=document) => root.querySelector(s);
   const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
 
-  const SB_PWD_KEY     = "sb_ws_password_v1";
-  const EVENTS_KEY     = "jbs.events.v1";
-  const MAX_EVENTS     = 200;
+  const SB_PWD_KEY = "sb_ws_password_v1";
+  const EVENTS_KEY = "jbs.events.v1";
+  const MAX_EVENTS = 200;
 
   function showTab(name){
     $$('.tab').forEach(btn=>{
@@ -21,7 +21,7 @@
     try { localStorage.setItem('jbs.activeTab', name); } catch {}
   }
 
-  // setDot => agit sur TOUS les éléments qui matchent
+  // agit sur TOUS les éléments qui matchent
   function setDot(selector, on){
     $$(selector).forEach(el=>{
       el.classList.remove('on','off');
@@ -88,7 +88,7 @@
     showTab(initial);
   })();
 
-  // Quick-view : seul le TITRE clique
+  // Quick-view : seul le TITRE est cliquable
   $$('.qv-card').forEach(card => {
     const title = card.querySelector('.qv-head h2');
     const target = card.dataset.goto;
@@ -124,17 +124,27 @@
     } catch {}
   }
 
-  let eventsStore = loadEvents(); // [{id,type,user,tierLabel,months,ack}]
+  let eventsStore = loadEvents();                // [{id,type,user,tierLabel,months,ack}]
   let qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
 
-  function refreshQvEventsBadge(){
-    const b = $('#qv-events-count');
-    if (!b) return;
-    b.textContent = String(qvUnreadEvents);
-    b.style.display = qvUnreadEvents > 0 ? '' : 'none';
-  }
-  function refreshEventsIndicators(){
+  // -------- counters/status centralisés (UNREAD) --------
+  function syncEventsStatusUI(){
+    // Voyant global Events (tous les points .dot-events)
     setDot('.dot-events', qvUnreadEvents > 0);
+
+    // Badge “quick view” (Overview)
+    const bQV = $('#qv-events-count');
+    if (bQV){ bQV.textContent = String(qvUnreadEvents); bQV.style.display = qvUnreadEvents>0?'':'none'; }
+
+    // Badge sur l’onglet + badge dans l’entête du panneau
+    const bTab  = $('.badge-events');
+    const bHead = $('#events-counter');
+    if (bTab){  bTab.textContent = String(qvUnreadEvents);  bTab.style.display  = qvUnreadEvents>0?'':'none'; }
+    if (bHead){ bHead.textContent = String(qvUnreadEvents); }
+
+    // Libellé “Actif/Inactif” dans Events Checker
+    const txt = $('#events-status-text');
+    if (txt) txt.textContent = qvUnreadEvents>0 ? 'Actif' : 'Inactif';
   }
 
   function renderStoredEventsIntoUI(){
@@ -146,13 +156,11 @@
     if (!eventsStore.length){
       if (qv){ qv.innerHTML = '<li class="muted">Aucun sub récent</li>'; }
       if (full){ full.innerHTML = '<li class="muted">Aucun sub</li>'; }
-      refreshQvEventsBadge();
-      refreshEventsIndicators();
+      syncEventsStatusUI();
       return;
     }
 
-    // >>>> FIX ORDRE : on parcourt du plus récent au plus ancien ET on APPEND
-    // Ainsi, à la fin, le plus récent reste en haut (comme en live).
+    // Ordre conservé: plus récents en haut (append du plus récent au plus ancien)
     for (let i = eventsStore.length - 1; i >= 0; i--){
       const e = eventsStore[i];
       const line = `<strong>${e.user}</strong> — <span class="mono">${e.type}</span> • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
@@ -162,31 +170,23 @@
         if (idx>=0){ eventsStore[idx].ack = isAck; saveEvents(eventsStore); }
         qvUnreadEvents += isAck ? -1 : +1;
         qvUnreadEvents = Math.max(0, qvUnreadEvents);
-        refreshQvEventsBadge();
-        refreshEventsIndicators();
+        syncEventsStatusUI();
       }, e.ack);
 
       appendListItem(full, line, null, e.ack);
     }
-    refreshQvEventsBadge();
-    refreshEventsIndicators();
+    syncEventsStatusUI();
   }
   renderStoredEventsIntoUI();
 
   // ============================ API publique (UI) ============================
   window.DashboardStatus = {
-    setStatus(name, isOn, count){
+    setStatus(name, isOn/*, count*/){
       setDot(`.dot-${name}`, !!isOn);
 
       if (name==='events'){
-        const txt = $('#events-status-text'); if (txt) txt.textContent = isOn ? 'Actif':'Inactif';
-        const badgeTab = $('.badge-events');
-        const badgeHdr = $('#events-counter');
-        if (typeof count === 'number'){
-          [badgeTab,badgeHdr].forEach(b=>{ if (b) b.textContent = String(Math.max(0,count|0)); });
-          if (badgeTab) badgeTab.style.display = count>0 ? '' : 'none';
-        }
-        refreshEventsIndicators();
+        // Le statut Events est piloté par le nombre de NON-LUS
+        syncEventsStatusUI();
       }
 
       if (name==='tts'){
@@ -199,17 +199,13 @@
       }
     },
 
+    // --------------------------- Events (SUBS) ---------------------------
     events: {
       addSub({type, user, tierLabel, months}){
-        const badgeTab = $('.badge-events');
-        const badgeHdr = $('#events-counter');
-        const current = parseInt((badgeTab && badgeTab.textContent || "0"), 10) || 0;
-        [badgeTab,badgeHdr].forEach(b=>{ if (b) b.textContent = String(current+1); });
-        if (badgeTab) badgeTab.style.display = '';
-
         const safeUser = displayNameFromAny(user);
         const line = `<strong>${safeUser}</strong> — <span class="mono">${type||'Sub'}</span> • ${tierLabel}${months>0 ? ` • ${months} mois` : ''}`;
 
+        // store
         const evObj = {
           id: Date.now() + Math.random().toString(16).slice(2),
           type: type || 'Sub',
@@ -221,25 +217,27 @@
         if (eventsStore.length > MAX_EVENTS) eventsStore = eventsStore.slice(-MAX_EVENTS);
         saveEvents(eventsStore);
 
-        // Live: on garde le “nouveau en haut” => PREPEND
+        // Quick-view (non-lu par défaut)
         prependListItem($('#qv-events-list'), line, (isAck)=>{
           evObj.ack = isAck; saveEvents(eventsStore);
           qvUnreadEvents += isAck ? -1 : +1;
           qvUnreadEvents = Math.max(0, qvUnreadEvents);
-          refreshQvEventsBadge();
-          refreshEventsIndicators();
+          syncEventsStatusUI();
         }, false);
-        qvUnreadEvents += 1;
-        refreshQvEventsBadge();
-        refreshEventsIndicators();
 
+        // Panneau Events
         prependListItem($('#events-subs-list'), line, null, false);
+
+        // Comptes/états
+        qvUnreadEvents += 1;
+        syncEventsStatusUI();
 
         appendLog('#events-log', `${type||'Sub'} ${tierLabel} ${safeUser}${months>0 ? ` (${months} mois)` : ''}`);
       },
       log(msg){ appendLog('#events-log', msg); }
     },
 
+    // --------------------------- TTS ---------------------------
     tts: {
       addRead({user, message}){
         const safeUser = displayNameFromAny(user);
@@ -252,6 +250,7 @@
       log(msg){ appendLog('#tts-log', msg); }
     },
 
+    // --------------------------- Guess --------------------------
     guess: {
       setStatus(running){
         const s = running ? 'En cours' : 'En pause';
@@ -427,10 +426,12 @@
       },
 
       onData: ({event, data}) => {
+        // LIVE / OFFLINE
         if (event?.source === 'Twitch' && (event.type === 'StreamOnline' || event.type === 'StreamOffline')) {
           setLiveIndicator(event.type === 'StreamOnline'); return;
         }
 
+        // TTS lus
         if (event?.source === 'General' && data?.widget === 'tts-reader-selection') {
           const u = displayNameFromAny(data.selectedUser || data.user || '');
           const t = data.message || '';
@@ -438,6 +439,7 @@
           return;
         }
 
+        // SUBS / RESUB / GIFTSUB
         if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
           const d = data || {};
           const user = displayNameFromAny(
