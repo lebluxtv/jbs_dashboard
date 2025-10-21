@@ -129,7 +129,7 @@
         const current = parseInt((badgeTab && badgeTab.textContent || "0"), 10) || 0;
         [badgeTab,badgeHdr].forEach(b=>{ if (b) b.textContent = String(current+1); });
 
-        const safeUser = (typeof user === 'string') ? user : displayNameOf(user);
+        const safeUser = displayNameFromAny(user);
         const txt = `<strong>${safeUser}</strong> — ${tierLabel}${months>0 ? ` • ${months} mois` : ''}`;
 
         // Quick-view (compte "non lus")
@@ -153,7 +153,7 @@
     tts: {
       addRead({user, message}){
         DashboardStatus.setStatus('tts', true);
-        const safeUser = displayNameOf(user);
+        const safeUser = displayNameFromAny(user);
         const safeMsg  = message || '';
         const html = `<strong>${safeUser}</strong> — ${safeMsg}`;
         prependListItem($('#qv-tts-list'), html);
@@ -199,19 +199,54 @@
     showTab
   };
 
-  // ============================ Normalisation noms ============================
-  function displayNameOf(u){
-    if (!u) return '—';
-    if (typeof u === 'string') return u;
-    if (typeof u === 'object'){
-      if (typeof u.displayName === 'string') return u.displayName;
-      if (typeof u.userName === 'string')    return u.userName;
-      if (typeof u.username === 'string')    return u.username;
-      if (typeof u.name === 'string')        return u.name;
-      if (typeof u.login === 'string')       return u.login;
-      if (typeof u.id === 'string')          return u.id;
+  // ============================ Normalisation des noms et tiers ============================
+  function displayNameFromAny(val){
+    if (!val) return '—';
+    if (typeof val === 'string') return val;
+
+    // si c’est un objet, cherche dans ses propriétés usuelles
+    if (typeof val === 'object'){
+      const cands = [
+        val.displayName, val.userName, val.username, val.name,
+        val.login, val.display, val.channel, val.broadcaster
+      ];
+      for (const c of cands){
+        if (typeof c === 'string' && c.trim()) return c.trim();
+      }
+      if (typeof val.id === 'string' && val.id.trim()) return val.id.trim();
+      if (typeof val.id === 'number') return String(val.id);
     }
-    return String(u);
+    return String(val);
+  }
+
+  function parseTierLabelFromPayload(d){
+    // collecte toutes les sources possibles
+    const raw0 =
+      d?.tier ?? d?.plan ?? d?.tierId ?? d?.level ??
+      d?.subPlan ?? d?.subscriptionPlan ?? d?.subscription?.plan ?? '';
+
+    const s = String(raw0).toLowerCase().replace(/\s+/g,''); // normalise
+
+    if (s.includes('prime')) return 'Prime';
+    if (/(3000|tier3|t3|\b3\b)/.test(s)) return 'T3';
+    if (/(2000|tier2|t2|\b2\b)/.test(s)) return 'T2';
+    if (/(1000|tier1|t1|\b1\b)/.test(s)) return 'T1';
+
+    // si c’est un nombre brut
+    if (typeof raw0 === 'number'){
+      if (raw0 === 3) return 'T3';
+      if (raw0 === 2) return 'T2';
+      if (raw0 === 1) return 'T1';
+    }
+
+    // défaut raisonnable
+    return 'T1';
+  }
+
+  function extractMonths(d){
+    return Number(
+      d?.cumulativeMonths ?? d?.months ?? d?.streak ?? d?.totalMonths ?? d?.subscription?.months ?? 0
+    ) || 0;
   }
 
   // ============================ Password local ============================
@@ -322,7 +357,7 @@
       onData: ({event, data}) => {
         // TTS lus
         if (event?.source === 'General' && data?.widget === 'tts-reader-selection') {
-          const u = displayNameOf(data.selectedUser || data.user || '');
+          const u = displayNameFromAny(data.selectedUser || data.user || '');
           const t = data.message || '';
           if (u && t) DashboardStatus.tts.addRead({ user: u, message: t });
           return;
@@ -332,19 +367,14 @@
         if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
           const d = data || {};
 
-          const user = displayNameOf(
-            d.displayName ?? d.user ?? d.userName ?? d.username ?? d.sender ?? d.gifter
+          // nom utilisateur (accepte string ou objets imbriqués)
+          const user = displayNameFromAny(
+            d.displayName ?? d.user ?? d.userName ?? d.username ?? d.sender ?? d.gifter ?? d.userInfo
           );
 
-          let raw = (d.tier ?? d.plan ?? d.tierId ?? d.level ?? '').toString().toLowerCase();
-          let tierLabel = 'T1';
-          if (raw.includes('3000') || raw==='3')      tierLabel = 'T3';
-          else if (raw.includes('2000') || raw==='2') tierLabel = 'T2';
-          else if (raw.includes('prime'))             tierLabel = 'Prime';
-
-          const months = Number(
-            d.cumulativeMonths ?? d.months ?? d.streak ?? d.totalMonths ?? 0
-          ) || 0;
+          // tier + mois robustes
+          const tierLabel = parseTierLabelFromPayload(d);
+          const months = extractMonths(d);
 
           DashboardStatus.events.addSub({ user, tierLabel, months });
           return;
