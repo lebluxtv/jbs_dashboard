@@ -76,8 +76,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .qv-body{padding:12px;min-height:220px}
 .qv-foot{padding:8px 12px;border-top:1px dashed var(--border);text-align:center;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px}
 
-/* Events quick-view: expand puis scroll */
-#qv-events-list{max-height:300px;overflow:auto}
+/* Quick-view scroll: Events & TTS */
+#qv-events-list, #qv-tts-list { max-height:300px; overflow:auto }
 
 /* Text utils + footer */
 .muted{color:var(--muted)}
