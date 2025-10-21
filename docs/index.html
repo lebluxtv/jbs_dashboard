@@ -158,37 +158,91 @@
       </div>
     </section>
 
-    <!-- Guess The Game -->
-    <section id="tab-guess" class="tab-panel" role="tabpanel">
-      <div class="panel-head">
-        <h2>Guess The Game</h2>
-        <div class="status-inline">
-          <span class="dot dot-guess off" aria-hidden="true"></span>
-          <span id="guess-status-text">En pause</span>
+<section id="tab-guess" class="tab-panel" role="tabpanel">
+  <div class="panel-head">
+    <h2>Guess The Game</h2>
+    <div class="status-inline">
+      <span class="dot dot-guess off" aria-hidden="true"></span>
+      <span id="guess-status-text">En pause</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- Filtres -->
+    <div class="card stretch">
+      <h3>Filtres</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Genre (inclusion, optionnel)</label>
+          <select id="guess-genre">
+            <option value="">— Aucun —</option>
+          </select>
+        </div>
+
+        <div class="form-group grow">
+          <label>Genres à exclure</label>
+          <div class="inline">
+            <input id="guess-exclude-input" type="text" placeholder="Rechercher un genre…" list="guess-genres-datalist" />
+            <datalist id="guess-genres-datalist"></datalist>
+            <button id="guess-exclude-add" class="btn">Ajouter</button>
+          </div>
+          <div id="guess-exclude-chips" class="chips"></div>
+          <div class="hint">Tu peux laisser vide, ou exclure plusieurs genres.</div>
+        </div>
+
+        <div class="form-group sm">
+          <label>Année (de)</label>
+          <input id="guess-year-from" type="number" min="1970" max="2100" />
+        </div>
+        <div class="form-group sm">
+          <label>Année (à)</label>
+          <input id="guess-year-to" type="number" min="1970" max="2100" />
         </div>
       </div>
-      <div class="grid">
-        <div class="card">
-          <h3>Statut</h3>
-          <div id="guess-status-info" class="muted">En pause</div>
-        </div>
-        <div class="card">
-          <h3>Dernier jeu trouvé</h3>
-          <div id="guess-last-info" class="muted">—</div>
-        </div>
-        <div class="card stretch">
-          <h3>Leaderboard</h3>
-          <ol id="guess-board" class="qv-ol">
-            <li class="muted">Aucune donnée</li>
-          </ol>
-        </div>
-        <div class="card stretch">
-          <h3>Journal</h3>
-          <div id="guess-log" class="log"></div>
-        </div>
+
+      <div class="actions-row">
+        <button id="guess-bootstrap" class="btn">Charger filtres</button>
+        <button id="guess-start" class="btn ok">Lancer</button>
+        <button id="guess-end" class="btn danger">Terminer</button>
+        <span id="guess-msg" class="muted"></span>
       </div>
-    </section>
-  </main>
+    </div>
+
+    <!-- Statut -->
+    <div class="card">
+      <h3>Statut</h3>
+      <div id="guess-status-info" class="muted">En pause</div>
+    </div>
+
+    <!-- Dernier jeu -->
+    <div class="card">
+      <h3>Dernier jeu trouvé</h3>
+      <div id="guess-last-info" class="muted">—</div>
+    </div>
+
+    <!-- Aperçu screenshot -->
+    <div class="card stretch">
+      <h3>Aperçu</h3>
+      <img id="guess-shot" alt="Aperçu screenshot" style="max-width:100%;border-radius:10px;border:1px solid var(--border)"/>
+      <div class="hint" style="margin-top:8px">
+        URL utilisée : globale <code>GTG_current_screenshot_url</code> (Browser Source OBS).
+      </div>
+    </div>
+
+    <!-- Leaderboard + Journal (inchangés) -->
+    <div class="card stretch">
+      <h3>Leaderboard</h3>
+      <ol id="guess-board" class="qv-ol">
+        <li class="muted">Aucune donnée</li>
+      </ol>
+    </div>
+    <div class="card stretch">
+      <h3>Journal</h3>
+      <div id="guess-log" class="log"></div>
+    </div>
+  </div>
+</section>
+</main>
 
   <footer class="app-footer">
     <span class="muted">© <span id="year"></span> leblux Corp.</span>
