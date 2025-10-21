@@ -41,7 +41,7 @@
     li.innerHTML = htmlText;
 
     li.addEventListener('click', (ev) => {
-      if ((ev.target.tagName || '').toLowerCase() === 'a') return; // liens cliquables OK
+      if ((ev.target.tagName || '').toLowerCase() === 'a') return; // liens OK
       li.classList.toggle('ack');
       if (typeof onToggle === 'function') onToggle(li.classList.contains('ack'));
       ev.stopPropagation();
@@ -129,7 +129,8 @@
         const current = parseInt((badgeTab && badgeTab.textContent || "0"), 10) || 0;
         [badgeTab,badgeHdr].forEach(b=>{ if (b) b.textContent = String(current+1); });
 
-        const txt = `<strong>${user}</strong> — ${tierLabel}${months>0 ? ` • ${months} mois` : ''}`;
+        const safeUser = (typeof user === 'string') ? user : displayNameOf(user);
+        const txt = `<strong>${safeUser}</strong> — ${tierLabel}${months>0 ? ` • ${months} mois` : ''}`;
 
         // Quick-view (compte "non lus")
         prependListItem($('#qv-events-list'), txt, (isAck)=>{
@@ -143,7 +144,7 @@
         // Panneau Events (liste principale)
         prependListItem($('#events-subs-list'), txt);
 
-        appendLog('#events-log', `SUB ${tierLabel} ${user}${months>0 ? ` (${months} mois)` : ''}`);
+        appendLog('#events-log', `SUB ${tierLabel} ${safeUser}${months>0 ? ` (${months} mois)` : ''}`);
       },
       log(msg){ appendLog('#events-log', msg); }
     },
@@ -152,7 +153,7 @@
     tts: {
       addRead({user, message}){
         DashboardStatus.setStatus('tts', true);
-        const safeUser = user || 'user';
+        const safeUser = displayNameOf(user);
         const safeMsg  = message || '';
         const html = `<strong>${safeUser}</strong> — ${safeMsg}`;
         prependListItem($('#qv-tts-list'), html);
@@ -197,6 +198,21 @@
 
     showTab
   };
+
+  // ============================ Normalisation noms ============================
+  function displayNameOf(u){
+    if (!u) return '—';
+    if (typeof u === 'string') return u;
+    if (typeof u === 'object'){
+      if (typeof u.displayName === 'string') return u.displayName;
+      if (typeof u.userName === 'string')    return u.userName;
+      if (typeof u.username === 'string')    return u.username;
+      if (typeof u.name === 'string')        return u.name;
+      if (typeof u.login === 'string')       return u.login;
+      if (typeof u.id === 'string')          return u.id;
+    }
+    return String(u);
+  }
 
   // ============================ Password local ============================
   const SB_PWD_KEY = "sb_ws_password_v1";
@@ -268,9 +284,9 @@
 
     try { await client?.disconnect?.(); } catch {}
 
-    // NOTE: garde 'localhost' si ça marche chez toi; sinon remets '127.0.0.1'
+    // Remets '127.0.0.1' si besoin.
     client = new StreamerbotClient({
-      host: 'localhost',
+      host: '127.0.0.1',
       port: 8080,
       endpoint: '/',
       scheme: 'ws',
@@ -304,20 +320,32 @@
       },
 
       onData: ({event, data}) => {
+        // TTS lus
         if (event?.source === 'General' && data?.widget === 'tts-reader-selection') {
-          const u = data.selectedUser || data.user || '';
+          const u = displayNameOf(data.selectedUser || data.user || '');
           const t = data.message || '';
           if (u && t) DashboardStatus.tts.addRead({ user: u, message: t });
           return;
         }
+
+        // SUBS / RESUB / GIFTSUB
         if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
           const d = data || {};
-          const user = d.displayName || d.user || d.userName || d.username || '—';
+
+          const user = displayNameOf(
+            d.displayName ?? d.user ?? d.userName ?? d.username ?? d.sender ?? d.gifter
+          );
+
           let raw = (d.tier ?? d.plan ?? d.tierId ?? d.level ?? '').toString().toLowerCase();
-          let tierLabel = raw.includes('3000') || raw==='3' ? 'T3'
-                        : raw.includes('2000') || raw==='2' ? 'T2'
-                        : raw.includes('prime') ? 'Prime' : 'T1';
-          const months = Number(d.cumulativeMonths ?? d.months ?? d.streak ?? d.totalMonths ?? 0) || 0;
+          let tierLabel = 'T1';
+          if (raw.includes('3000') || raw==='3')      tierLabel = 'T3';
+          else if (raw.includes('2000') || raw==='2') tierLabel = 'T2';
+          else if (raw.includes('prime'))             tierLabel = 'Prime';
+
+          const months = Number(
+            d.cumulativeMonths ?? d.months ?? d.streak ?? d.totalMonths ?? 0
+          ) || 0;
+
           DashboardStatus.events.addSub({ user, tierLabel, months });
           return;
         }
