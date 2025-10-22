@@ -44,7 +44,6 @@
   }
 
   // ------ Items de liste (avec sync cross-vues) ------
-  // makeItem(htmlText, onToggle, ack=false, id=null)
   function makeItem(htmlText, onToggle, ack, id){
     const li = document.createElement('li');
     li.innerHTML = htmlText;
@@ -54,11 +53,9 @@
     li.addEventListener('click', (ev) => {
       if ((ev.target.tagName || '').toLowerCase() === 'a') return;
 
-      // toggle visuel local
       li.classList.toggle('ack');
       const isAck = li.classList.contains('ack');
 
-      // sync toutes les occurrences de ce même event dans le DOM (Overview + Events)
       if (id){
         $$(`li[data-eid="${cssEscape(id)}"]`).forEach(other => {
           if (other !== li) other.classList.toggle('ack', isAck);
@@ -71,7 +68,6 @@
     return li;
   }
 
-  // prependListItem(listEl, html, onToggle, ack=false, id=null)
   function prependListItem(listEl, htmlText, onToggle, ack=false, id=null){
     if (!listEl) return;
     const li = makeItem(htmlText, onToggle, ack, id);
@@ -85,7 +81,6 @@
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
   }
 
-  // appendListItem(listEl, html, onToggle, ack=false, id=null)
   function appendListItem(listEl, htmlText, onToggle, ack=false, id=null){
     if (!listEl) return;
     const li = makeItem(htmlText, onToggle, ack, id);
@@ -192,7 +187,6 @@
       return;
     }
 
-    // Remplissage dans l'ordre de stockage (plus anciens -> récents)
     for (let i = 0; i < eventsStore.length; i++){
       const e = eventsStore[i];
       const line = eventLine(e);
@@ -241,7 +235,6 @@
         const line = eventLine(e);
         const handler = (isAck)=> updateAckInStore(e.id, isAck);
 
-        // Même item (même data-eid) dans Overview + onglet Events
         prependListItem($('#qv-events-list'),   line, handler, e.ack, e.id);
         prependListItem($('#events-subs-list'), line, handler, e.ack, e.id);
 
@@ -382,55 +375,7 @@
     } catch {}
   });
 
-  // ============================ Connexion Streamer.bot ============================
-  let client;
-
-  // ---- TTS Switch helpers ----
-  const ttsSwitchInput = $('#tts-switch');
-  const ttsSwitchLabel = $('#tts-switch-label');
-  const ttsSwitchLabelText = $('.switch-label-text', ttsSwitchLabel);
-
-  function updateTtsSwitchUI(on){
-    if (!ttsSwitchInput) return;
-    const val = !!on;
-    ttsSwitchInput.checked = val;
-    if (ttsSwitchLabelText) ttsSwitchLabelText.textContent = val ? 'TTS ON' : 'TTS OFF';
-    if (ttsSwitchLabel) ttsSwitchLabel.style.opacity = val ? '1' : '0.6';
-    DashboardStatus.setStatus('tts', val);
-  }
-
-  async function syncTtsSwitchFromBackend(){
-    try {
-      const resp = await client.getGlobal("ttsAutoReaderEnabled");
-      const isOn = resp && resp.status === "ok" ? !!resp.variable?.value : false;
-      updateTtsSwitchUI(isOn);
-    } catch {
-      updateTtsSwitchUI(false);
-    }
-  }
-
-  async function setTtsAutoReader(enabled){
-    try {
-      await client.doAction({
-        name: "TTS Auto Message Reader Switch ON OFF",
-        args: { mode: enabled ? "on" : "off" }
-      });
-      updateTtsSwitchUI(enabled);
-      appendLog('#tts-log', `Auto TTS ${enabled ? 'ON' : 'OFF'} (via bouton)`);
-    } catch (e){
-      updateTtsSwitchUI(!enabled);
-      appendLog('#tts-log', `Erreur: impossible de changer l’état de l’auto TTS`);
-      alert("Impossible de changer l’état de l’auto TTS.");
-      console.error(e);
-    }
-  }
-
-  if (ttsSwitchInput){
-    ttsSwitchInput.addEventListener('change', () => setTtsAutoReader(!!ttsSwitchInput.checked));
-  }
-
   // ============================ Guess The Game (UI + Backend) ============================
-  // Références DOM
   const guessGenreSel       = $('#guess-genre');
   const guessExcludeInput   = $('#guess-exclude-input');
   const guessDatalist       = $('#guess-genres-datalist');
@@ -447,13 +392,46 @@
   let GTG_GENRES = [];            // [{id,name}]
   let GTG_EXCLUDED = new Set();   // ids exclus
 
+  // gestion des bornes années
+  let OLDEST_YEAR = 1970;
+  let NEWEST_YEAR = new Date().getFullYear();
+
   function setGuessMessage(msg){
     if (guessMsg) guessMsg.textContent = msg || '';
   }
 
+  // ------- Validation / Normalisation années -------
+  function parseYear(val){
+    const n = Number(val);
+    if (!Number.isFinite(n)) return null;
+    return Math.min(NEWEST_YEAR, Math.max(OLDEST_YEAR, Math.trunc(n)));
+  }
+
+  function normalizeYearInputs({silent=false} = {}){
+    let yf = parseYear(guessYearFromInput?.value);
+    let yt = parseYear(guessYearToInput?.value);
+
+    // Ajuste min/max dynamiques
+    if (guessYearFromInput) guessYearFromInput.max = String(yt ?? NEWEST_YEAR);
+    if (guessYearToInput)   guessYearToInput.min   = String(yf ?? OLDEST_YEAR);
+
+    // Corrige incohérences (yt < yf)
+    if (yf != null && yt != null && yt < yf){
+      yt = yf; // On aligne "à" sur "de"
+      if (guessYearToInput) guessYearToInput.value = String(yt);
+      if (!silent) setGuessMessage('Plage corrigée : Année (à) ajustée sur Année (de).');
+    }
+
+    // Replace inputs par valeurs clampées (si l’utilisateur a tapé hors bornes)
+    if (guessYearFromInput && yf != null) guessYearFromInput.value = String(yf);
+    if (guessYearToInput   && yt != null) guessYearToInput.value   = String(yt);
+  }
+
+  guessYearFromInput?.addEventListener('input', () => normalizeYearInputs());
+  guessYearToInput?.addEventListener('input',   () => normalizeYearInputs());
+
   function fillGenresUI(genres){
     GTG_GENRES = Array.isArray(genres) ? genres : [];
-    // select (inclusion)
     if (guessGenreSel){
       guessGenreSel.innerHTML = `<option value="">— Aucun —</option>`;
       for (const g of GTG_GENRES){
@@ -463,7 +441,6 @@
         guessGenreSel.appendChild(opt);
       }
     }
-    // datalist (exclusions)
     if (guessDatalist){
       guessDatalist.innerHTML = '';
       for (const g of GTG_GENRES){
@@ -513,11 +490,12 @@
   }
 
   function collectFilters(){
+    normalizeYearInputs({silent:true}); // garantit une plage valide
     const includeGenreId = guessGenreSel?.value ? String(guessGenreSel.value) : "";
     const excludeGenreIds = Array.from(GTG_EXCLUDED);
-    const yFrom = Number(guessYearFromInput?.value || 0) || null;
-    const yTo   = Number(guessYearToInput?.value   || 0) || null;
-    return { includeGenreId, excludeGenreIds, yearFrom: yFrom, yearTo: yTo };
+    const yFrom = parseYear(guessYearFromInput?.value);
+    const yTo   = parseYear(guessYearToInput?.value);
+    return { includeGenreId, excludeGenreIds, yearFrom: yFrom ?? null, yearTo: yTo ?? null };
   }
 
   async function gtgBootstrap(){
@@ -527,22 +505,24 @@
       const res = await client.doAction({ name: "GTG Bootstrap Genres & Years" });
       if (res?.status !== 'ok'){ throw new Error('bootstrap-failed'); }
       const genres = res?.result?.genres || res?.genres || [];
-      const oldest = Number(res?.result?.oldestYear ?? res?.oldestYear ?? 1970);
-      const newest = Number(res?.result?.newestYear ?? res?.newestYear ?? (new Date().getFullYear()));
+      OLDEST_YEAR  = Number(res?.result?.oldestYear ?? res?.oldestYear ?? 1970) || 1970;
+      NEWEST_YEAR  = Number(res?.result?.newestYear ?? res?.newestYear ?? (new Date().getFullYear())) || new Date().getFullYear();
 
       fillGenresUI(genres);
 
       if (guessYearFromInput){
-        guessYearFromInput.min = String(oldest);
-        guessYearFromInput.max = String(newest);
+        guessYearFromInput.min = String(OLDEST_YEAR);
+        guessYearFromInput.max = String(NEWEST_YEAR);
       }
       if (guessYearToInput){
-        guessYearToInput.min = String(oldest);
-        guessYearToInput.max = String(newest);
+        guessYearToInput.min = String(OLDEST_YEAR);
+        guessYearToInput.max = String(NEWEST_YEAR);
       }
 
-      setGuessMessage(`Genres chargés (${genres.length}). Plage ${oldest} — ${newest}.`);
-      DashboardStatus.guess.log(`Genres: ${genres.length}, période: ${oldest}-${newest}`);
+      normalizeYearInputs({silent:true});
+
+      setGuessMessage(`Genres chargés (${genres.length}). Plage ${OLDEST_YEAR} — ${NEWEST_YEAR}.`);
+      DashboardStatus.guess.log(`Genres: ${genres.length}, période: ${OLDEST_YEAR}-${NEWEST_YEAR}`);
     }catch(e){
       console.error(e);
       setGuessMessage('Erreur: impossible de charger la liste des genres.');
@@ -629,6 +609,8 @@
   }
 
   // ============================ Connexion & events ============================
+  let client;
+
   async function initStreamerbotClient() {
     if (typeof StreamerbotClient === 'undefined') {
       setWsIndicator(false);
@@ -670,7 +652,6 @@
       onConnect: async (info) => {
         setWsIndicator(true);
         $('#ws-status') && ($('#ws-status').textContent = `Connecté à Streamer.bot (${info?.version || 'v?'})`);
-        // Sync états
         await syncTtsSwitchFromBackend();
         await syncGuessFromBackend();
       },
@@ -741,6 +722,51 @@
       const info = await client.getInfo();
       if (info?.status !== 'ok') throw new Error('info-not-ok');
     } catch {}
+  }
+
+  // ---- TTS Switch helpers (après init client)
+  let ttsSwitchInput = $('#tts-switch');
+  const ttsSwitchLabel = $('#tts-switch-label');
+  const ttsSwitchLabelText = $('.switch-label-text', ttsSwitchLabel);
+
+  function updateTtsSwitchUI(on){
+    if (!ttsSwitchInput) ttsSwitchInput = $('#tts-switch');
+    if (!ttsSwitchInput) return;
+    const val = !!on;
+    ttsSwitchInput.checked = val;
+    if (ttsSwitchLabelText) ttsSwitchLabelText.textContent = val ? 'TTS ON' : 'TTS OFF';
+    if (ttsSwitchLabel) ttsSwitchLabel.style.opacity = val ? '1' : '0.6';
+    DashboardStatus.setStatus('tts', val);
+  }
+
+  async function syncTtsSwitchFromBackend(){
+    try {
+      const resp = await client.getGlobal("ttsAutoReaderEnabled");
+      const isOn = resp && resp.status === "ok" ? !!resp.variable?.value : false;
+      updateTtsSwitchUI(isOn);
+    } catch {
+      updateTtsSwitchUI(false);
+    }
+  }
+
+  async function setTtsAutoReader(enabled){
+    try {
+      await client.doAction({
+        name: "TTS Auto Message Reader Switch ON OFF",
+        args: { mode: enabled ? "on" : "off" }
+      });
+      updateTtsSwitchUI(enabled);
+      appendLog('#tts-log', `Auto TTS ${enabled ? 'ON' : 'OFF'} (via bouton)`);
+    } catch (e){
+      updateTtsSwitchUI(!enabled);
+      appendLog('#tts-log', `Erreur: impossible de changer l’état de l’auto TTS`);
+      alert("Impossible de changer l’état de l’auto TTS.");
+      console.error(e);
+    }
+  }
+
+  if (ttsSwitchInput){
+    ttsSwitchInput.addEventListener('change', () => setTtsAutoReader(!!ttsSwitchInput.checked));
   }
 
   initStreamerbotClient();
