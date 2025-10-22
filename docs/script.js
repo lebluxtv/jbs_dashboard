@@ -504,9 +504,19 @@
     try{
       const res = await client.doAction({ name: "GTG Bootstrap Genres & Years" });
       if (res?.status !== 'ok'){ throw new Error('bootstrap-failed'); }
-      const genres = res?.result?.genres || res?.genres || [];
-      OLDEST_YEAR  = Number(res?.result?.oldestYear ?? res?.oldestYear ?? 1970) || 1970;
-      NEWEST_YEAR  = Number(res?.result?.newestYear ?? res?.newestYear ?? (new Date().getFullYear())) || new Date().getFullYear();
+
+      // 🔧 Lecture robuste des retours (genresJson = string JSON)
+      let genres = [];
+      const r = res?.result || res;
+      if (r?.genresJson) {
+        try { genres = JSON.parse(r.genresJson); } catch {}
+      }
+      if ((!genres || !genres.length) && (r?.genres)) {
+        genres = r.genres;
+      }
+
+      OLDEST_YEAR  = Number(r?.oldestYear ?? 1970) || 1970;
+      NEWEST_YEAR  = Number(r?.newestYear ?? (new Date().getFullYear())) || new Date().getFullYear();
 
       fillGenresUI(genres);
 
