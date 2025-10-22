@@ -77,8 +77,6 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 
 /* Overview quick view grid */
 .overview-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
-
-/* Quick view cards: seul le titre est cliquable */
 .qv-card{grid-column:span 4;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);cursor:default;transition:transform .08s ease,border-color .12s ease}
 .qv-card:hover{transform:translateY(-2px);border-color:#3a3a3d}
 .qv-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)}
@@ -86,7 +84,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .qv-body{padding:12px;min-height:220px}
 .qv-foot{padding:8px 12px;border-top:1px dashed var(--border);text-align:center;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px}
 
-/* Quick-view scroll: Events & TTS */
+/* Quick-view scroll */
 #qv-events-list, #qv-tts-list { max-height:300px; overflow:auto }
 
 /* Text utils + footer */
@@ -94,41 +92,34 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .mono{font-family:var(--mono)}
 .app-footer{padding:14px 16px;border-top:1px solid var(--border);text-align:right;color:var(--muted)}
 
-/* ---------- Guess The Game – UI (optimisé) ---------- */
+/* ---------- Guess The Game – UI (optimisé, sans aperçu) ---------- */
 .form-row{
-  display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start; /* alignement haut cohérent */
+  display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;
 }
 .form-group{
   display:flex;flex-direction:column;gap:6px;min-width:200px;
-  flex:1 1 240px; /* colonnes souples et cohérentes */
+  flex:1 1 240px;
 }
 .form-group.grow{flex:2 1 360px}
-.form-group.sm{
-  min-width:120px;max-width:140px;flex:0 0 140px; /* années fixes */
-}
-.form-group label{
-  font-weight:600;line-height:1.2;margin-bottom:2px;color:#d9d9d9;
-}
+.form-group.sm{min-width:120px;max-width:140px;flex:0 0 140px}
+.form-group label{font-weight:600;line-height:1.2;margin-bottom:2px;color:#d9d9d9}
 
 .inline{display:flex;gap:8px;align-items:center;width:100%}
 
 select,input[type="number"],input[type="text"]{
-  width:100%;
-  min-height:36px;
+  width:100%;min-height:36px;
   background:var(--panel);border:1px solid var(--border);color:var(--text);
   border-radius:10px;padding:8px 10px;outline:none;
 }
-select:focus,
-input[type="number"]:focus,
-input[type="text"]:focus{
-  border-color:var(--focus);
-  box-shadow:0 0 0 3px rgba(55,204,134,.15);
+select:focus,input[type="number"]:focus,input[type="text"]:focus{
+  border-color:var(--focus);box-shadow:0 0 0 3px rgba(55,204,134,.15);
 }
 ::placeholder{color:#b7bcc3}
 
 .btn{
   border:1px solid var(--border);background:var(--panel);color:var(--text);
-  padding:8px 12px;border-radius:10px;cursor:pointer;transition:border-color .15s, transform .06s ease;
+  padding:8px 12px;border-radius:10px;cursor:pointer;
+  transition:border-color .15s, transform .06s ease;
 }
 .btn:hover{border-color:#3a3a3d}
 .btn:active{transform:translateY(1px)}
@@ -156,6 +147,6 @@ input[type="text"]:focus{
   .overview-grid{grid-template-columns:repeat(6,1fr)}
   .qv-card{grid-column:span 6}
   .tabs{flex-wrap:wrap}
-  .form-group{flex:1 1 100%;min-width:0} /* filtres en pile claire */
-  .form-group.sm{flex:1 1 48%;max-width:none} /* années côte-à-côte */
+  .form-group{flex:1 1 100%;min-width:0}
+  .form-group.sm{flex:1 1 48%;max-width:none}
 }
