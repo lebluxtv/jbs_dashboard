@@ -9,6 +9,11 @@
   const EVENTS_KEY = "jbs.events.v1";
   const MAX_EVENTS = 200;
 
+  const cssEscape = (v)=>{
+    try { return CSS.escape(String(v)); }
+    catch { return String(v).replace(/[^\w-]/g, '\\$&'); }
+  };
+
   function showTab(name){
     $$('.tab').forEach(btn=>{
       const act = btn.dataset.tab===name;
@@ -38,24 +43,38 @@
     el.scrollTop = el.scrollHeight;
   }
 
-  // ------ Items de liste ------
-  function makeItem(htmlText, onToggle, ack){
+  // ------ Items de liste (avec sync cross-vues) ------
+  // makeItem(htmlText, onToggle, ack=false, id=null)
+  function makeItem(htmlText, onToggle, ack, id){
     const li = document.createElement('li');
     li.innerHTML = htmlText;
     if (ack) li.classList.add('ack');
+    if (id) li.dataset.eid = String(id);
 
     li.addEventListener('click', (ev) => {
       if ((ev.target.tagName || '').toLowerCase() === 'a') return;
+
+      // toggle visuel local
       li.classList.toggle('ack');
-      if (typeof onToggle === 'function') onToggle(li.classList.contains('ack'));
+      const isAck = li.classList.contains('ack');
+
+      // sync toutes les occurrences de ce même event dans le DOM (Overview + Events)
+      if (id){
+        $$(`li[data-eid="${cssEscape(id)}"]`).forEach(other => {
+          if (other !== li) other.classList.toggle('ack', isAck);
+        });
+      }
+
+      if (typeof onToggle === 'function') onToggle(isAck);
       ev.stopPropagation();
     });
     return li;
   }
 
-  function prependListItem(listEl, htmlText, onToggle, ack=false){
+  // prependListItem(listEl, html, onToggle, ack=false, id=null)
+  function prependListItem(listEl, htmlText, onToggle, ack=false, id=null){
     if (!listEl) return;
-    const li = makeItem(htmlText, onToggle, ack);
+    const li = makeItem(htmlText, onToggle, ack, id);
 
     if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')) {
       listEl.removeChild(listEl.firstElementChild);
@@ -66,9 +85,10 @@
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
   }
 
-  function appendListItem(listEl, htmlText, onToggle, ack=false){
+  // appendListItem(listEl, html, onToggle, ack=false, id=null)
+  function appendListItem(listEl, htmlText, onToggle, ack=false, id=null){
     if (!listEl) return;
-    const li = makeItem(htmlText, onToggle, ack);
+    const li = makeItem(htmlText, onToggle, ack, id);
 
     if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')) {
       listEl.removeChild(listEl.firstElementChild);
@@ -126,6 +146,10 @@
   let eventsStore = loadEvents();                // [{id,type,user,tierLabel,months,ack}]
   let qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
 
+  function eventLine(e){
+    return `<strong>${e.user}</strong> — <span class="mono">${e.type}</span> • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
+  }
+
   function syncEventsStatusUI(){
     setDot('.dot-events', qvUnreadEvents > 0);
 
@@ -141,6 +165,20 @@
     if (txt) txt.textContent = qvUnreadEvents>0 ? 'Actif' : 'Inactif';
   }
 
+  function updateAckInStore(eventId, isAck){
+    const idx = eventsStore.findIndex(x=>x.id===eventId);
+    if (idx>=0){
+      const before = !!eventsStore[idx].ack;
+      eventsStore[idx].ack = isAck;
+      saveEvents(eventsStore);
+      if (before !== isAck){
+        qvUnreadEvents += isAck ? -1 : +1;
+        qvUnreadEvents = Math.max(0, qvUnreadEvents);
+        syncEventsStatusUI();
+      }
+    }
+  }
+
   function renderStoredEventsIntoUI(){
     const qv = $('#qv-events-list');
     const full = $('#events-subs-list');
@@ -154,19 +192,14 @@
       return;
     }
 
-    for (let i = eventsStore.length - 1; i >= 0; i--){
+    // Remplissage dans l'ordre de stockage (plus anciens -> récents)
+    for (let i = 0; i < eventsStore.length; i++){
       const e = eventsStore[i];
-      const line = `<strong>${e.user}</strong> — <span class="mono">${e.type}</span> • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
+      const line = eventLine(e);
+      const handler = (isAck)=> updateAckInStore(e.id, isAck);
 
-      appendListItem(qv, line, (isAck)=>{
-        const idx = eventsStore.findIndex(x=>x.id===e.id);
-        if (idx>=0){ eventsStore[idx].ack = isAck; saveEvents(eventsStore); }
-        qvUnreadEvents += isAck ? -1 : +1;
-        qvUnreadEvents = Math.max(0, qvUnreadEvents);
-        syncEventsStatusUI();
-      }, e.ack);
-
-      appendListItem(full, line, null, e.ack);
+      appendListItem(qv,   line, handler, e.ack, e.id);
+      appendListItem(full, line, handler, e.ack, e.id);
     }
     syncEventsStatusUI();
   }
@@ -193,32 +226,29 @@
     events: {
       addSub({type, user, tierLabel, months}){
         const safeUser = displayNameFromAny(user);
-        const line = `<strong>${safeUser}</strong> — <span class="mono">${type||'Sub'}</span> • ${tierLabel}${months>0 ? ` • ${months} mois` : ''}`;
-
-        const evObj = {
+        const e = {
           id: Date.now() + Math.random().toString(16).slice(2),
           type: type || 'Sub',
           user: safeUser,
-          tierLabel, months,
+          tierLabel,
+          months: months || 0,
           ack: false
         };
-        eventsStore.push(evObj);
+        eventsStore.push(e);
         if (eventsStore.length > MAX_EVENTS) eventsStore = eventsStore.slice(-MAX_EVENTS);
         saveEvents(eventsStore);
 
-        prependListItem($('#qv-events-list'), line, (isAck)=>{
-          evObj.ack = isAck; saveEvents(eventsStore);
-          qvUnreadEvents += isAck ? -1 : +1;
-          qvUnreadEvents = Math.max(0, qvUnreadEvents);
-          syncEventsStatusUI();
-        }, false);
+        const line = eventLine(e);
+        const handler = (isAck)=> updateAckInStore(e.id, isAck);
 
-        prependListItem($('#events-subs-list'), line, null, false);
+        // Même item (même data-eid) dans Overview + onglet Events
+        prependListItem($('#qv-events-list'),   line, handler, e.ack, e.id);
+        prependListItem($('#events-subs-list'), line, handler, e.ack, e.id);
 
         qvUnreadEvents += 1;
         syncEventsStatusUI();
 
-        appendLog('#events-log', `${type||'Sub'} ${tierLabel} ${safeUser}${months>0 ? ` (${months} mois)` : ''}`);
+        appendLog('#events-log', `${e.type} ${e.tierLabel} ${e.user}${e.months>0 ? ` (${e.months} mois)` : ''}`);
       },
       log(msg){ appendLog('#events-log', msg); }
     },
@@ -366,7 +396,6 @@
     ttsSwitchInput.checked = val;
     if (ttsSwitchLabelText) ttsSwitchLabelText.textContent = val ? 'TTS ON' : 'TTS OFF';
     if (ttsSwitchLabel) ttsSwitchLabel.style.opacity = val ? '1' : '0.6';
-    // Voyants & libellé
     DashboardStatus.setStatus('tts', val);
   }
 
@@ -389,7 +418,6 @@
       updateTtsSwitchUI(enabled);
       appendLog('#tts-log', `Auto TTS ${enabled ? 'ON' : 'OFF'} (via bouton)`);
     } catch (e){
-      // rollback visuel
       updateTtsSwitchUI(!enabled);
       appendLog('#tts-log', `Erreur: impossible de changer l’état de l’auto TTS`);
       alert("Impossible de changer l’état de l’auto TTS.");
@@ -473,27 +501,20 @@
 
   function idFromGenreInputText(txt){
     if (!txt) return null;
-    // 1) essai par nom strict
     const exact = GTG_GENRES.find(g => (g.name || '').toLowerCase() === txt.toLowerCase());
     if (exact) return String(exact.id);
-    // 2) essai par datalist option
     const opt = Array.from(guessDatalist?.children || []).find(o => (o.value||'').toLowerCase() === txt.toLowerCase());
     if (opt?.dataset?.id) return String(opt.dataset.id);
-    // 3) essai si nombre
     const n = Number(txt);
     if (Number.isFinite(n) && n>0) return String(n);
-    // 4) essai par recherche partielle (premier match)
     const partial = GTG_GENRES.find(g => (g.name||'').toLowerCase().includes(txt.toLowerCase()));
     if (partial) return String(partial.id);
     return null;
   }
 
   function collectFilters(){
-    // inclusion (unique / optionnel)
     const includeGenreId = guessGenreSel?.value ? String(guessGenreSel.value) : "";
-    // exclusion (0..n)
     const excludeGenreIds = Array.from(GTG_EXCLUDED);
-    // période
     const yFrom = Number(guessYearFromInput?.value || 0) || null;
     const yTo   = Number(guessYearToInput?.value   || 0) || null;
     return { includeGenreId, excludeGenreIds, yearFrom: yFrom, yearTo: yTo };
@@ -504,7 +525,6 @@
     setGuessMessage('Chargement des genres…');
     try{
       const res = await client.doAction({ name: "GTG Bootstrap Genres & Years" });
-      // On attend: {status:"ok", result:{ genres:[{id,name}], oldestYear:1981, newestYear:2025 }}
       if (res?.status !== 'ok'){ throw new Error('bootstrap-failed'); }
       const genres = res?.result?.genres || res?.genres || [];
       const oldest = Number(res?.result?.oldestYear ?? res?.oldestYear ?? 1970);
@@ -512,7 +532,6 @@
 
       fillGenresUI(genres);
 
-      // borne année
       if (guessYearFromInput){
         guessYearFromInput.min = String(oldest);
         guessYearFromInput.max = String(newest);
@@ -547,7 +566,6 @@
           yearTo: filters.yearTo
         }
       });
-      // On attend: {status:"ok", result:{ gameName, screenshotUrl } }
       if (res?.status !== 'ok') throw new Error('gtg-start-failed');
       const gameName = res?.result?.gameName || res?.gameName || '—';
       const url      = res?.result?.screenshotUrl || res?.screenshotUrl || '';
@@ -702,7 +720,7 @@
           return;
         }
 
-        // (Optionnel) Si tu envoies un event côté SB pour GTG (par ex. widget='gtg')
+        // (Optionnel) évènements GTG
         if (event?.source === 'General' && data?.widget === 'gtg'){
           if (typeof data.running === 'boolean'){
             DashboardStatus.guess.setStatus(!!data.running);
