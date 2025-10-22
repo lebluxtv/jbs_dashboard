@@ -411,18 +411,15 @@
     let yf = parseYear(guessYearFromInput?.value);
     let yt = parseYear(guessYearToInput?.value);
 
-    // Ajuste min/max dynamiques
     if (guessYearFromInput) guessYearFromInput.max = String(yt ?? NEWEST_YEAR);
     if (guessYearToInput)   guessYearToInput.min   = String(yf ?? OLDEST_YEAR);
 
-    // Corrige incohérences (yt < yf)
     if (yf != null && yt != null && yt < yf){
-      yt = yf; // On aligne "à" sur "de"
+      yt = yf;
       if (guessYearToInput) guessYearToInput.value = String(yt);
       if (!silent) setGuessMessage('Plage corrigée : Année (à) ajustée sur Année (de).');
     }
 
-    // Replace inputs par valeurs clampées (si l’utilisateur a tapé hors bornes)
     if (guessYearFromInput && yf != null) guessYearFromInput.value = String(yf);
     if (guessYearToInput   && yt != null) guessYearToInput.value   = String(yt);
   }
@@ -490,7 +487,7 @@
   }
 
   function collectFilters(){
-    normalizeYearInputs({silent:true}); // garantit une plage valide
+    normalizeYearInputs({silent:true});
     const includeGenreId = guessGenreSel?.value ? String(guessGenreSel.value) : "";
     const excludeGenreIds = Array.from(GTG_EXCLUDED);
     const yFrom = parseYear(guessYearFromInput?.value);
@@ -498,25 +495,21 @@
     return { includeGenreId, excludeGenreIds, yearFrom: yFrom ?? null, yearTo: yTo ?? null };
   }
 
+  // ******* MODIFIÉ : lecture des arguments + parse JSON *******
   async function gtgBootstrap(){
     if (!client) return setGuessMessage('Client SB indisponible.');
     setGuessMessage('Chargement des genres…');
     try{
       const res = await client.doAction({ name: "GTG Bootstrap Genres & Years" });
-      if (res?.status !== 'ok'){ throw new Error('bootstrap-failed'); }
+      if (res?.status !== 'ok') throw new Error('bootstrap-failed');
 
-      // 🔧 Lecture robuste des retours (genresJson = string JSON)
+      const args = res?.result?.arguments || {};
+      const genresJson = args.genresJson ?? res?.genresJson ?? "[]";
       let genres = [];
-      const r = res?.result || res;
-      if (r?.genresJson) {
-        try { genres = JSON.parse(r.genresJson); } catch {}
-      }
-      if ((!genres || !genres.length) && (r?.genres)) {
-        genres = r.genres;
-      }
+      try { genres = JSON.parse(genresJson); } catch { genres = []; }
 
-      OLDEST_YEAR  = Number(r?.oldestYear ?? 1970) || 1970;
-      NEWEST_YEAR  = Number(r?.newestYear ?? (new Date().getFullYear())) || new Date().getFullYear();
+      OLDEST_YEAR = Number(args.oldestYear ?? 1970) || 1970;
+      NEWEST_YEAR = Number(args.newestYear ?? (new Date().getFullYear())) || new Date().getFullYear();
 
       fillGenresUI(genres);
 
@@ -539,6 +532,7 @@
       DashboardStatus.guess.log(`Erreur bootstrap genres`);
     }
   }
+  // **************************************************************
 
   async function gtgStart(){
     if (!client) return setGuessMessage('Client SB indisponible.');
@@ -557,8 +551,9 @@
         }
       });
       if (res?.status !== 'ok') throw new Error('gtg-start-failed');
-      const gameName = res?.result?.gameName || res?.gameName || '—';
-      const url      = res?.result?.screenshotUrl || res?.screenshotUrl || '';
+      const args = res?.result?.arguments || {};
+      const gameName = args.gameName || '—';
+      const url      = args.screenshotUrl || '';
       if (guessShotImg) guessShotImg.src = url || '';
       DashboardStatus.guess.setLastFound({ by: 'streamer', game: gameName });
       DashboardStatus.guess.setStatus(true);
