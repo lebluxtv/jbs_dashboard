@@ -152,7 +152,7 @@
     showTab
   };
 
-  // ==================== Guess (filtres & années & rating) ====================
+  // ==================== Guess (filtres & années & rating & durée) ====================
   const guessGenreSel       = $('#guess-genre');
   const guessExcludeInput   = $('#guess-exclude-input');
   const guessDatalist       = $('#guess-genres-datalist');
@@ -161,16 +161,22 @@
   const guessYearFromInput  = $('#guess-year-from');
   const guessYearToInput    = $('#guess-year-to');
   const guessMinRatingSel   = $('#guess-min-rating');     // (facultatif dans le HTML)
+  const guessDurationMinInput = $('#guess-duration-min'); // NEW durée en minutes
   const guessBootstrapBtn   = $('#guess-bootstrap');
   const guessStartBtn       = $('#guess-start');
   const guessEndBtn         = $('#guess-end');
   const guessMsg            = $('#guess-msg');
   const guessShotImg        = $('#guess-shot');
+  const guessTimerEl        = $('#guess-timer');          // NEW affichage du timer
 
   let GTG_GENRES = [];
   let GTG_EXCLUDED = new Set();
   let OLDEST_YEAR = null;
   let NEWEST_YEAR = null;
+
+  // Timer runtime
+  let GTG_TIMER_ID = null;
+  let GTG_ROUND_END_MS = null;
 
   function setGuessMessage(msg){ if (guessMsg) guessMsg.textContent = msg || ''; }
 
@@ -223,7 +229,6 @@
     if (!el) return;
     const list = Array.isArray(steps) && steps.length ? steps : [0,50,60,70,80,85,90];
     el.innerHTML = '';
-    // “Aucun” = valeur vide
     const none = document.createElement('option'); none.value = ''; none.textContent = '— Aucun —'; el.appendChild(none);
     list.filter(n => typeof n === 'number' && isFinite(n))
         .sort((a,b)=>a-b)
@@ -266,7 +271,37 @@
     const yFrom = parseYear(guessYearFromInput?.value);
     const yTo   = parseYear(guessYearToInput?.value);
     const minRating = guessMinRatingSel && guessMinRatingSel.value !== '' ? Number(guessMinRatingSel.value) : null;
-    return { includeGenreId, excludeGenreIds, yearFrom: yFrom ?? null, yearTo: yTo ?? null, minRating };
+
+    // NEW durée (1..120, défaut 2)
+    const mins = guessDurationMinInput ? Number(guessDurationMinInput.value) : 2;
+    const durationMin = Number.isFinite(mins) ? Math.max(1, Math.min(120, Math.trunc(mins))) : 2;
+
+    return { includeGenreId, excludeGenreIds, yearFrom: yFrom ?? null, yearTo: yTo ?? null, minRating, durationMin };
+  }
+
+  // ---------- Timer helpers ----------
+  function fmtMMSS(ms){
+    if (!Number.isFinite(ms) || ms <= 0) return '00:00';
+    const s = Math.ceil(ms/1000);
+    const m = Math.floor(s/60);
+    const r = s % 60;
+    return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
+  }
+  function stopRoundTimer(){
+    if (GTG_TIMER_ID){ clearInterval(GTG_TIMER_ID); GTG_TIMER_ID = null; }
+    GTG_ROUND_END_MS = null;
+    if (guessTimerEl) guessTimerEl.textContent = '—:—';
+  }
+  function startRoundTimer(endMs){
+    stopRoundTimer();
+    GTG_ROUND_END_MS = endMs;
+    const tick = ()=>{
+      const remain = endMs - Date.now();
+      if (guessTimerEl) guessTimerEl.textContent = fmtMMSS(remain);
+      if (remain <= 0){ stopRoundTimer(); }
+    };
+    tick();
+    GTG_TIMER_ID = setInterval(tick, 250);
   }
 
   // ---------- actions ----------
@@ -286,7 +321,7 @@
   async function gtgStart(){
     if (!client) return setGuessMessage('Client SB indisponible.');
     const filters = collectFilters();
-    setGuessMessage('Sélection d’un jeu…');
+    setGuessMessage('Manche lancée…');
     DashboardStatus.setStatus('guess', true);
     DashboardStatus.guess.setStatus(true);
     try{
@@ -297,16 +332,18 @@
           excludeGenreIds: filters.excludeGenreIds || [],
           yearFrom: filters.yearFrom,
           yearTo: filters.yearTo,
-          minRating: filters.minRating
+          minRating: filters.minRating,
+          roundMinutes: filters.durationMin // NEW
         }
       });
-      // pas de lecture de res — on attend le broadcast "gtg/start"
+      // On attend le broadcast "gtg/start"
     }catch(e){
       console.error(e);
       setGuessMessage('Erreur: impossible de lancer la sélection.');
       DashboardStatus.guess.log(`Erreur sélection jeu`);
       DashboardStatus.guess.setStatus(false);
       DashboardStatus.setStatus('guess', false);
+      stopRoundTimer();
     }
   }
 
@@ -316,6 +353,7 @@
     DashboardStatus.guess.setStatus(false);
     DashboardStatus.setStatus('guess', false);
     setGuessMessage('En pause');
+    stopRoundTimer();
   }
 
   $('#guess-exclude-add')?.addEventListener('click', ()=>{
@@ -333,10 +371,22 @@
 
   // ---------- Sync init ----------
   async function syncGuessFromBackend(){
-    try{ const run = await client.getGlobal("GTG_running"); const isRunning = run?.status === 'ok' ? !!run.variable?.value : false;
-      DashboardStatus.guess.setStatus(isRunning); DashboardStatus.setStatus('guess', isRunning); }catch{}
-    try{ const shot = await client.getGlobal("GTG_current_screenshot_url");
-      const url = (shot?.status === 'ok') ? (shot.variable?.value || '') : ''; if (url) DashboardStatus.guess.setShot(url); }catch{}
+    try{
+      const run = await client.getGlobal("GTG_running");
+      const isRunning = run?.status === 'ok' ? !!run.variable?.value : false;
+      DashboardStatus.guess.setStatus(isRunning);
+      DashboardStatus.setStatus('guess', isRunning);
+    }catch{}
+    try{
+      const shot = await client.getGlobal("GTG_current_screenshot_url");
+      const url = (shot?.status === 'ok') ? (shot.variable?.value || '') : '';
+      if (url) DashboardStatus.guess.setShot(url);
+    }catch{}
+    try{
+      const endTs = await client.getGlobal("GTG_round_end_ts_ms");
+      const endMs = endTs?.status === 'ok' ? Number(endTs.variable?.value) : NaN;
+      if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
+    }catch{}
   }
 
   // ---------- Streamer.bot client ----------
@@ -369,6 +419,7 @@
         if (el) el.textContent = msg;
         if (evt.code === 1006) clearStoredPwd();
         updateTtsSwitchUI(false);
+        stopRoundTimer(); // NEW
         DashboardStatus.guess.setStatus(false);
         DashboardStatus.setStatus('guess', false);
       },
@@ -422,6 +473,7 @@
               DashboardStatus.guess.log('Start erreur: ' + data.error);
               DashboardStatus.guess.setStatus(false);
               DashboardStatus.setStatus('guess', false);
+              stopRoundTimer();
               return;
             }
             if (typeof data.running === 'boolean'){
@@ -429,14 +481,36 @@
               DashboardStatus.setStatus('guess', !!data.running);
             }
             if (data.screenshotUrl){ DashboardStatus.guess.setShot(data.screenshotUrl); }
-            if (data.gameName){ DashboardStatus.guess.setLastFound({ by: 'streamer', game: data.gameName }); setGuessMessage(`OK — ${data.gameName}`); }
+            // NEW: démarrer le timer (pas de nom de jeu ici)
+            const endMs = Number(data.roundEndsAt);
+            if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
+            setGuessMessage('Manche lancée');
+            return;
+          }
+
+          if (data.type === 'reveal') {
+            // NEW: fin + révélation du nom
+            stopRoundTimer();
+            if (typeof data.running === 'boolean'){
+              DashboardStatus.guess.setStatus(!!data.running);
+              DashboardStatus.setStatus('guess', !!data.running);
+            }
+            if (data.screenshotUrl){ DashboardStatus.guess.setShot(data.screenshotUrl); }
+            if (data.gameName){
+              DashboardStatus.guess.setLastFound({ by: 'streamer', game: data.gameName });
+              setGuessMessage(`Réponse : ${data.gameName}`);
+            }
             return;
           }
 
           // autres mises à jour “gtg”
           if (typeof data.running === 'boolean'){ DashboardStatus.guess.setStatus(!!data.running); DashboardStatus.setStatus('guess', !!data.running); }
           if (data.screenshotUrl){ DashboardStatus.guess.setShot(data.screenshotUrl); }
-          if (data.gameName){ DashboardStatus.guess.setLastFound({ by: data.by || '—', game: data.gameName }); }
+          if (typeof data.roundEndsAt !== 'undefined') {
+            const endMs = Number(data.roundEndsAt);
+            if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
+          }
+          if (data.gameName){ /* ne rien faire ici pendant la manche */ }
           if (data.log){ DashboardStatus.guess.log(String(data.log)); }
           return;
         }
@@ -453,7 +527,7 @@
     if (typeof val === 'object'){
       const cands = [val.displayName, val.userName, val.username, val.name, val.login, val.display, val.channel, val.broadcaster];
       for (const c of cands){ if (typeof c === 'string' && c.trim()) return c.trim(); }
-      if (typeof val.id === 'string' && val.id.trim()) return val.id.trim();
+      if (typeof val.id === 'string' && val.trim()) return val.trim();
       if (typeof val.id === 'number') return String(val.id);
     }
     return String(val);
