@@ -160,12 +160,10 @@
     guess: {
       setStatus(running){ const s = running ? 'En cours' : 'En pause'; const a = $('#guess-status-info'); if (a) a.textContent = s; },
       setLastFound({by, game}){
-        // Affiche uniquement le nom du jeu sur la ligne "Dernier jeu trouvé"
         const text = game ? `${game}` : '—';
         const a  = $('#guess-last-info'); if (a) a.textContent = text;
         const qv = $('#qv-guess-last');  if (qv) qv.textContent = text;
-        // La ligne "Gagnant" est gérée par setWinner() séparément
-        if (by) this.setWinner(by); // si on a un auteur, on le pousse dans "Gagnant"
+        if (by) this.setWinner(by);
       },
       setWinner(name){
         const w = $('#guess-winner'); if (w) w.textContent = (name && String(name).trim()) ? String(name) : '—';
@@ -226,7 +224,7 @@
   }
 
   function applyLastSetupAfterGenres(){
-    const last = loadLastSetup(); if (!last) return;
+    const last = loadLastSetup(); if (!last) { toggleExcludeUI(); return; }
 
     if (guessGenreSel){
       const has = last.includeGenreId && GTG_GENRES.some(g => String(g.id)===String(last.includeGenreId));
@@ -254,6 +252,9 @@
       const dm = isNum(last.roundMinutes) ? Math.max(1, Math.min(120, Math.trunc(last.roundMinutes))) : 2;
       guessDurationMinInput.value = String(dm);
     }
+
+    // met à jour l'état grisé/actif du bloc exclusions
+    toggleExcludeUI();
   }
 
   function attachAutoSaveListeners(){
@@ -299,7 +300,6 @@
   function fillGenresUI(genres){
     GTG_GENRES = Array.isArray(genres) ? genres : [];
     if (guessGenreSel){
-      // libellé par défaut "— —"
       guessGenreSel.innerHTML = `<option value="">— —</option>`;
       for (const g of GTG_GENRES){
         const opt = document.createElement('option');
@@ -317,14 +317,14 @@
         guessDatalist.appendChild(o);
       }
     }
-    applyLastSetupAfterGenres();
+    applyLastSetupAfterGenres();  // réapplique minRating + années + durée + exclusions + genre inclu
+    toggleExcludeUI();            // et met l’UI exclusions au bon état
   }
 
   function fillRatingSteps(steps){
     const el = guessMinRatingSel; if (!el) return;
     const list = Array.isArray(steps) && steps.length ? steps : [0,50,60,70,80,85,90];
     el.innerHTML = '';
-    // libellé par défaut "— —"
     const none = document.createElement('option'); none.value = ''; none.textContent = '— —'; el.appendChild(none);
     list.filter(n => typeof n === 'number' && isFinite(n))
         .sort((a,b)=>a-b)
@@ -351,6 +351,19 @@
       guessExcludeChips.appendChild(chip);
     }
   }
+
+  // grise / active la zone exclusions selon choix d’inclusion
+  function toggleExcludeUI(){
+    const hasInclude = !!(guessGenreSel && guessGenreSel.value);
+    const group = guessExcludeChips?.closest('.form-group'); // bloc "Genres à exclure"
+    const addBtn = $('#guess-exclude-add');
+
+    if (guessExcludeInput) guessExcludeInput.disabled = hasInclude;
+    if (addBtn) addBtn.disabled = hasInclude;
+    if (group) group.classList.toggle('is-disabled', hasInclude);
+  }
+  // quand on change de genre inclu, on met à jour l’UI et le pool
+  guessGenreSel?.addEventListener('change', () => { toggleExcludeUI(); requestPoolCount(); });
 
   function idFromGenreInputText(txt){
     if (!txt) return null;
@@ -379,7 +392,8 @@
       if (seen.has(s)) continue;
       if (GTG_GENRES.some(g => String(g.id) === s)){ seen.add(s); validExcl.push(s); }
     }
-    const excludeClean = raw.includeGenreId ? validExcl.filter(id => String(id) !== String(raw.includeGenreId)) : validExcl;
+    // Inclusion choisie => exclure devient sans objet (on n’envoie aucune exclusion)
+    const excludeClean = raw.includeGenreId ? [] : validExcl;
 
     let yf = raw.yearFrom, yt = raw.yearTo;
     if (yf != null && !isNum(yf)) errs.push("Année (de) invalide.");
@@ -427,6 +441,7 @@
   function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
 
   // --- demande de poolCount auprès de Streamer.bot ---
+  let client; // Streamer.bot client (unique)
   const requestPoolCount = debounce(async ()=>{
     if (!client) return;
     const draft = collectFilters();
@@ -459,8 +474,6 @@
   }
 
   // ===================== Streamer.bot client / safe doAction =====================
-  let client;
-
   async function safeDoAction(name, args={}){
     if (!client){ setGuessMessage('Client SB indisponible.'); throw new Error('SB client missing'); }
     const payload = { name: String(name || ''), args: (args && typeof args==='object') ? args : {} };
@@ -532,7 +545,7 @@
     DashboardStatus.setStatus('guess', false);
     setGuessMessage('En pause');
     stopRoundTimer();
-    // On ne touche pas "Dernier jeu trouvé" ni le gagnant ici.
+    // On ne touche pas "Dernier jeu trouvé" ni "Gagnant".
   }
 
   // UI listeners
@@ -595,8 +608,6 @@
   })();
 
   // ===================== Streamer.bot client =====================
-  
-
   async function initStreamerbotClient(forcePrompt = false) {
     if (typeof StreamerbotClient === 'undefined'){
       setWsIndicator(false);
@@ -688,6 +699,7 @@
             NEWEST_YEAR = isNum(data.newestYear) ? data.newestYear : null;
             normalizeYearInputs({silent:true});
             fillRatingSteps(data.ratingSteps);
+            applyLastSetupAfterGenres();     // réapplique le setup après options créées
             const rangeLabel = (isNum(OLDEST_YEAR) && isNum(NEWEST_YEAR)) ? `${OLDEST_YEAR} — ${NEWEST_YEAR}` : 'plage inconnue';
             setGuessMessage(`Genres chargés (${genres.length}). Plage ${rangeLabel}.`);
             DashboardStatus.guess.log(`Genres: ${genres.length}, période: ${rangeLabel}`);
@@ -724,7 +736,6 @@
             }
             if (data.screenshotUrl){ DashboardStatus.guess.setShot(data.screenshotUrl); }
             const endMs = Number(data.roundEndsAt);
-            // si le backend envoie roundEndsAt, on recale le timer, sinon on garde le fallback local
             if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
             if (typeof data.poolCount === 'number' && guessPoolEl) guessPoolEl.textContent = String(data.poolCount);
             setGuessMessage('Manche lancée');
@@ -739,7 +750,6 @@
             }
             if (data.screenshotUrl){ DashboardStatus.guess.setShot(data.screenshotUrl); }
             if (data.gameName){
-              // On n’ajoute pas "(par Streamer)" ici ; on met le gagnant sur la ligne dédiée
               DashboardStatus.guess.setLastFound({ by: '', game: data.gameName });
             }
             if (data.lastWinner){
