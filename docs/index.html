@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>JBS Dashboard</title>
+  <title>JBS - Dashboard</title>
 
   <!-- Styles -->
   <link rel="stylesheet" href="style.css" />
 
-  <!-- Lib Streamer.bot client (évite “lib introuvable”) -->
+  <!-- Lib Streamer.bot client -->
   <script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.umd.js"></script>
 </head>
 <body>
@@ -29,21 +29,31 @@
     </div>
   </header>
 
-  <!-- Tabs -->
+  <!-- Tabs (texte géré par CSS, pastilles d’état sur chaque tab) -->
   <nav class="tabs">
-    <button class="tab" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="overview">
+      <span class="dot off" aria-hidden="true"></span>
+      Overview
+    </button>
     <button class="tab" data-tab="events">
+      <span class="dot dot-events off" aria-hidden="true"></span>
       Events Checker
       <span class="badge badge-events" style="display:none">0</span>
     </button>
-    <button class="tab" data-tab="tts">TTS Reader</button>
-    <button class="tab active" data-tab="guess">Guess The Game</button>
+    <button class="tab" data-tab="tts">
+      <span class="dot dot-tts off" aria-hidden="true"></span>
+      TTS Reader
+    </button>
+    <button class="tab active" data-tab="guess">
+      <span class="dot dot-guess off" aria-hidden="true"></span>
+      Guess The Game
+    </button>
   </nav>
 
   <!-- Panels -->
   <main class="tab-panels">
 
-    <!-- Overview (léger ; tous les IDs optionnels sont tolérés par le JS) -->
+    <!-- Overview -->
     <section id="tab-overview" class="tab-panel" style="display:none">
       <div class="overview-grid">
         <article class="qv-card" data-goto="events">
@@ -112,7 +122,7 @@
           <ul id="events-subs-list" class="qv-list big clickable"><li class="muted">Aucun sub</li></ul>
         </div>
         <div class="card stretch">
-          <h3>Log</h3>
+          <h3>Journal</h3>
           <div id="events-log" class="log"></div>
         </div>
       </div>
@@ -198,22 +208,17 @@
         </div>
 
         <div class="actions-row">
-          <button id="guess-bootstrap" class="btn" type="button">Charger filtres</button>
+          <!-- Bouton bootstrap SUPPRIMÉ (chargement auto) -->
           <button id="guess-start" class="btn ok" type="button">Lancer</button>
           <button id="guess-end" class="btn" type="button">Terminer</button>
-
-          <!-- Compteur de pool IGDB -->
-          <div id="guess-pool-wrapper" style="margin-left:auto">
-            <span class="hint">Pool —</span>
-            <span id="guess-pool-count" class="mono">—</span>
-          </div>
         </div>
 
         <p id="guess-msg" class="hint" style="margin-top:8px">—</p>
       </div>
 
+      <!-- Panneaux verticaux (stretch) -->
       <div class="grid">
-        <div class="card">
+        <div class="card stretch">
           <h3>Statut</h3>
           <div class="qv-kv">
             <div><span>Etat</span><strong id="guess-status-info">En pause</strong></div>
@@ -222,12 +227,9 @@
           </div>
         </div>
 
-        <div class="card">
-          <h3>Screenshot courant</h3>
-          <img id="guess-shot" alt="screenshot" />
-        </div>
+        <!-- Panel Screenshot SUPPRIMÉ -->
 
-        <div class="card">
+        <div class="card stretch">
           <h3>Leaderboard</h3>
           <ol id="guess-board" class="qv-ol">
             <li class="muted">Aucune donnée</li>
@@ -238,13 +240,24 @@
           <h3>Journal</h3>
           <div id="guess-log" class="log"></div>
         </div>
+
+        <!-- Bouton Reset Scores discret, centré sous le Journal -->
+        <div class="card stretch" style="background:transparent;border:none;box-shadow:none;padding-top:0">
+          <div style="text-align:center;">
+            <button id="gtg-reset-scores" class="btn" type="button"
+              title="Remet tous les scores à zéro (confirmation requise)"
+              style="background:#1b1b1d;color:#aaa;border:1px solid #2a2a2d;font-size:12px;padding:5px 10px;border-radius:8px;">
+              Reset Scores
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
   </main>
 
   <footer class="app-footer">
-    © <span id="year"></span> — JBS
+    © 2025 leblux Corp.
   </footer>
 
   <!-- Script principal -->
