@@ -52,17 +52,21 @@
     if (label) label.textContent = hasPwd ? 'Mot de passe défini' : 'Définir mot de passe';
   }
 
-  (function setupLockButton(){
-    const btn = $('#ws-lock');
-    if (!btn){ return; }
+  // ⚠️ ATTACH APRÈS LE DOM (et anti double-bind)
+  function setupLockButton(){
+    const btn = document.querySelector('#ws-lock');
+    if (!btn) return;            // DOM pas prêt ou bouton absent
+    if (btn._bound) return;      // déjà bindé
+    btn._bound = true;
 
-    const modal = $('#ws-password-modal'); // <dialog> optionnel
+    const modal = document.querySelector('#ws-password-modal'); // <dialog> optionnel
+
     btn.addEventListener('click', (ev)=>{
       ev.preventDefault();
 
-      // 1) Modal natif si présent
+      // 1) Modal <dialog> si dispo
       if (modal && typeof modal.showModal === 'function'){
-        const input = modal.querySelector('input[type="password"], input[type="text"]');
+        const input   = modal.querySelector('input[type="password"], input[type="text"]');
         const saveBtn = modal.querySelector('[data-save]');
         const clearBtn= modal.querySelector('[data-clear]');
         if (input) input.value = getStoredPwd();
@@ -100,7 +104,7 @@
     });
 
     setLockVisual();
-  })();
+  }
 
   /******************************************************************
    *                        📊 OVERVIEW EVENTS (optionnel)
@@ -230,9 +234,8 @@
 
   /******************************************************************
    *                         📈 SMOOTHIE PLACEHOLDER
-   * (graph temps réel — laissé tel quel/optionnel)
    ******************************************************************/
-  // Laisse ton code existant si tu l’utilises, sinon placeholder.
+  // (laisse tel quel si tu n'utilises pas)
 
   /******************************************************************
    *                      🎮 GTG FILTERS & UI BINDINGS
@@ -258,7 +261,6 @@
 
   function setGuessMessage(t){ if (guessMsgEl) guessMsgEl.textContent = t||''; }
 
-  // Exclusions : Set d’IDs (strings)
   const GTG_EXCLUDED = new Set();
 
   function renderExcludeChips(){
@@ -341,7 +343,6 @@
   }
 
   function saveLastSetup(setup){
-    // merge with existing
     const old = loadLastSetup();
     const merged = Object.assign({}, old, setup||{});
     try { localStorage.setItem(LAST_SETUP_KEY, JSON.stringify(merged)); } catch {}
@@ -370,7 +371,6 @@
     if (isNum(s.roundMinutes) && guessDurationMinInput) guessDurationMinInput.value = String(s.roundMinutes);
   }
 
-  // Collect + validate
   function collectFilters(){
     normalizeYearInputs();
     const includeGenreId = guessGenreSel?.value ? String(guessGenreSel.value) : "";
@@ -400,7 +400,6 @@
       if (seen.has(s)) continue;
       if (GTG_GENRES.some(g => String(g.id) === s)){ seen.add(s); validExcl.push(s); }
     }
-    // Inclusion choisie => exclusions ignorées
     const excludeClean = raw.includeGenreId ? [] : validExcl;
 
     let yf = raw.yearFrom, yt = raw.yearTo;
@@ -436,7 +435,6 @@
   function setGuessHandlers(){
     const debounceCount = debounce(requestPoolCount, 250);
 
-    // Changements UI -> Count live
     [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinRatingSel, guessDurationMinInput].forEach(el=>{
       if (!el) return;
       el.addEventListener('change', ()=>{ debounceCount(); });
@@ -445,7 +443,6 @@
       }
     });
 
-    // Include depuis texte (datalist)
     guessIncludeInput?.addEventListener('change', ()=>{
       const id = idFromGenreInputText(guessIncludeInput.value);
       guessGenreSel.value = id || '';
@@ -453,13 +450,11 @@
       requestPoolCount();
     });
 
-    // Exclude depuis texte
     guessExcludeInput?.addEventListener('change', ()=>{
       const id = idFromGenreInputText(guessExcludeInput.value);
       if (id){ GTG_EXCLUDED.add(String(id)); renderExcludeChips(); requestPoolCount(); }
     });
 
-    // Boutons principaux
     guessBootstrapBtn?.addEventListener('click', ()=> safeDoAction('GTG Bootstrap Genres & Years & Ratings', {}));
 
     guessLaunchBtn?.addEventListener('click', ()=>{
@@ -568,7 +563,7 @@
         host,
         port,
         endpoint: '/',     // par défaut
-        // protocol: (supprimé)
+        // protocol (supprimé)
         password,          // mot de passe si défini dans Streamer.bot
         log: false
       });
@@ -577,11 +572,9 @@
 
       const routeEvent = (obj)=>{
         try {
-          // format standard: { event: {...}, data: {...} }
           if (obj && (obj.event || obj.data)) {
             handleSBEvent(obj.event, obj.data);
           } else if (obj && obj.source && obj.type) {
-            // fallback: {source,type,data}
             handleSBEvent({ source: obj.source, type: obj.type }, obj.data || obj);
           }
         } catch(e) { /* ignore */ }
@@ -610,7 +603,6 @@
 
       await sbClient.connect();
 
-      // Souscriptions indispensables à notre dashboard
       await sbClient.subscribe({
         events: {
           General:   ['Custom'],
@@ -619,7 +611,6 @@
         }
       });
 
-      // premier comptage à la connexion
       requestPoolCount();
 
     } catch (e) {
@@ -646,10 +637,8 @@
 
   function handleSBEvent(event, data){
     try {
-      // Live state
       if (event && event.type === 'StreamUpdate'){ setLiveIndicator(!!data?.live); }
 
-      // Compat: TTS logs (si présents dans ton écosystème)
       if (event?.source === 'Custom' && event.type === 'DashMessage'){
         const u = data?.user || data?.userName || data?.username || 'Inconnu';
         const t = data?.message || '';
@@ -657,12 +646,8 @@
         return;
       }
 
-      // Subs
       if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
         const d = data || {};
-        the:
-        {
-        }
         const user = displayNameFromAny(d.displayName ?? d.user ?? d.userName ?? d.username ?? d.sender ?? d.gifter ?? '—');
         const tierLabel = tierLabelFromAny(d.tier ?? d.plan ?? d.subPlan ?? 'Prime');
         const months = extractMonths(d);
@@ -670,7 +655,6 @@
         return;
       }
 
-      // ---------- GTG payloads ----------
       if (data && data.widget === 'gtg') {
 
         if (data.type === 'bootstrap') {
@@ -840,13 +824,17 @@
    *                              INIT
    ******************************************************************/
   function boot(){
-    // Genre/Année/Rating init : bouton dédié (bootstrap) côté C#
-    // Ici on s’assure juste que la UI est prête.
+    setupLockButton(); // <-- maintenant, le DOM est prêt
     setGuessHandlers();
-    connectSB(); // lance la connexion au WS
+    connectSB();
     const yearEl = $('#year'); if (yearEl) yearEl.textContent = new Date().getFullYear();
   }
 
-  boot();
+  // Lance après que le DOM soit prêt
+  document.addEventListener('DOMContentLoaded', boot);
+  // Filet de sécu si le script est en bas de page
+  if (document.readyState === 'interactive' || document.readyState === 'complete') {
+    setTimeout(boot, 0);
+  }
 
 })();
