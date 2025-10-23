@@ -196,7 +196,7 @@
           <div class="form-group sm">
             <label for="guess-min-rating">Note minimale</label>
             <select id="guess-min-rating">
-              <option value="">— Aucun —</option>
+              <option value="">——</option>
             </select>
           </div>
 
@@ -209,7 +209,8 @@
         <div class="actions-row">
           <!-- Bouton bootstrap SUPPRIMÉ (chargement auto) -->
           <button id="guess-start" class="btn ok" type="button">Lancer</button>
-          <button id="guess-end" class="btn" type="button">Terminer</button>
+          <button id="guess-end" class="btn danger" type="button">Terminer</button>
+
         </div>
 
         <p id="guess-msg" class="hint" style="margin-top:8px">—</p>
@@ -223,6 +224,7 @@
             <div><span>Etat</span><strong id="guess-status-info">En pause</strong></div>
             <div><span>Timer</span><strong id="guess-timer">—:—</strong></div>
             <div><span>Dernier jeu trouvé</span><strong id="guess-last-info">—</strong></div>
+            <div><span>Gagnant</span><strong id="guess-winner">—</strong></div>
           </div>
         </div>
 
