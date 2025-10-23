@@ -5,11 +5,11 @@
   const $  = (s, root=document) => root.querySelector(s);
   const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
 
-  const WS_SCHEME     = 'ws';                        // forcer ws en local
-  const SB_PWD_KEY    = "sb_ws_password_v1";
-  const EVENTS_KEY    = "jbs.events.v1";
-  const LAST_SETUP_KEY= "gtg.lastSetup.v1";
-  const MAX_EVENTS    = 200;
+  const WS_SCHEME      = 'ws';
+  const SB_PWD_KEY     = "sb_ws_password_v1";
+  const EVENTS_KEY     = "jbs.events.v1";
+  const LAST_SETUP_KEY = "gtg.lastSetup.v1";
+  const MAX_EVENTS     = 200;
 
   const cssEscape = (v)=>{ try { return CSS.escape(String(v)); } catch { return String(v).replace(/[^\w-]/g, '\\$&'); } };
   const isNum = (n)=> typeof n === 'number' && Number.isFinite(n);
@@ -20,7 +20,6 @@
   function clearStoredPwd(){ try { localStorage.removeItem(SB_PWD_KEY); } catch {} }
   function getQS(name){ try { return new URLSearchParams(location.search).get(name); } catch { return null; } }
 
-  // Renvoie toujours une string (éventuellement vide) — ne jette plus d'exception.
   async function ensureSbPassword({ forcePrompt=false } = {}){
     const fromQS = getQS('pw');
     if (fromQS && fromQS.trim()){
@@ -34,7 +33,7 @@
     const input = window.prompt("Mot de passe WebSocket Streamer.bot :", (pwd || "").trim());
     const cleaned = (input || "").trim();
     if (cleaned){ setStoredPwd(cleaned); }
-    return cleaned; // possiblement vide si l’utilisateur annule
+    return cleaned;
   }
 
   // ===================== Tabs / UI helpers =====================
@@ -160,8 +159,17 @@
     },
     guess: {
       setStatus(running){ const s = running ? 'En cours' : 'En pause'; const a = $('#guess-status-info'); if (a) a.textContent = s; },
-      setLastFound({by, game}){ const label = by === 'streamer' ? 'Streamer' : (by || '—'); const text = game ? `${game} (par ${label})` : '—';
-        const qv = $('#qv-guess-last'); if (qv) qv.textContent = text; const a  = $('#guess-last-info'); if (a) a.textContent = text; },
+      setLastFound({by, game}){
+        // Affiche uniquement le nom du jeu sur la ligne "Dernier jeu trouvé"
+        const text = game ? `${game}` : '—';
+        const a  = $('#guess-last-info'); if (a) a.textContent = text;
+        const qv = $('#qv-guess-last');  if (qv) qv.textContent = text;
+        // La ligne "Gagnant" est gérée par setWinner() séparément
+        if (by) this.setWinner(by); // si on a un auteur, on le pousse dans "Gagnant"
+      },
+      setWinner(name){
+        const w = $('#guess-winner'); if (w) w.textContent = (name && String(name).trim()) ? String(name) : '—';
+      },
       setLeaderboard(entries){
         const ol1 = $('#qv-guess-board'); const ol2 = $('#guess-board');
         function fill(ol){
@@ -291,7 +299,8 @@
   function fillGenresUI(genres){
     GTG_GENRES = Array.isArray(genres) ? genres : [];
     if (guessGenreSel){
-      guessGenreSel.innerHTML = `<option value="">— Aucun —</option>`;
+      // libellé par défaut "— —"
+      guessGenreSel.innerHTML = `<option value="">— —</option>`;
       for (const g of GTG_GENRES){
         const opt = document.createElement('option');
         opt.value = String(g.id);
@@ -315,7 +324,8 @@
     const el = guessMinRatingSel; if (!el) return;
     const list = Array.isArray(steps) && steps.length ? steps : [0,50,60,70,80,85,90];
     el.innerHTML = '';
-    const none = document.createElement('option'); none.value = ''; none.textContent = '— Aucun —'; el.appendChild(none);
+    // libellé par défaut "— —"
+    const none = document.createElement('option'); none.value = ''; none.textContent = '— —'; el.appendChild(none);
     list.filter(n => typeof n === 'number' && isFinite(n))
         .sort((a,b)=>a-b)
         .forEach(v => { const o = document.createElement('option'); o.value = String(v); o.textContent = `≥ ${v}`; el.appendChild(o); });
@@ -330,7 +340,8 @@
     for (const id of GTG_EXCLUDED){
       const g = GTG_GENRES.find(x=>String(x.id)===String(id));
       const label = g?.name || `#${id}`;
-      const chip = document.createElement('span'); chip.className = 'chip';
+      const chip = document.createElement('span');
+      chip.className = 'chip chip-excl';
       chip.innerHTML = `${label} <button type="button" title="Retirer">×</button>`;
       chip.querySelector('button').addEventListener('click', ()=>{
         GTG_EXCLUDED.delete(id); renderExcludeChips();
@@ -490,6 +501,14 @@
       roundMinutes: clean.roundMinutes
     });
 
+    // Reset affichages
+    DashboardStatus.guess.setLastFound({ by: '', game: '' });
+    DashboardStatus.guess.setWinner('');
+
+    // Fallback : démarre le timer tout de suite localement (corrigé ensuite par l’event 'start')
+    const localEnd = Date.now() + clean.roundMinutes * 60 * 1000;
+    startRoundTimer(localEnd);
+
     setGuessMessage('Manche lancée…');
     DashboardStatus.setStatus('guess', true);
     DashboardStatus.guess.setStatus(true);
@@ -513,6 +532,7 @@
     DashboardStatus.setStatus('guess', false);
     setGuessMessage('En pause');
     stopRoundTimer();
+    // On ne touche pas "Dernier jeu trouvé" ni le gagnant ici.
   }
 
   // UI listeners
@@ -575,6 +595,8 @@
   })();
 
   // ===================== Streamer.bot client =====================
+  let client; // défini plus haut
+
   async function initStreamerbotClient(forcePrompt = false) {
     if (typeof StreamerbotClient === 'undefined'){
       setWsIndicator(false);
@@ -610,17 +632,17 @@
         if (el) el.textContent = `Connecté à Streamer.bot (${info?.version || 'v?'})`;
 
         await syncGuessFromBackend();
-        await gtgBootstrap();              // bootstrap auto
-        await requestScoresFromBackend();  // scores auto
-        await syncTtsSwitchFromBackend();  // TTS sync
-        requestPoolCount();                // premier count du pool
+        await gtgBootstrap();
+        await requestScoresFromBackend();
+        await syncTtsSwitchFromBackend();
+        requestPoolCount();
       },
       onDisconnect: async (evt = {}) => {
         setWsIndicator(false);
         if (evt.code === 1006){
           if (el) el.textContent = 'Auth invalide — ressaisir le mot de passe…';
           clearStoredPwd();
-          await initStreamerbotClient(true); // re-prompt
+          await initStreamerbotClient(true);
           return;
         }
         const msg = `Déconnecté${evt.code ? ' — code '+evt.code : ''}${evt.reason ? ' — '+evt.reason : ''}`;
@@ -702,6 +724,7 @@
             }
             if (data.screenshotUrl){ DashboardStatus.guess.setShot(data.screenshotUrl); }
             const endMs = Number(data.roundEndsAt);
+            // si le backend envoie roundEndsAt, on recale le timer, sinon on garde le fallback local
             if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
             if (typeof data.poolCount === 'number' && guessPoolEl) guessPoolEl.textContent = String(data.poolCount);
             setGuessMessage('Manche lancée');
@@ -716,8 +739,12 @@
             }
             if (data.screenshotUrl){ DashboardStatus.guess.setShot(data.screenshotUrl); }
             if (data.gameName){
-              DashboardStatus.guess.setLastFound({ by: 'streamer', game: data.gameName });
-              setGuessMessage(`Réponse : ${data.gameName}`);
+              // On n’ajoute pas "(par Streamer)" ici ; on met le gagnant sur la ligne dédiée
+              DashboardStatus.guess.setLastFound({ by: '', game: data.gameName });
+            }
+            if (data.lastWinner){
+              const winnerName = data.lastWinner.isStreamer ? 'Streamer' : (data.lastWinner.user || '');
+              DashboardStatus.guess.setWinner(winnerName);
             }
             return;
           }
@@ -725,11 +752,9 @@
           if (data.type === 'scoreUpdate') {
             const lb = Array.isArray(data.leaderboard) ? data.leaderboard : [];
             DashboardStatus.guess.setLeaderboard(lb);
-            if (data.lastWinner) {
-              DashboardStatus.guess.setLastFound({
-                by: data.lastWinner.isStreamer ? 'streamer' : data.lastWinner.user,
-                game: data.gameName || ''
-              });
+            if (data.lastWinner){
+              const winnerName = data.lastWinner.isStreamer ? 'Streamer' : (data.lastWinner.user || '');
+              DashboardStatus.guess.setWinner(winnerName);
             }
             appendLog('#guess-log', `Scores reçus (${lb.length} entrées).`);
             return;
@@ -738,6 +763,7 @@
           if (data.type === 'scoreReset') {
             DashboardStatus.guess.setLeaderboard([]);
             DashboardStatus.guess.setLastFound({ by: '', game: '' });
+            DashboardStatus.guess.setWinner('');
             appendLog('#guess-log', 'Scores remis à zéro (broadcast).');
             return;
           }
@@ -811,10 +837,10 @@
     clearStoredPwd();
     setWsIndicator(false);
     const el = $('#ws-status'); if (el) el.textContent = 'Mot de passe requis';
-    await initStreamerbotClient(true); // force prompt
+    await initStreamerbotClient(true);
   });
 
   // ===================== Boot =====================
-  initStreamerbotClient(); // premier connect (avec reuse du mdp s’il existe)
+  initStreamerbotClient();
 
 })();
