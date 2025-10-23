@@ -2,80 +2,84 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>JBS Dashboard</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>JBS Dashboard</title>
+
+  <!-- Styles -->
   <link rel="stylesheet" href="style.css" />
+
+  <!-- Lib Streamer.bot client (évite “lib introuvable”) -->
+  <script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.umd.js"></script>
 </head>
 <body>
 
   <!-- Header -->
   <header class="app-header">
-    <h1 class="app-title">JBS Dashboard</h1>
+    <h1 class="app-title">JBS - Dashboard</h1>
     <div class="header-right">
       <div class="status-inline">
-        <span class="dot off" id="ws-dot"></span>
-        <span class="ws-status-text" id="ws-status">Déconnecté de Streamer.bot</span>
-      </div>
-      <div class="status-inline" style="margin-left:14px">
         <span class="dot off" id="live-dot"></span>
-        <span class="ws-status-text" id="live-status">Offline</span>
+        <span id="live-status">Offline</span>
       </div>
-      <button class="icon-btn" title="Rafraîchir" onclick="location.reload()">
-        ↻
-      </button>
+      <div class="status-inline">
+        <span class="dot off" id="ws-dot"></span>
+        <span id="ws-status" class="ws-status-text">Connecté à Streamer.bot (—)</span>
+      </div>
+      <button class="icon-btn" id="refresh-btn" title="Recharger">⟲</button>
     </div>
   </header>
 
   <!-- Tabs -->
-  <nav class="tabs" role="tablist">
-    <button class="tab active" data-tab="overview" role="tab" aria-selected="true">Overview</button>
-    <button class="tab" data-tab="events"   role="tab">Event Checker <span class="badge badge-events" style="display:none">0</span></button>
-    <button class="tab" data-tab="tts"      role="tab">TTS Reader</button>
-    <button class="tab" data-tab="guess"    role="tab">Guess The Game</button>
+  <nav class="tabs">
+    <button class="tab" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="events">
+      Events Checker
+      <span class="badge badge-events" style="display:none">0</span>
+    </button>
+    <button class="tab" data-tab="tts">TTS Reader</button>
+    <button class="tab active" data-tab="guess">Guess The Game</button>
   </nav>
 
+  <!-- Panels -->
   <main class="tab-panels">
-    <!-- Overview -->
-    <section id="tab-overview" class="tab-panel" style="display:block">
-      <div class="overview-grid">
 
-        <!-- Quick View: Events -->
+    <!-- Overview (léger ; tous les IDs optionnels sont tolérés par le JS) -->
+    <section id="tab-overview" class="tab-panel" style="display:none">
+      <div class="overview-grid">
         <article class="qv-card" data-goto="events">
           <div class="qv-head">
-            <h2>Subs &amp; Events</h2>
+            <h2>Events</h2>
             <div class="status-inline">
               <span class="dot dot-events off"></span>
-              <span class="badge" id="qv-events-count" style="display:none">0</span>
+              <span id="qv-events-count" class="badge" style="display:none">0</span>
             </div>
           </div>
           <div class="qv-body">
             <ul id="qv-events-list" class="qv-list"></ul>
           </div>
-          <div class="qv-foot">Voir l’onglet Events</div>
+          <div class="qv-foot">Derniers subs</div>
         </article>
 
-        <!-- Quick View: TTS -->
         <article class="qv-card" data-goto="tts">
           <div class="qv-head">
             <h2>TTS</h2>
             <div class="status-inline">
               <span class="dot dot-tts off"></span>
-              <span id="tts-status-text" class="muted">Inactif</span>
+              <span id="tts-status-text">Inactif</span>
             </div>
           </div>
           <div class="qv-body">
             <ul id="qv-tts-list" class="qv-list"></ul>
           </div>
-          <div class="qv-foot">Voir l’onglet TTS</div>
+          <div class="qv-foot">Messages lus</div>
         </article>
 
-        <!-- Quick View: Guess -->
         <article class="qv-card" data-goto="guess">
           <div class="qv-head">
             <h2>Guess The Game</h2>
             <div class="status-inline">
               <span class="dot dot-guess off"></span>
-              <span id="qv-guess-status" class="muted">En pause</span>
+              <span id="qv-guess-status">En pause</span>
             </div>
           </div>
           <div class="qv-body">
@@ -88,156 +92,167 @@
               <ol id="qv-guess-board" class="qv-ol"></ol>
             </div>
           </div>
-          <div class="qv-foot">Voir l’onglet GTG</div>
+          <div class="qv-foot">Résumé</div>
         </article>
-
       </div>
     </section>
 
-    <!-- Event Checker -->
-    <section id="tab-events" class="tab-panel">
+    <!-- Events -->
+    <section id="tab-events" class="tab-panel" style="display:none">
       <div class="panel-head">
-        <h2>Event Checker</h2>
+        <h2>Events</h2>
         <div class="status-inline">
           <span class="dot dot-events off"></span>
-          <span id="events-status-text" class="muted">Inactif</span>
-          <span class="badge badge-events" style="display:none">0</span>
+          <span id="events-status-text">Inactif</span>
         </div>
       </div>
       <div class="grid">
         <div class="card stretch">
-          <h3>Subs / Resubs</h3>
-          <ul id="events-subs-list" class="qv-list big clickable">
-            <li class="muted">Aucun sub</li>
-          </ul>
+          <h3>Subs</h3>
+          <ul id="events-subs-list" class="qv-list big clickable"><li class="muted">Aucun sub</li></ul>
         </div>
-        <div class="card">
+        <div class="card stretch">
           <h3>Log</h3>
           <div id="events-log" class="log"></div>
         </div>
       </div>
     </section>
 
-    <!-- TTS Reader -->
-    <section id="tab-tts" class="tab-panel">
+    <!-- TTS -->
+    <section id="tab-tts" class="tab-panel" style="display:none">
       <div class="panel-head">
         <h2>TTS Reader</h2>
-        <div class="status-inline">
-          <label id="tts-switch-label" class="switch">
-            <input type="checkbox" id="tts-switch" />
-            <span class="slider"></span>
-            <span class="switch-label-text">TTS OFF</span>
-          </label>
-        </div>
+        <label id="tts-switch-label" class="switch">
+          <input id="tts-switch" type="checkbox" />
+          <span class="slider"></span>
+          <span class="switch-label-text">TTS OFF</span>
+        </label>
       </div>
       <div class="grid">
         <div class="card stretch">
           <h3>Messages lus</h3>
           <ul id="tts-read-list" class="qv-list big"></ul>
         </div>
-        <div class="card">
-          <h3>Log</h3>
+        <div class="card stretch">
+          <h3>Journal</h3>
           <div id="tts-log" class="log"></div>
         </div>
       </div>
     </section>
 
     <!-- Guess The Game -->
-    <section id="tab-guess" class="tab-panel">
+    <section id="tab-guess" class="tab-panel" style="display:block">
       <div class="panel-head">
         <h2>Guess The Game</h2>
         <div class="status-inline">
           <span class="dot dot-guess off"></span>
-          <span id="guess-status-text" class="muted">En pause</span>
+          <span id="guess-status-text">En pause</span>
         </div>
       </div>
 
       <!-- Filtres -->
       <div class="card stretch">
         <h3>Filtres</h3>
+
         <div class="form-row">
           <div class="form-group">
-            <label for="guess-genre">Genre (inclusion unique)</label>
-            <select id="guess-genre"></select>
+            <label for="guess-genre">Genre (inclusion, optionnel)</label>
+            <select id="guess-genre">
+              <option value="">— Aucun —</option>
+            </select>
           </div>
 
           <div class="form-group grow">
             <label for="guess-exclude-input">Genres à exclure</label>
             <div class="inline">
-              <input list="guess-genres-datalist" id="guess-exclude-input" type="text" placeholder="Nom exact / id / recherche partielle…" />
-              <datalist id="guess-genres-datalist"></datalist>
-              <button class="btn" id="guess-exclude-add" type="button">Ajouter</button>
+              <input id="guess-exclude-input" list="guess-genres-datalist" type="text" placeholder="Rechercher un genre..." />
+              <button id="guess-exclude-add" class="btn" type="button">Ajouter</button>
             </div>
-            <div class="chips" id="guess-exclude-chips"></div>
+            <datalist id="guess-genres-datalist"></datalist>
+            <div id="guess-exclude-chips" class="chips">
+              <span class="hint">Tu peux laisser vide, ou exclure plusieurs genres.</span>
+            </div>
           </div>
 
           <div class="form-group sm">
             <label for="guess-year-from">Année (de)</label>
-            <input id="guess-year-from" type="number" inputmode="numeric" placeholder="min" />
+            <input id="guess-year-from" type="number" placeholder="min" />
           </div>
+
           <div class="form-group sm">
             <label for="guess-year-to">Année (à)</label>
-            <input id="guess-year-to" type="number" inputmode="numeric" placeholder="max" />
+            <input id="guess-year-to" type="number" placeholder="max" />
           </div>
 
           <div class="form-group sm">
             <label for="guess-min-rating">Note minimale</label>
-            <select id="guess-min-rating"></select>
+            <select id="guess-min-rating">
+              <option value="">— Aucun —</option>
+            </select>
           </div>
 
           <div class="form-group sm">
             <label for="guess-duration-min">Durée de la manche (min)</label>
-            <input id="guess-duration-min" type="number" min="1" max="120" step="1" value="2" />
+            <input id="guess-duration-min" type="number" min="1" max="120" value="2" />
           </div>
         </div>
 
         <div class="actions-row">
-          <!-- Bouton facultatif (bootstrap auto de toute façon) -->
-          <button class="btn" id="guess-bootstrap" type="button">Charger filtres</button>
-          <button class="btn ok" id="guess-start" type="button">Lancer</button>
-          <button class="btn" id="guess-end" type="button">Pause / Arrêter</button>
+          <button id="guess-bootstrap" class="btn" type="button">Charger filtres</button>
+          <button id="guess-start" class="btn ok" type="button">Lancer</button>
+          <button id="guess-end" class="btn" type="button">Terminer</button>
 
-          <!-- Compteur IGDB -->
-          <div class="hint" id="guess-pool-wrapper" style="margin-left:auto">
-            Pool: <span id="guess-pool-count">—</span>
+          <!-- Compteur de pool IGDB -->
+          <div id="guess-pool-wrapper" style="margin-left:auto">
+            <span class="hint">Pool —</span>
+            <span id="guess-pool-count" class="mono">—</span>
           </div>
         </div>
 
-        <p class="muted" id="guess-msg" style="margin-top:8px">—</p>
+        <p id="guess-msg" class="hint" style="margin-top:8px">—</p>
       </div>
 
-      <!-- État & Leaderboard -->
       <div class="grid">
         <div class="card">
-          <h3>Status</h3>
+          <h3>Statut</h3>
           <div class="qv-kv">
             <div><span>Etat</span><strong id="guess-status-info">En pause</strong></div>
             <div><span>Timer</span><strong id="guess-timer">—:—</strong></div>
             <div><span>Dernier jeu trouvé</span><strong id="guess-last-info">—</strong></div>
           </div>
         </div>
+
         <div class="card">
           <h3>Screenshot courant</h3>
-          <img id="guess-shot" alt="screenshot" style="width:100%;height:auto;border-radius:10px;border:1px solid var(--border)"/>
+          <img id="guess-shot" alt="screenshot" />
         </div>
+
         <div class="card">
           <h3>Leaderboard</h3>
-          <ol id="guess-board" class="qv-ol"></ol>
+          <ol id="guess-board" class="qv-ol">
+            <li class="muted">Aucune donnée</li>
+          </ol>
         </div>
-        <div class="card">
-          <h3>Log</h3>
+
+        <div class="card stretch">
+          <h3>Journal</h3>
           <div id="guess-log" class="log"></div>
         </div>
       </div>
     </section>
+
   </main>
 
   <footer class="app-footer">
     © <span id="year"></span> — JBS
   </footer>
 
-  <!-- Streamer.bot client (doit être disponible dans ton environnement) -->
-  <script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.umd.js"></script>
+  <!-- Script principal -->
   <script src="script.js"></script>
+
+  <script>
+    // bouton refresh (optionnel)
+    document.getElementById('refresh-btn')?.addEventListener('click', ()=>location.reload());
+  </script>
 </body>
 </html>
