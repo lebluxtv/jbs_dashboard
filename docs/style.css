@@ -29,9 +29,13 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 
 /* Tabs */
 .tabs{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:5}
-.tab{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-weight:600;user-select:none}
+.tab{
+  display:inline-flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);
+  border:1px solid var(--border);border-radius:10px;cursor:pointer;font-weight:600;user-select:none;
+  color:var(--text); /* force texte blanc sur bouton */
+}
 .tab:hover{border-color:#3a3a3d}
-.tab.active{border-color:#414145;box-shadow:inset 0 -2px 0 var(--accent)}
+.tab.active{border-color:#414145;box-shadow:inset 0 -2px 0 var(--accent);color:#fff}
 
 /* Dots & badges */
 .dot{width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.4) inset}
@@ -82,7 +86,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .qv-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)}
 .qv-head h2{margin:0;font-size:16px;cursor:pointer}
 .qv-body{padding:12px;min-height:220px}
-.qv-foot{padding:8px 12px;border-top:1px dashed var(--border);text-align:center;color:#cfd2d6;font-weight:600;text-transform:uppercase;letter-spacing:.6px}
+.qv-foot{padding:8px 12px;border-top:1px dashed var(--border);text-align:center;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px}
 
 /* Quick-view scroll */
 #qv-events-list, #qv-tts-list { max-height:300px; overflow:auto }
@@ -92,7 +96,10 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .mono{font-family:var(--mono)}
 .app-footer{padding:14px 16px;border-top:1px solid var(--border);text-align:right;color:#cfd2d6}
 
-/* ---------- Guess The Game – UI (optimisé, sans aperçu) ---------- */
+/* Timer emphasis */
+#guess-timer{font-family:var(--mono);font-weight:700;letter-spacing:.5px}
+
+/* ---------- Guess The Game – UI ---------- */
 .form-row{
   display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;
 }
@@ -134,7 +141,7 @@ select:focus,input[type="number"]:focus,input[type="text"]:focus{
   border:1px solid var(--border);border-radius:999px;padding:6px 10px
 }
 .chip button{background:transparent;border:none;color:#cfd2d6;cursor:pointer}
-.hint{font-size:12px;color:var(--muted)}
+.hint{font-size:12px;color:#9aa0a6}
 
 /* ---------- Responsive ---------- */
 @media (max-width:1100px){
@@ -150,3 +157,4 @@ select:focus,input[type="number"]:focus,input[type="text"]:focus{
   .form-group{flex:1 1 100%;min-width:0}
   .form-group.sm{flex:1 1 48%;max-width:none}
 }
+
