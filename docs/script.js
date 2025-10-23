@@ -560,16 +560,15 @@
     try {
       const host = getQS('host') || location.hostname || '127.0.0.1';
       const port = getQS('port') || '8080';
-      const wantWss = getQS('wss') === '1'; // wss si reverse-proxy TLS correctement configuré par toi
-      const protocol = wantWss ? 'wss' : 'ws';
       const password = getStoredPwd() || getQS('pwd') || '';
 
+      // 👉 LAISSE LA LIB CHOISIR (aucun `protocol` passé)
       // eslint-disable-next-line no-undef
       sbClient = new StreamerbotClient({
         host,
         port,
         endpoint: '/',     // par défaut
-        protocol,          // 'ws' natif, 'wss' si fourni par reverse-proxy
+        // protocol: (supprimé)
         password,          // mot de passe si défini dans Streamer.bot
         log: false
       });
@@ -592,7 +591,7 @@
         setWsIndicator(true);
         wsConnected = true;
         setLockVisual();
-        appendLog('#ws-log', `Connecté (${protocol}://${host}:${port})`);
+        appendLog('#ws-log', `Connecté (auto) ${host}:${port}`);
       });
 
       sbClient.on('Close', ()=> {
@@ -623,9 +622,6 @@
       // premier comptage à la connexion
       requestPoolCount();
 
-      if (location.protocol === 'https:' && protocol === 'ws') {
-        appendLog('#ws-log', '⚠️ Page HTTPS → le navigateur peut bloquer ws://. Utilise un reverse-proxy TLS (?wss=1) ou ouvre la page en HTTP local.');
-      }
     } catch (e) {
       appendLog('#ws-log', 'Connexion impossible: ' + (e?.message||e));
     }
@@ -664,6 +660,9 @@
       // Subs
       if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
         const d = data || {};
+        the:
+        {
+        }
         const user = displayNameFromAny(d.displayName ?? d.user ?? d.userName ?? d.username ?? d.sender ?? d.gifter ?? '—');
         const tierLabel = tierLabelFromAny(d.tier ?? d.plan ?? d.subPlan ?? 'Prime');
         const months = extractMonths(d);
