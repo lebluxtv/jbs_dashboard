@@ -91,6 +91,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .muted{color:var(--muted)}
 .mono{font-family:var(--mono)}
 .app-footer{padding:14px 16px;border-top:1px solid var(--border);text-align:right;color:var(--muted)}
+/* Timer emphasis */
+#guess-timer{font-family:var(--mono);font-weight:700;letter-spacing:.5px}
 
 /* ---------- Guess The Game – UI (optimisé, sans aperçu) ---------- */
 .form-row{
