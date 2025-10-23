@@ -142,7 +142,7 @@
       addSub({type, user, tierLabel, months}){
         const safeUser = displayNameFromAny(user);
         const e = { id: Date.now() + Math.random().toString(16).slice(2), type: type || 'Sub', user: safeUser, tierLabel, months: months || 0, ack: false };
-        eventsStore.push(e); if (eventsStore.length > MAX_EVENTS) eventsStore = eventsStore.slice(-MAX_EVENTS); saveEvents(eventsStore);
+        eventsStore.push(e); if (eventsStore.length > MAX_EVENTS) eventsStore = eventsStore.slice(-[MAX_EVENTS]); saveEvents(eventsStore);
         const line = eventLine(e); const handler = (isAck)=> updateAckInStore(e.id, isAck);
         prependListItem($('#qv-events-list'),   line, handler, e.ack, e.id);
         prependListItem($('#events-subs-list'), line, handler, e.ack, e.id);
@@ -195,7 +195,7 @@
   const guessStartBtn         = $('#guess-start');
   const guessEndBtn           = $('#guess-end');
   const guessMsg              = $('#guess-msg');
-  const guessTimerEl          = $('#guess-timer');
+  const guessTimerEls         = $$('#guess-timer'); // <-- plusieurs occurences dans l'HTML
   const guessPoolEl           = $('#guess-pool-count');
 
   let GTG_GENRES = [];
@@ -223,6 +223,35 @@
     } catch {}
   }
 
+  // ---------- UI helpers (inclu/exclu) ----------
+  function styleIncludeSelect(hasValue){
+    // met un liseré vert si une valeur est choisie ; sinon styles par défaut
+    if (!guessGenreSel) return;
+    if (hasValue){
+      guessGenreSel.style.borderColor = 'var(--focus)';
+      guessGenreSel.style.boxShadow   = '0 0 0 3px rgba(55,204,134,.15)';
+    } else {
+      guessGenreSel.style.borderColor = '';
+      guessGenreSel.style.boxShadow   = '';
+    }
+  }
+  function toggleExcludeUI(){
+    const hasInclude = !!(guessGenreSel && guessGenreSel.value);
+    const group = guessExcludeChips?.closest('.form-group'); // bloc "Genres à exclure"
+    const addBtn = $('#guess-exclude-add');
+
+    if (guessExcludeInput) guessExcludeInput.disabled = hasInclude;
+    if (addBtn) addBtn.disabled = hasInclude;
+
+    // applique aussi un style inline pour t’assurer de l’effet même sans CSS dédié
+    if (group){
+      group.classList.toggle('is-disabled', hasInclude); // pour ton CSS si présent
+      group.style.opacity = hasInclude ? '0.55' : '';
+      group.style.pointerEvents = hasInclude ? 'none' : '';
+    }
+    styleIncludeSelect(hasInclude);
+  }
+
   function applyLastSetupAfterGenres(){
     const last = loadLastSetup(); if (!last) { toggleExcludeUI(); return; }
 
@@ -245,6 +274,7 @@
     normalizeYearInputs({silent:true});
 
     if (guessMinRatingSel){
+      // réapplique la valeur sauvegardée après création des options
       guessMinRatingSel.value = (isNum(last.minRating) ? String(last.minRating) : "");
     }
 
@@ -253,8 +283,7 @@
       guessDurationMinInput.value = String(dm);
     }
 
-    // met à jour l'état grisé/actif du bloc exclusions
-    toggleExcludeUI();
+    toggleExcludeUI(); // met à jour grisé + liseré vert
   }
 
   function attachAutoSaveListeners(){
@@ -317,8 +346,7 @@
         guessDatalist.appendChild(o);
       }
     }
-    applyLastSetupAfterGenres();  // réapplique minRating + années + durée + exclusions + genre inclu
-    toggleExcludeUI();            // et met l’UI exclusions au bon état
+    applyLastSetupAfterGenres();
   }
 
   function fillRatingSteps(steps){
@@ -352,17 +380,7 @@
     }
   }
 
-  // grise / active la zone exclusions selon choix d’inclusion
-  function toggleExcludeUI(){
-    const hasInclude = !!(guessGenreSel && guessGenreSel.value);
-    const group = guessExcludeChips?.closest('.form-group'); // bloc "Genres à exclure"
-    const addBtn = $('#guess-exclude-add');
-
-    if (guessExcludeInput) guessExcludeInput.disabled = hasInclude;
-    if (addBtn) addBtn.disabled = hasInclude;
-    if (group) group.classList.toggle('is-disabled', hasInclude);
-  }
-  // quand on change de genre inclu, on met à jour l’UI et le pool
+  // grise / active la zone exclusions selon choix d’inclusion + liseré vert
   guessGenreSel?.addEventListener('change', () => { toggleExcludeUI(); requestPoolCount(); });
 
   function idFromGenreInputText(txt){
@@ -392,7 +410,7 @@
       if (seen.has(s)) continue;
       if (GTG_GENRES.some(g => String(g.id) === s)){ seen.add(s); validExcl.push(s); }
     }
-    // Inclusion choisie => exclure devient sans objet (on n’envoie aucune exclusion)
+    // Inclusion choisie => exclusions ignorées totalement
     const excludeClean = raw.includeGenreId ? [] : validExcl;
 
     let yf = raw.yearFrom, yt = raw.yearTo;
@@ -451,6 +469,10 @@
   }, 300);
 
   // ===================== Timer helpers =====================
+  function setTimerText(text){
+    if (!guessTimerEls || !guessTimerEls.length) return;
+    guessTimerEls.forEach(el => { el.textContent = text; });
+  }
   function fmtMMSS(ms){
     if (!Number.isFinite(ms) || ms <= 0) return '00:00';
     const s = Math.ceil(ms/1000);
@@ -460,13 +482,13 @@
   }
   function stopRoundTimer(){
     if (GTG_TIMER_ID){ clearInterval(GTG_TIMER_ID); GTG_TIMER_ID = null; }
-    if (guessTimerEl) guessTimerEl.textContent = '—:—';
+    setTimerText('—:—');
   }
   function startRoundTimer(endMs){
     stopRoundTimer();
     const tick = ()=>{
       const remain = endMs - Date.now();
-      if (guessTimerEl) guessTimerEl.textContent = fmtMMSS(remain);
+      setTimerText(fmtMMSS(remain));
       if (remain <= 0){ stopRoundTimer(); }
     };
     tick();
@@ -545,7 +567,6 @@
     DashboardStatus.setStatus('guess', false);
     setGuessMessage('En pause');
     stopRoundTimer();
-    // On ne touche pas "Dernier jeu trouvé" ni "Gagnant".
   }
 
   // UI listeners
@@ -647,6 +668,8 @@
         await requestScoresFromBackend();
         await syncTtsSwitchFromBackend();
         requestPoolCount();
+        // sync visuel inclu/exclu au tout début
+        toggleExcludeUI();
       },
       onDisconnect: async (evt = {}) => {
         setWsIndicator(false);
@@ -699,7 +722,7 @@
             NEWEST_YEAR = isNum(data.newestYear) ? data.newestYear : null;
             normalizeYearInputs({silent:true});
             fillRatingSteps(data.ratingSteps);
-            applyLastSetupAfterGenres();     // réapplique le setup après options créées
+            applyLastSetupAfterGenres();
             const rangeLabel = (isNum(OLDEST_YEAR) && isNum(NEWEST_YEAR)) ? `${OLDEST_YEAR} — ${NEWEST_YEAR}` : 'plage inconnue';
             setGuessMessage(`Genres chargés (${genres.length}). Plage ${rangeLabel}.`);
             DashboardStatus.guess.log(`Genres: ${genres.length}, période: ${rangeLabel}`);
