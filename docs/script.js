@@ -162,11 +162,12 @@
   const guessYearToInput      = $('#guess-year-to');
   const guessMinRatingSel     = $('#guess-min-rating');
   const guessDurationMinInput = $('#guess-duration-min');
-  const guessBootstrapBtn     = $('#guess-bootstrap'); // vestigial (la charge est auto)
+  const guessBootstrapBtn     = $('#guess-bootstrap'); // vestigial (charge auto)
   const guessStartBtn         = $('#guess-start');
   const guessEndBtn           = $('#guess-end');
   const guessMsg              = $('#guess-msg');
   const guessTimerEl          = $('#guess-timer');
+  const guessPoolEl           = $('#guess-pool-count');
 
   let GTG_GENRES = [];
   let GTG_EXCLUDED = new Set();
@@ -174,11 +175,10 @@
   let NEWEST_YEAR = null;
 
   let GTG_TIMER_ID = null;
-  let GTG_ROUND_END_MS = null;
 
   function setGuessMessage(msg){ if (guessMsg) guessMsg.textContent = msg || ''; }
 
-  // ---------- Last Setup (persisté localement) ----------
+  // ---------- Last Setup ----------
   function loadLastSetup(){
     try { const raw = localStorage.getItem(LAST_SETUP_KEY); if (!raw) return null;
       const obj = JSON.parse(raw);
@@ -197,13 +197,11 @@
   function applyLastSetupAfterGenres(){
     const last = loadLastSetup(); if (!last) return;
 
-    // include genre
     if (guessGenreSel){
       const has = last.includeGenreId && GTG_GENRES.some(g => String(g.id)===String(last.includeGenreId));
       guessGenreSel.value = has ? String(last.includeGenreId) : "";
     }
 
-    // excluded list
     GTG_EXCLUDED = new Set();
     if (Array.isArray(last.excludeGenreIds) && last.excludeGenreIds.length){
       for (const id of last.excludeGenreIds){
@@ -213,17 +211,14 @@
     }
     renderExcludeChips();
 
-    // years
     if (guessYearFromInput && isNum(last.yearFrom)) guessYearFromInput.value = String(last.yearFrom);
     if (guessYearToInput   && isNum(last.yearTo))   guessYearToInput.value   = String(last.yearTo);
     normalizeYearInputs({silent:true});
 
-    // rating
     if (guessMinRatingSel){
       guessMinRatingSel.value = (isNum(last.minRating) ? String(last.minRating) : "");
     }
 
-    // duration
     if (guessDurationMinInput){
       const dm = isNum(last.roundMinutes) ? Math.max(1, Math.min(120, Math.trunc(last.roundMinutes))) : 2;
       guessDurationMinInput.value = String(dm);
@@ -241,10 +236,10 @@
         minRating: clean.minRating,
         roundMinutes: clean.roundMinutes
       });
+      requestPoolCount(); // met à jour le pool quand on modifie quelque chose
     };
     [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinRatingSel, guessDurationMinInput]
       .forEach(el => el && el.addEventListener('change', saveNow));
-    // exclu: géré lors des clics + bouton ajouter
   }
 
   // ---------- Year handling ----------
@@ -290,7 +285,6 @@
         guessDatalist.appendChild(o);
       }
     }
-    // appliquer le Last Setup après avoir les genres
     applyLastSetupAfterGenres();
   }
 
@@ -318,6 +312,7 @@
       chip.querySelector('button').addEventListener('click', ()=>{
         GTG_EXCLUDED.delete(id); renderExcludeChips();
         saveLastSetup({ excludeGenreIds: Array.from(GTG_EXCLUDED) });
+        requestPoolCount();
       });
       guessExcludeChips.appendChild(chip);
     }
@@ -339,12 +334,10 @@
   // ===================== Validation forte côté client =====================
   function validateFilters(raw){
     const errs = [];
-    // Genre inclus valide
     if (raw.includeGenreId){
       const ok = GTG_GENRES.some(g => String(g.id) === String(raw.includeGenreId));
       if (!ok) errs.push("Genre d'inclusion invalide.");
     }
-    // Exclusions: ids valides & uniques
     const validExcl = [];
     const seen = new Set();
     for (const id of (raw.excludeGenreIds || [])){
@@ -354,7 +347,6 @@
     }
     const excludeClean = raw.includeGenreId ? validExcl.filter(id => String(id) !== String(raw.includeGenreId)) : validExcl;
 
-    // Années
     let yf = raw.yearFrom, yt = raw.yearTo;
     if (yf != null && !isNum(yf)) errs.push("Année (de) invalide.");
     if (yt != null && !isNum(yt)) errs.push("Année (à) invalide.");
@@ -362,11 +354,9 @@
     if (isNum(NEWEST_YEAR)){ if (isNum(yf) && yf > NEWEST_YEAR) yf = NEWEST_YEAR; if (isNum(yt) && yt > NEWEST_YEAR) yt = NEWEST_YEAR; }
     if (isNum(yf) && isNum(yt) && yt < yf) yt = yf;
 
-    // Note minimale
     let minRating = raw.minRating;
     if (minRating != null && (!isNum(minRating) || minRating < 0 || minRating > 100)) errs.push("Note minimale invalide.");
 
-    // Durée
     let roundMinutes = Number(raw.durationMin);
     if (!isNum(roundMinutes)) roundMinutes = 2;
     roundMinutes = Math.max(1, Math.min(120, Math.trunc(roundMinutes)));
@@ -399,6 +389,18 @@
     return { includeGenreId, excludeGenreIds, yearFrom: yFrom ?? null, yearTo: yTo ?? null, minRating, durationMin };
   }
 
+  // --- debounce util ---
+  function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+
+  // --- demande de poolCount auprès de Streamer.bot ---
+  const requestPoolCount = debounce(async ()=>{
+    if (!client) return;
+    const draft = collectFilters();
+    const { ok, clean } = validateFilters(draft);
+    if (!ok) return;
+    try { await safeDoAction("GTG Games Count", clean); } catch(e) { /* ignore */ }
+  }, 300);
+
   // ===================== Timer helpers =====================
   function fmtMMSS(ms){
     if (!Number.isFinite(ms) || ms <= 0) return '00:00';
@@ -409,12 +411,10 @@
   }
   function stopRoundTimer(){
     if (GTG_TIMER_ID){ clearInterval(GTG_TIMER_ID); GTG_TIMER_ID = null; }
-    GTG_ROUND_END_MS = null;
     if (guessTimerEl) guessTimerEl.textContent = '—:—';
   }
   function startRoundTimer(endMs){
     stopRoundTimer();
-    GTG_ROUND_END_MS = endMs;
     const tick = ()=>{
       const remain = endMs - Date.now();
       if (guessTimerEl) guessTimerEl.textContent = fmtMMSS(remain);
@@ -446,7 +446,6 @@
     try{
       await safeDoAction("GTG Bootstrap Genres & Years & Ratings", {});
       appendLog('#guess-log', 'Bootstrap demandé (genres/années/notes)…');
-      // on attend le payload "gtg/bootstrap"
     }catch(e){
       console.error('[GTG] Bootstrap doAction failed', e);
       setGuessMessage('Erreur: impossible de déclencher le bootstrap.');
@@ -460,7 +459,6 @@
     const { ok, errs, clean } = validateFilters(draft);
     if (!ok){ setGuessMessage(errs[0] || 'Filtres invalides.'); appendLog('#guess-log', 'Start annulé (validation échouée).'); return; }
 
-    // Sauvegarde immédiate du Last Setup validé
     saveLastSetup({
       includeGenreId: clean.includeGenreId,
       excludeGenreIds: clean.excludeGenreIds,
@@ -505,9 +503,10 @@
     renderExcludeChips();
     saveLastSetup({ excludeGenreIds: Array.from(GTG_EXCLUDED) });
     setGuessMessage('');
+    requestPoolCount();
   });
 
-  $('#guess-bootstrap')?.addEventListener('click', gtgBootstrap); // optionnel, l’auto bootstrap existe
+  $('#guess-bootstrap')?.addEventListener('click', gtgBootstrap); // optionnel
   $('#guess-start')    ?.addEventListener('click', gtgStart);
   $('#guess-end')      ?.addEventListener('click', gtgEnd);
 
@@ -562,7 +561,6 @@
       const getQS = (name) => { try { return new URLSearchParams(location.search).get(name); } catch { return null; } };
       function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
       function setStoredPwd(p){ try { if (p) localStorage.setItem(SB_PWD_KEY, p); } catch {} }
-      function clearStoredPwd(){ try { localStorage.removeItem(SB_PWD_KEY); } catch {} }
 
       const fromQS = getQS('pw'); if (fromQS && fromQS.trim()) { setStoredPwd(fromQS.trim()); return fromQS.trim(); }
       let pwd = getStoredPwd(); if (!forcePrompt && pwd && pwd.trim()) return pwd.trim();
@@ -583,13 +581,14 @@
       onConnect: async (info) => {
         setWsIndicator(true);
         if ($('#ws-status')) $('#ws-status').textContent = `Connecté à Streamer.bot (${info?.version || 'v?'})`;
+
         await syncGuessFromBackend();
-        // 1) Bootstrap auto (plus besoin du bouton)
-        await gtgBootstrap();
-        // 2) Récupération auto des scores
+        await gtgBootstrap();           // bootstrap auto
         await requestScoresFromBackend();
-        // 3) TTS toggle sync (après connect)
         await syncTtsSwitchFromBackend();
+
+        // Déclenche un premier count en fonction des filtres chargés
+        requestPoolCount();
       },
       onDisconnect: (evt = {}) => {
         setWsIndicator(false);
@@ -620,7 +619,7 @@
 
         // ---------- GTG payloads ----------
         if (data && data.widget === 'gtg') {
-          // Bootstrap genres/années/notes
+
           if (data.type === 'bootstrap') {
             if (data.error) {
               setGuessMessage('Erreur: ' + data.error);
@@ -636,10 +635,25 @@
             const rangeLabel = (isNum(OLDEST_YEAR) && isNum(NEWEST_YEAR)) ? `${OLDEST_YEAR} — ${NEWEST_YEAR}` : 'plage inconnue';
             setGuessMessage(`Genres chargés (${genres.length}). Plage ${rangeLabel}.`);
             DashboardStatus.guess.log(`Genres: ${genres.length}, période: ${rangeLabel}`);
+
+            if (typeof data.poolCount === 'number' && guessPoolEl) {
+              guessPoolEl.textContent = String(data.poolCount);
+            }
+            // on recalcule quand même avec les filtres courants
+            requestPoolCount();
             return;
           }
 
-          // Start round
+          if (data.type === 'count') {
+            if (data.error) {
+              if (guessPoolEl) guessPoolEl.textContent = '—';
+              DashboardStatus.guess.log('Count erreur: ' + data.error);
+            } else {
+              if (guessPoolEl) guessPoolEl.textContent = String(data.poolCount ?? 0);
+            }
+            return;
+          }
+
           if (data.type === 'start') {
             if (data.error) {
               setGuessMessage('Erreur: ' + data.error);
@@ -656,11 +670,11 @@
             if (data.screenshotUrl){ DashboardStatus.guess.setShot(data.screenshotUrl); }
             const endMs = Number(data.roundEndsAt);
             if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
+            if (typeof data.poolCount === 'number' && guessPoolEl) guessPoolEl.textContent = String(data.poolCount);
             setGuessMessage('Manche lancée');
             return;
           }
 
-          // Reveal (fin)
           if (data.type === 'reveal') {
             stopRoundTimer();
             if (typeof data.running === 'boolean'){
@@ -675,7 +689,6 @@
             return;
           }
 
-          // Score updates (inclut reveal par listener)
           if (data.type === 'scoreUpdate') {
             const lb = Array.isArray(data.leaderboard) ? data.leaderboard : [];
             DashboardStatus.guess.setLeaderboard(lb);
@@ -689,7 +702,6 @@
             return;
           }
 
-          // Scores reset
           if (data.type === 'scoreReset') {
             DashboardStatus.guess.setLeaderboard([]);
             DashboardStatus.guess.setLastFound({ by: '', game: '' });
@@ -697,7 +709,7 @@
             return;
           }
 
-          // Autres updates (timer, shot…)
+          // Autres updates
           if (typeof data.running === 'boolean'){ DashboardStatus.guess.setStatus(!!data.running); DashboardStatus.setStatus('guess', !!data.running); }
           if (data.screenshotUrl){ DashboardStatus.guess.setShot(data.screenshotUrl); }
           if (typeof data.roundEndsAt !== 'undefined') {
