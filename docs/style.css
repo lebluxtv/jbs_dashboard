@@ -149,6 +149,23 @@ select:focus,input[type="number"]:focus,input[type="text"]:focus{
 .card.half { grid-column: span 6; }
 
 /* responsive : déjà géré plus bas (<=1100px .card -> span 6), donc OK */
+/* --- Header lock button (fond sombre, pas de blanc) --- */
+.lock-btn{
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: #cfcfcf;
+}
+.lock-btn:hover{ border-color:#3a3a3d; color:#fff; transform:translateY(-1px); }
+
+/* --- Chips d’exclusion : bordure rouge discrète --- */
+.chip-excl{
+  border-color:#7a2f2f !important;
+  background:#181313 !important;
+}
+
+/* --- Bouton Terminer en rouge (utilise .btn.danger existant) --- */
+.btn.danger{ background:#4a1f1f; border-color:#7a2f2f; }
+.btn.danger:hover{ border-color:#9b3a3a; }
 
 /* ---------- Responsive ---------- */
 @media (max-width:1100px){
