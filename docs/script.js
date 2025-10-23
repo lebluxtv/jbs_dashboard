@@ -5,13 +5,15 @@
   const $  = (s, root=document) => root.querySelector(s);
   const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
 
-  const SB_PWD_KEY = "sb_ws_password_v1";
-  const EVENTS_KEY = "jbs.events.v1";
+  const SB_PWD_KEY     = "sb_ws_password_v1";
+  const EVENTS_KEY     = "jbs.events.v1";
   const LAST_SETUP_KEY = "gtg.lastSetup.v1";
-  const MAX_EVENTS = 200;
+  const MAX_EVENTS     = 200;
+
+  const WS_SCHEME = (location.protocol === 'https:' ? 'wss' : 'ws');
 
   const cssEscape = (v)=>{ try { return CSS.escape(String(v)); } catch { return String(v).replace(/[^\w-]/g, '\\$&'); } };
-  const isNum = (n)=> typeof n === 'number' && Number.isFinite(n);
+  const isNum     = (n)=> typeof n === 'number' && Number.isFinite(n);
 
   // ===================== Tabs / UI helpers =====================
   function showTab(name){
@@ -42,7 +44,7 @@
   function setWsIndicator(state){ setDot('#ws-dot', state); const txt = $('#ws-status'); if (txt) txt.textContent = state ? 'Connecté à Streamer.bot' : 'Déconnecté de Streamer.bot'; }
   function setLiveIndicator(isLive){ setDot('#live-dot', !!isLive); const t = $('#live-status'); if (t) t.textContent = isLive ? 'Live' : 'Offline'; }
 
-  // ===================== Events store (overview) =====================
+  // ===================== Stockage Events (overview) =====================
   function loadEvents(){ try { const raw = localStorage.getItem(EVENTS_KEY); const arr = raw ? JSON.parse(raw) : []; return Array.isArray(arr) ? arr : []; } catch { return []; } }
   function saveEvents(list){ try { const trimmed = (list||[]).slice(0, MAX_EVENTS); localStorage.setItem(EVENTS_KEY, JSON.stringify(trimmed)); } catch {} }
 
@@ -162,23 +164,22 @@
   const guessYearToInput      = $('#guess-year-to');
   const guessMinRatingSel     = $('#guess-min-rating');
   const guessDurationMinInput = $('#guess-duration-min');
-  const guessBootstrapBtn     = $('#guess-bootstrap'); // vestigial (charge auto)
   const guessStartBtn         = $('#guess-start');
   const guessEndBtn           = $('#guess-end');
   const guessMsg              = $('#guess-msg');
   const guessTimerEl          = $('#guess-timer');
-  const guessPoolEl           = $('#guess-pool-count');
+  const guessPoolEl           = $('#guess-pool-count'); // optionnel dans le HTML
 
-  let GTG_GENRES = [];
+  let GTG_GENRES   = [];
   let GTG_EXCLUDED = new Set();
-  let OLDEST_YEAR = null;
-  let NEWEST_YEAR = null;
+  let OLDEST_YEAR  = null;
+  let NEWEST_YEAR  = null;
 
   let GTG_TIMER_ID = null;
 
   function setGuessMessage(msg){ if (guessMsg) guessMsg.textContent = msg || ''; }
 
-  // ---------- Last Setup ----------
+  // ---------- Last Setup (persisté) ----------
   function loadLastSetup(){
     try { const raw = localStorage.getItem(LAST_SETUP_KEY); if (!raw) return null;
       const obj = JSON.parse(raw);
@@ -236,13 +237,13 @@
         minRating: clean.minRating,
         roundMinutes: clean.roundMinutes
       });
-      requestPoolCount(); // met à jour le pool quand on modifie quelque chose
+      requestPoolCount(); // MAJ du pool lorsqu’on modifie quelque chose
     };
     [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinRatingSel, guessDurationMinInput]
       .forEach(el => el && el.addEventListener('change', saveNow));
   }
 
-  // ---------- Year handling ----------
+  // ---------- Années ----------
   function parseYear(val){
     const n = Number(val);
     if (!Number.isFinite(n)) return null;
@@ -377,11 +378,11 @@
 
   function collectFilters(){
     normalizeYearInputs({silent:true});
-    const includeGenreId = guessGenreSel?.value ? String(guessGenreSel.value) : "";
+    const includeGenreId  = guessGenreSel?.value ? String(guessGenreSel.value) : "";
     const excludeGenreIds = Array.from(GTG_EXCLUDED);
-    const yFrom = parseYear(guessYearFromInput?.value);
-    const yTo   = parseYear(guessYearToInput?.value);
-    const minRating = guessMinRatingSel && guessMinRatingSel.value !== '' ? Number(guessMinRatingSel.value) : null;
+    const yFrom           = parseYear(guessYearFromInput?.value);
+    const yTo             = parseYear(guessYearToInput?.value);
+    const minRating       = guessMinRatingSel && guessMinRatingSel.value !== '' ? Number(guessMinRatingSel.value) : null;
 
     const mins = guessDurationMinInput ? Number(guessDurationMinInput.value) : 2;
     const durationMin = Number.isFinite(mins) ? Math.max(1, Math.min(120, Math.trunc(mins))) : 2;
@@ -506,9 +507,8 @@
     requestPoolCount();
   });
 
-  $('#guess-bootstrap')?.addEventListener('click', gtgBootstrap); // optionnel
-  $('#guess-start')    ?.addEventListener('click', gtgStart);
-  $('#guess-end')      ?.addEventListener('click', gtgEnd);
+  $('#guess-start')?.addEventListener('click', gtgStart);
+  $('#guess-end')  ?.addEventListener('click', gtgEnd);
 
   attachAutoSaveListeners();
 
@@ -532,63 +532,71 @@
     }catch{}
   }
 
-  // ===================== Bouton "Reset Scores" (avec confirmation) =====================
-  (function injectResetBtn(){
-    const actionsRow = $(`#tab-guess .actions-row`) || $('#tab-guess');
-    if (!actionsRow) return;
-    if ($('#gtg-reset-scores')) return;
-    const btn = document.createElement('button');
-    btn.id = 'gtg-reset-scores';
-    btn.className = 'btn danger';
-    btn.textContent = 'Reset Scores';
-    btn.title = 'Remet tous les scores à zéro (confirmation requise)';
-    btn.addEventListener('click', async ()=>{
-      if (!client) return alert('Streamer.bot non connecté.');
-      const ok = confirm("⚠️ Réinitialiser tous les scores GTG ?\nCette action est irréversible.");
-      if (!ok) return;
-      try { await safeDoAction("GTG Scores Reset", {}); appendLog('#guess-log', 'Scores GTG réinitialisés via le dashboard.'); alert('✅ Scores réinitialisés.'); }
-      catch(e){ console.error(e); alert('Erreur : impossible de réinitialiser les scores.'); }
-    });
-    actionsRow.appendChild(btn);
-  })();
+  // ===================== Reset Scores (bouton sous Journal) =====================
+  $('#gtg-reset-scores')?.addEventListener('click', async ()=>{
+    if (!client) return alert('Streamer.bot non connecté.');
+    const ok = confirm("⚠️ Réinitialiser tous les scores GTG ?\nCette action est irréversible.");
+    if (!ok) return;
+    try { await safeDoAction("GTG Scores Reset", {}); appendLog('#guess-log', 'Scores GTG réinitialisés via le dashboard.'); alert('✅ Scores réinitialisés.'); }
+    catch(e){ console.error(e); alert('Erreur : impossible de réinitialiser les scores.'); }
+  });
+
+  // ===================== Password storage helpers (pour le cadenas) =====================
+  function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
+  function setStoredPwd(p){ try { if (p) localStorage.setItem(SB_PWD_KEY, p); } catch {} }
+  function clearStoredPwd(){ try { localStorage.removeItem(SB_PWD_KEY); } catch {} }
+  async function promptSbPassword(defaultVal=""){
+    const input = window.prompt("Mot de passe WebSocket Streamer.bot :", (defaultVal || "").trim());
+    if (!input || !input.trim()) throw new Error("Aucun mot de passe fourni.");
+    setStoredPwd(input.trim());
+    return input.trim();
+  }
+  function getQS(name){ try { return new URLSearchParams(location.search).get(name); } catch { return null; } }
+
+  async function ensureSbPassword(forcePrompt = false){
+    const fromQS = getQS('pw');
+    if (fromQS && fromQS.trim()) { setStoredPwd(fromQS.trim()); return fromQS.trim(); }
+    let pwd = getStoredPwd();
+    if (!forcePrompt && pwd && pwd.trim()) return pwd.trim();
+    return promptSbPassword(pwd);
+  }
 
   // ===================== Streamer.bot client =====================
-  async function initStreamerbotClient() {
-    if (typeof StreamerbotClient === 'undefined'){ setWsIndicator(false); const el = $('#ws-status'); if (el) el.textContent = 'Lib @streamerbot/client introuvable'; return; }
-
-    // Mot de passe WS
-    async function ensureSbPassword(forcePrompt = false){
-      const getQS = (name) => { try { return new URLSearchParams(location.search).get(name); } catch { return null; } };
-      function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
-      function setStoredPwd(p){ try { if (p) localStorage.setItem(SB_PWD_KEY, p); } catch {} }
-
-      const fromQS = getQS('pw'); if (fromQS && fromQS.trim()) { setStoredPwd(fromQS.trim()); return fromQS.trim(); }
-      let pwd = getStoredPwd(); if (!forcePrompt && pwd && pwd.trim()) return pwd.trim();
-      const input = window.prompt("Mot de passe WebSocket Streamer.bot :", (pwd || "").trim());
-      if (!input || !input.trim()) throw new Error("Aucun mot de passe fourni."); setStoredPwd(input.trim()); return input.trim();
+  async function initStreamerbotClient(forcePrompt = false) {
+    if (typeof StreamerbotClient === 'undefined'){
+      setWsIndicator(false);
+      const el = $('#ws-status'); if (el) el.textContent = 'Lib @streamerbot/client introuvable';
+      return;
     }
 
     let password;
-    try { password = (await ensureSbPassword()).trim(); }
+    try { password = (await ensureSbPassword(forcePrompt)).trim(); }
     catch { setWsIndicator(false); const el = $('#ws-status'); if (el) el.textContent = 'Mot de passe requis'; return; }
     if (!password){ setWsIndicator(false); const el = $('#ws-status'); if (el) el.textContent = 'Mot de passe vide'; return; }
 
     try { await client?.disconnect?.(); } catch {}
 
     client = new StreamerbotClient({
-      host: '127.0.0.1', port: 8080, endpoint: '/', scheme: 'ws', password,
-      immediate: true, autoReconnect: true, retries: -1, subscribe: '*', logLevel: 'warn',
+      host: '127.0.0.1',
+      port: 8080,
+      endpoint: '/',
+      scheme: WS_SCHEME,
+      password,
+      immediate: true,
+      autoReconnect: true,
+      retries: -1,
+      subscribe: '*',
+      logLevel: 'warn',
       onConnect: async (info) => {
         setWsIndicator(true);
         if ($('#ws-status')) $('#ws-status').textContent = `Connecté à Streamer.bot (${info?.version || 'v?'})`;
 
         await syncGuessFromBackend();
-        await gtgBootstrap();           // bootstrap auto
+        await gtgBootstrap();           // bootstrap auto (genres/années/rating)
         await requestScoresFromBackend();
         await syncTtsSwitchFromBackend();
 
-        // Déclenche un premier count en fonction des filtres chargés
-        requestPoolCount();
+        requestPoolCount(); // premier calcul de pool
       },
       onDisconnect: (evt = {}) => {
         setWsIndicator(false);
@@ -639,8 +647,7 @@
             if (typeof data.poolCount === 'number' && guessPoolEl) {
               guessPoolEl.textContent = String(data.poolCount);
             }
-            // on recalcule quand même avec les filtres courants
-            requestPoolCount();
+            requestPoolCount(); // recalcule avec filtres courants
             return;
           }
 
@@ -748,6 +755,15 @@
     }
   }
 
+  // ========== Cadenas : forcer un nouveau mot de passe + reconnexion ==========
+  $('#lock-btn')?.addEventListener('click', async ()=>{
+    try { await client?.disconnect?.(); } catch {}
+    clearStoredPwd();
+    setWsIndicator(false);
+    const el = $('#ws-status'); if (el) el.textContent = 'Mot de passe requis';
+    await initStreamerbotClient(true); // force le prompt
+  });
+
   // ===================== Utils non-UI =====================
   function displayNameFromAny(val){
     if (!val) return '—';
@@ -774,6 +790,6 @@
   function extractMonths(d){ return Number(d?.cumulativeMonths ?? d?.months ?? d?.streak ?? d?.totalMonths ?? d?.subscription?.months ?? 0) || 0; }
 
   // ===================== Boot =====================
-  initStreamerbotClient();
+  initStreamerbotClient(); // prompt si aucun mot de passe n’est mémorisé
 
 })();
