@@ -595,7 +595,7 @@
   })();
 
   // ===================== Streamer.bot client =====================
-  let client; // défini plus haut
+  
 
   async function initStreamerbotClient(forcePrompt = false) {
     if (typeof StreamerbotClient === 'undefined'){
