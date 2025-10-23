@@ -9,7 +9,9 @@
   const MAX_EVENTS = 200;
 
   const cssEscape = (v)=>{ try { return CSS.escape(String(v)); } catch { return String(v).replace(/[^\w-]/g, '\\$&'); } };
+  const isNum = (n)=> typeof n === 'number' && isFinite(n);
 
+  // ---------- tabs / ui helpers ----------
   function showTab(name){
     $$('.tab').forEach(btn=>{
       const act = btn.dataset.tab===name;
@@ -26,22 +28,20 @@
     const el = $(sel); if (!el) return;
     const p = document.createElement('p');
     const ts = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    p.textContent = `[${ts}] ${text}`; el.appendChild(p); el.scrollTop = el.scrollHeight;
+    p.textContent = `[${ts}] ${text}`;
+    el.appendChild(p); el.scrollTop = el.scrollHeight;
   }
 
   $$('.tab').forEach(btn => btn.addEventListener('click', () => showTab(btn.dataset.tab)));
   (function initTab(){ let initial = 'overview'; try { initial = localStorage.getItem('jbs.activeTab') || 'overview'; } catch {} showTab(initial); })();
-
-  $$('.qv-card').forEach(card => {
-    const title = card.querySelector('.qv-head h2');
-    const target = card.dataset.goto;
-    if (title && target) title.addEventListener('click', () => showTab(target));
-  });
+  $$('.qv-card').forEach(card => { const t = card.querySelector('.qv-head h2'); const to = card.dataset.goto; if (t && to) t.addEventListener('click', () => showTab(to)); });
   $('#year') && ($('#year').textContent = new Date().getFullYear());
 
+  // ---------- ws indicators ----------
   function setWsIndicator(state){ setDot('#ws-dot', state); const txt = $('#ws-status'); if (txt) txt.textContent = state ? 'Connecté à Streamer.bot' : 'Déconnecté de Streamer.bot'; }
   function setLiveIndicator(isLive){ setDot('#live-dot', !!isLive); const t = $('#live-status'); if (t) t.textContent = isLive ? 'Live' : 'Offline'; }
 
+  // ---------- events store ----------
   function loadEvents(){ try { const raw = localStorage.getItem(EVENTS_KEY); const arr = raw ? JSON.parse(raw) : []; return Array.isArray(arr) ? arr : []; } catch { return []; } }
   function saveEvents(list){ try { const trimmed = (list||[]).slice(0, MAX_EVENTS); localStorage.setItem(EVENTS_KEY, JSON.stringify(trimmed)); } catch {} }
 
@@ -49,7 +49,6 @@
   let qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
 
   function eventLine(e){ return `<strong>${e.user}</strong> — <span class="mono">${e.type}</span> • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`; }
-
   function syncEventsStatusUI(){
     setDot('.dot-events', qvUnreadEvents > 0);
     const bQV = $('#qv-events-count'); if (bQV){ bQV.textContent = String(qvUnreadEvents); bQV.style.display = qvUnreadEvents>0?'':'none'; }
@@ -58,7 +57,6 @@
     if (bHead){ bHead.textContent = String(qvUnreadEvents); }
     const txt = $('#events-status-text'); if (txt) txt.textContent = qvUnreadEvents>0 ? 'Actif' : 'Inactif';
   }
-
   function updateAckInStore(eventId, isAck){
     const idx = eventsStore.findIndex(x=>x.id===eventId);
     if (idx>=0){
@@ -67,7 +65,6 @@
       if (before !== isAck){ qvUnreadEvents += isAck ? -1 : +1; qvUnreadEvents = Math.max(0, qvUnreadEvents); syncEventsStatusUI(); }
     }
   }
-
   function makeItem(htmlText, onToggle, ack, id){
     const li = document.createElement('li'); li.innerHTML = htmlText;
     if (ack) li.classList.add('ack'); if (id) li.dataset.eid = String(id);
@@ -89,7 +86,6 @@
     if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')) listEl.removeChild(listEl.firstElementChild);
     listEl.appendChild(li); const limit = listEl.classList.contains('big') ? 50 : 10; while (listEl.children.length > limit) listEl.removeChild(listEl.firstChild);
   }
-
   function renderStoredEventsIntoUI(){
     const qv = $('#qv-events-list'); const full = $('#events-subs-list');
     if (qv) qv.innerHTML = ''; if (full) full.innerHTML = '';
@@ -107,6 +103,7 @@
   }
   renderStoredEventsIntoUI();
 
+  // ---------- Public UI API ----------
   window.DashboardStatus = {
     setStatus(name, isOn){
       setDot(`.dot-${name}`, !!isOn);
@@ -155,7 +152,7 @@
     showTab
   };
 
-  // ============================ Guess (filtres & années) ============================
+  // ==================== Guess (filtres & années & rating) ====================
   const guessGenreSel       = $('#guess-genre');
   const guessExcludeInput   = $('#guess-exclude-input');
   const guessDatalist       = $('#guess-genres-datalist');
@@ -163,6 +160,7 @@
   const guessExcludeChips   = $('#guess-exclude-chips');
   const guessYearFromInput  = $('#guess-year-from');
   const guessYearToInput    = $('#guess-year-to');
+  const guessMinRatingSel   = $('#guess-min-rating');     // (facultatif dans le HTML)
   const guessBootstrapBtn   = $('#guess-bootstrap');
   const guessStartBtn       = $('#guess-start');
   const guessEndBtn         = $('#guess-end');
@@ -171,47 +169,30 @@
 
   let GTG_GENRES = [];
   let GTG_EXCLUDED = new Set();
-
-  // IMPORTANT: pas de valeur par défaut — on attend l’API pour définir les bornes
-  let OLDEST_YEAR = null;  // number | null
-  let NEWEST_YEAR = null;  // number | null
+  let OLDEST_YEAR = null;
+  let NEWEST_YEAR = null;
 
   function setGuessMessage(msg){ if (guessMsg) guessMsg.textContent = msg || ''; }
 
   function parseYear(val){
     const n = Number(val);
     if (!Number.isFinite(n)) return null;
-    // Si on a des bornes API, on clamp. Sinon on laisse tel quel.
     let out = Math.trunc(n);
-    if (typeof OLDEST_YEAR === 'number') out = Math.max(OLDEST_YEAR, out);
-    if (typeof NEWEST_YEAR === 'number') out = Math.min(NEWEST_YEAR, out);
+    if (isNum(OLDEST_YEAR)) out = Math.max(OLDEST_YEAR, out);
+    if (isNum(NEWEST_YEAR)) out = Math.min(NEWEST_YEAR, out);
     return out;
   }
-
   function normalizeYearInputs({silent=false} = {}){
     let yf = parseYear(guessYearFromInput?.value);
     let yt = parseYear(guessYearToInput?.value);
 
-    // Ajuste min/max dynamiques UNIQUEMENT si l’API a fourni des bornes
-    if (guessYearFromInput){
-      guessYearFromInput.min = (typeof OLDEST_YEAR === 'number') ? String(OLDEST_YEAR) : '';
-      guessYearFromInput.max = (typeof NEWEST_YEAR === 'number') ? String(NEWEST_YEAR) : '';
-    }
-    if (guessYearToInput){
-      guessYearToInput.min = (typeof OLDEST_YEAR === 'number') ? String(OLDEST_YEAR) : '';
-      guessYearToInput.max = (typeof NEWEST_YEAR === 'number') ? String(NEWEST_YEAR) : '';
-    }
+    if (guessYearFromInput){ guessYearFromInput.min = isNum(OLDEST_YEAR)?String(OLDEST_YEAR):""; guessYearFromInput.max = isNum(NEWEST_YEAR)?String(NEWEST_YEAR):""; }
+    if (guessYearToInput){   guessYearToInput.min   = isNum(OLDEST_YEAR)?String(OLDEST_YEAR):""; guessYearToInput.max   = isNum(NEWEST_YEAR)?String(NEWEST_YEAR):""; }
 
-    if (yf != null && yt != null && yt < yf){
-      yt = yf;
-      if (guessYearToInput) guessYearToInput.value = String(yt);
-      if (!silent) setGuessMessage('Plage corrigée : Année (à) ajustée sur Année (de).');
-    }
-
+    if (yf != null && yt != null && yt < yf){ yt = yf; if (guessYearToInput) guessYearToInput.value = String(yt); if (!silent) setGuessMessage('Plage corrigée : Année (à) ajustée sur Année (de).'); }
     if (guessYearFromInput && yf != null) guessYearFromInput.value = String(yf);
     if (guessYearToInput   && yt != null) guessYearToInput.value   = String(yt);
   }
-
   guessYearFromInput?.addEventListener('input', () => normalizeYearInputs());
   guessYearToInput  ?.addEventListener('input', () => normalizeYearInputs());
 
@@ -235,6 +216,18 @@
         guessDatalist.appendChild(o);
       }
     }
+  }
+
+  function fillRatingSteps(steps){
+    const el = guessMinRatingSel;
+    if (!el) return;
+    const list = Array.isArray(steps) && steps.length ? steps : [0,50,60,70,80,85,90];
+    el.innerHTML = '';
+    // “Aucun” = valeur vide
+    const none = document.createElement('option'); none.value = ''; none.textContent = '— Aucun —'; el.appendChild(none);
+    list.filter(n => typeof n === 'number' && isFinite(n))
+        .sort((a,b)=>a-b)
+        .forEach(v => { const o = document.createElement('option'); o.value = String(v); o.textContent = `≥ ${v}`; el.appendChild(o); });
   }
 
   function renderExcludeChips(){
@@ -272,14 +265,16 @@
     const excludeGenreIds = Array.from(GTG_EXCLUDED);
     const yFrom = parseYear(guessYearFromInput?.value);
     const yTo   = parseYear(guessYearToInput?.value);
-    return { includeGenreId, excludeGenreIds, yearFrom: yFrom ?? null, yearTo: yTo ?? null };
+    const minRating = guessMinRatingSel && guessMinRatingSel.value !== '' ? Number(guessMinRatingSel.value) : null;
+    return { includeGenreId, excludeGenreIds, yearFrom: yFrom ?? null, yearTo: yTo ?? null, minRating };
   }
 
+  // ---------- actions ----------
   async function gtgBootstrap(){
     if (!client) return setGuessMessage('Client SB indisponible.');
     setGuessMessage('Chargement des genres…');
     try{
-      await client.doAction({ name: "GTG Bootstrap Genres & Years" });
+      await client.doAction({ name: "GTG Bootstrap Genres & Years & Ratings" });
       // On attend le broadcast "gtg/bootstrap"
     }catch(e){
       console.error(e);
@@ -295,27 +290,20 @@
     DashboardStatus.setStatus('guess', true);
     DashboardStatus.guess.setStatus(true);
     try{
-      const res = await client.doAction({
+      await client.doAction({
         name: "GTG Start",
         args: {
           includeGenreId: filters.includeGenreId || null,
           excludeGenreIds: filters.excludeGenreIds || [],
           yearFrom: filters.yearFrom,
-          yearTo: filters.yearTo
+          yearTo: filters.yearTo,
+          minRating: filters.minRating
         }
       });
-      if (res?.status !== 'ok') throw new Error('gtg-start-failed');
-      const gameName = res?.result?.gameName || res?.gameName || '—';
-      const url      = res?.result?.screenshotUrl || res?.screenshotUrl || '';
-      if (guessShotImg) guessShotImg.src = url || '';
-      DashboardStatus.guess.setLastFound({ by: 'streamer', game: gameName });
-      DashboardStatus.guess.setStatus(true);
-      DashboardStatus.setStatus('guess', true);
-      DashboardStatus.guess.log(`Jeu sélectionné: ${gameName}`);
-      setGuessMessage(`OK — ${gameName}`);
+      // pas de lecture de res — on attend le broadcast "gtg/start"
     }catch(e){
       console.error(e);
-      setGuessMessage('Erreur: aucune sélection possible (réessaie).');
+      setGuessMessage('Erreur: impossible de lancer la sélection.');
       DashboardStatus.guess.log(`Erreur sélection jeu`);
       DashboardStatus.guess.setStatus(false);
       DashboardStatus.setStatus('guess', false);
@@ -330,21 +318,20 @@
     setGuessMessage('En pause');
   }
 
-  if ($('#guess-exclude-add')){
-    $('#guess-exclude-add').addEventListener('click', ()=>{
-      const txt = (guessExcludeInput?.value || '').trim();
-      if (!txt) return;
-      const id = idFromGenreInputText(txt);
-      if (!id){ setGuessMessage(`Genre introuvable: “${txt}”`); return; }
-      GTG_EXCLUDED.add(String(id));
-      guessExcludeInput.value = ''; renderExcludeChips(); setGuessMessage('');
-    });
-  }
+  $('#guess-exclude-add')?.addEventListener('click', ()=>{
+    const txt = (guessExcludeInput?.value || '').trim();
+    if (!txt) return;
+    const id = idFromGenreInputText(txt);
+    if (!id){ setGuessMessage(`Genre introuvable: “${txt}”`); return; }
+    GTG_EXCLUDED.add(String(id));
+    guessExcludeInput.value = ''; renderExcludeChips(); setGuessMessage('');
+  });
 
-  guessBootstrapBtn?.addEventListener('click', gtgBootstrap);
-  guessStartBtn    ?.addEventListener('click', gtgStart);
-  guessEndBtn      ?.addEventListener('click', gtgEnd);
+  $('#guess-bootstrap')?.addEventListener('click', gtgBootstrap);
+  $('#guess-start')    ?.addEventListener('click', gtgStart);
+  $('#guess-end')      ?.addEventListener('click', gtgEnd);
 
+  // ---------- Sync init ----------
   async function syncGuessFromBackend(){
     try{ const run = await client.getGlobal("GTG_running"); const isRunning = run?.status === 'ok' ? !!run.variable?.value : false;
       DashboardStatus.guess.setStatus(isRunning); DashboardStatus.setStatus('guess', isRunning); }catch{}
@@ -352,6 +339,7 @@
       const url = (shot?.status === 'ok') ? (shot.variable?.value || '') : ''; if (url) DashboardStatus.guess.setShot(url); }catch{}
   }
 
+  // ---------- Streamer.bot client ----------
   let client;
 
   async function initStreamerbotClient() {
@@ -386,13 +374,16 @@
       },
       onError: (err) => { const el = $('#ws-status'); if (el) el.textContent = 'Erreur WebSocket'; console.warn('[SB] Error:', err); },
       onData: ({event, data}) => {
+        // online/offline
         if (event?.source === 'Twitch' && (event.type === 'StreamOnline' || event.type === 'StreamOffline')) { setLiveIndicator(event.type === 'StreamOnline'); return; }
 
+        // TTS lus
         if (event?.source === 'General' && data?.widget === 'tts-reader-selection') {
           const u = displayNameFromAny(data.selectedUser || data.user || ''); const t = data.message || '';
           if (u && t) DashboardStatus.tts.addRead({ user: u, message: t }); return;
         }
 
+        // subs
         if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
           const d = data || {};
           const user = displayNameFromAny(d.displayName ?? d.user ?? d.userName ?? d.username ?? d.sender ?? d.gifter ?? d.userInfo);
@@ -401,7 +392,7 @@
           DashboardStatus.events.addSub({ type: event.type, user, tierLabel, months }); return;
         }
 
-        // -------- GTG payloads (broadcast) --------
+        // ---------- GTG ----------
         if (data && data.widget === 'gtg') {
           if (data.type === 'bootstrap') {
             if (data.error) {
@@ -412,21 +403,37 @@
             const genres = Array.isArray(data.genres) ? data.genres : [];
             fillGenresUI(genres);
 
-            // bornes: uniquement si fournies par l’API (pas de fallback)
-            OLDEST_YEAR = (typeof data.oldestYear === 'number' && isFinite(data.oldestYear)) ? data.oldestYear : null;
-            NEWEST_YEAR = (typeof data.newestYear === 'number' && isFinite(data.newestYear)) ? data.newestYear : null;
-
+            OLDEST_YEAR = isNum(data.oldestYear) ? data.oldestYear : null;
+            NEWEST_YEAR = isNum(data.newestYear) ? data.newestYear : null;
             normalizeYearInputs({silent:true});
 
-            const rangeLabel = (OLDEST_YEAR!=null && NEWEST_YEAR!=null)
-              ? `${OLDEST_YEAR} — ${NEWEST_YEAR}`
-              : 'plage inconnue';
+            // notes minimales
+            fillRatingSteps(data.ratingSteps);
 
-            setGuessMessage(`Genres chargés (${genres.length}). ${rangeLabel}.`);
+            const rangeLabel = (isNum(OLDEST_YEAR) && isNum(NEWEST_YEAR)) ? `${OLDEST_YEAR} — ${NEWEST_YEAR}` : 'plage inconnue';
+            setGuessMessage(`Genres chargés (${genres.length}). Plage ${rangeLabel}.`);
             DashboardStatus.guess.log(`Genres: ${genres.length}, période: ${rangeLabel}`);
             return;
           }
 
+          if (data.type === 'start') {
+            if (data.error) {
+              setGuessMessage('Erreur: ' + data.error);
+              DashboardStatus.guess.log('Start erreur: ' + data.error);
+              DashboardStatus.guess.setStatus(false);
+              DashboardStatus.setStatus('guess', false);
+              return;
+            }
+            if (typeof data.running === 'boolean'){
+              DashboardStatus.guess.setStatus(!!data.running);
+              DashboardStatus.setStatus('guess', !!data.running);
+            }
+            if (data.screenshotUrl){ DashboardStatus.guess.setShot(data.screenshotUrl); }
+            if (data.gameName){ DashboardStatus.guess.setLastFound({ by: 'streamer', game: data.gameName }); setGuessMessage(`OK — ${data.gameName}`); }
+            return;
+          }
+
+          // autres mises à jour “gtg”
           if (typeof data.running === 'boolean'){ DashboardStatus.guess.setStatus(!!data.running); DashboardStatus.setStatus('guess', !!data.running); }
           if (data.screenshotUrl){ DashboardStatus.guess.setShot(data.screenshotUrl); }
           if (data.gameName){ DashboardStatus.guess.setLastFound({ by: data.by || '—', game: data.gameName }); }
@@ -439,7 +446,7 @@
     try { const info = await client.getInfo(); if (info?.status !== 'ok') throw new Error('info-not-ok'); } catch {}
   }
 
-  // ---- Normalisation utilitaires (po conservées, juste déplacées ici) ----
+  // ---------- utils ----------
   function displayNameFromAny(val){
     if (!val) return '—';
     if (typeof val === 'string') return val;
@@ -464,7 +471,7 @@
   }
   function extractMonths(d){ return Number(d?.cumulativeMonths ?? d?.months ?? d?.streak ?? d?.totalMonths ?? d?.subscription?.months ?? 0) || 0; }
 
-  // ---- Password local ----
+  // ---------- password ----------
   const getQS = (name) => { try { return new URLSearchParams(location.search).get(name); } catch { return null; } };
   function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
   function setStoredPwd(p){ try { if (p) localStorage.setItem(SB_PWD_KEY, p); } catch {} }
@@ -477,10 +484,10 @@
     if (!input || !input.trim()) throw new Error("Aucun mot de passe fourni."); setStoredPwd(input.trim()); return input.trim();
   }
 
+  // TTS switch (inchangé)
   let ttsSwitchInput = $('#tts-switch');
   const ttsSwitchLabel = $('#tts-switch-label');
   const ttsSwitchLabelText = $('.switch-label-text', ttsSwitchLabel);
-
   function updateTtsSwitchUI(on){
     if (!ttsSwitchInput) ttsSwitchInput = $('#tts-switch');
     if (!ttsSwitchInput) return;
