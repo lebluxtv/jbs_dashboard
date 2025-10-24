@@ -970,35 +970,51 @@
   /******************************************************************
    *                📞 GAMES COUNT (à chaque changement)
    ******************************************************************/
-  function requestPoolCount(){
-    const { ok, clean } = validateFilters(collectFilters());
-    if (!ok) return;
+function requestPoolCount(){
+  // Toujours normaliser et récupérer la config nettoyée
+  const { ok, clean } = validateFilters(collectFilters());
+  if (!ok) return;
 
-    const nowYear = new Date().getFullYear();
-    const safeYearFrom = (typeof clean.yearFrom === 'number' && Number.isFinite(clean.yearFrom))
-      ? clean.yearFrom
-      : 1970;
-    const safeYearTo = (typeof clean.yearTo === 'number' && Number.isFinite(clean.yearTo))
-      ? Math.min(clean.yearTo, nowYear)
-      : nowYear;
+  // Coercions pour ne JAMAIS envoyer null/undefined
+  const nowYear = new Date().getFullYear();
+  const safeYearFrom = (typeof clean.yearFrom === 'number' && Number.isFinite(clean.yearFrom))
+    ? clean.yearFrom
+    : 1970;
+  const safeYearTo = (typeof clean.yearTo === 'number' && Number.isFinite(clean.yearTo))
+    ? Math.min(clean.yearTo, nowYear)   // borne haute = année courante
+    : nowYear;
 
-    const safeMin = (typeof clean.minRating === 'number' && Number.isFinite(clean.minRating))
-      ? Math.max(0, Math.min(100, Math.trunc(clean.minRating)))
-      : null;
+  const safeMin = (typeof clean.minRating === 'number' && Number.isFinite(clean.minRating))
+    ? Math.max(0, Math.min(100, Math.trunc(clean.minRating)))
+    : null;
 
-    const payload = {
-      nonce: makeNonce(),
-      includeGenreId: clean.includeGenreId || "",
-      excludeGenreIds: Array.isArray(clean.excludeGenreIds) ? clean.excludeGenreIds : [],
-      yearFrom: safeYearFrom,
-      yearTo: safeYearTo,
-      minRating: safeMin
-    };
+  const payload = {
+    nonce: makeNonce(),
+    includeGenreId: clean.includeGenreId || "",
+    excludeGenreIds: Array.isArray(clean.excludeGenreIds) ? clean.excludeGenreIds : [],
+    yearFrom: safeYearFrom,
+    yearTo: safeYearTo,
+    minRating: safeMin
+  };
 
-    appendLog('#guess-log', `→ FRONT send count: { include:${payload.includeGenreId||''}, exclude:[${payload.excludeGenreIds.join(',')}], years:${payload.yearFrom}-${payload.yearTo}, min:${payload.minRating==null?'—':payload.minRating} }`);
+  // Log côté front pour vérifier ce qu'on envoie
+  appendLog('#guess-log', `→ FRONT send count: { include:${payload.includeGenreId||''}, exclude:[${payload.excludeGenreIds.join(',')}], years:${payload.yearFrom}-${payload.yearTo}, min:${payload.minRating==null?'—':payload.minRating} }`);
 
-    safeDoAction('GTG Games Count', payload);
-  }
+  // ✅ Envoi FIABLE : tout dans _json (string)
+  const wire = {
+    _json: JSON.stringify(payload)
+    // (optionnel) on peut doubler avec des champs simples si tu veux :
+    // yearFrom: payload.yearFrom,
+    // yearTo: payload.yearTo,
+    // minRating: payload.minRating ?? "",
+    // includeGenreId: payload.includeGenreId,
+    // excludeGenreIds: JSON.stringify(payload.excludeGenreIds)
+  };
+
+  // Envoi à Streamer.bot
+  safeDoAction('GTG Games Count', wire);
+}
+
 
   /******************************************************************
    *                         🔊 TTS PANEL (UI only)
