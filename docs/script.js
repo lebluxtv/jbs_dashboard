@@ -439,7 +439,7 @@
         host,
         port,
         //scheme: secure ? 'wss' : 'ws',//
-        scheme: (location.protocol === 'https:') ? 'wss' : 'ws',
+        //scheme: (location.protocol === 'https:') ? 'wss' : 'ws',
         endpoint: '/',          // identique TTS
        /* password,               // issu popup/LS/QS */
         password: 'streamer.bot',
@@ -480,10 +480,10 @@
           });
         }
       } catch {}
-
+/*
       if (sbClient && typeof sbClient.connect === 'function'){
         sbClient.connect().catch(()=>{});
-      }
+      }*/
     } catch (e) {
       appendLog('#guess-log', 'Connexion impossible: ' + (e?.message||e));
     }
