@@ -83,7 +83,6 @@
       const toTxt = e.recipient ? ` <span class="muted">to ${e.recipient}</span>` : '';
       return `<strong>${e.user}</strong> — Gifted sub${tierTxt}${toTxt}`;
     }
-    // Sub / ReSub
     return `<strong>${e.user}</strong> — ${e.type} • ${e.tier?('Tier '+e.tier):''} • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
   }
 
@@ -127,7 +126,6 @@
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
   }
 
-  // Rend du plus ancien -> au plus récent en PREPEND => le plus récent termine en haut
   function renderStoredEventsIntoUI(){
     const qv   = $('#qv-events-list');
     const full = $('#events-subs-list');
@@ -350,7 +348,6 @@
   function loadLastSetup(){
     try { return JSON.parse(localStorage.getItem(LAST_SETUP_KEY)||'{}') || {}; } catch { return {}; }
   }
-
   function applyLastSetupAfterGenres(){
     const s = loadLastSetup() || {};
     if (s.includeGenreId && guessGenreSel){
@@ -404,6 +401,7 @@
     if (isNum(yf) && yf < 1970) yf = 1970;
     if (isNum(yt) && yt < 1970) yt = 1970;
     if (isNum(yf) && isNum(yt) && yt < yf) yt = yf;
+
     const cap = new Date().getFullYear(); // borne max = année courante
     if (isNum(yf) && yf > cap) yf = cap;
     if (isNum(yt) && yt > cap) yt = cap;
@@ -453,9 +451,54 @@
     return true;
   }
 
+  /******************************************************************
+   *            🚀 ENVOI D’ACTIONS — ROBUSTE (avec fallback brut)
+   ******************************************************************/
+  let sbClient = null;
+
+  // Fallback natif WebSocket (format protocole Streamer.bot)
+  function sendRawDoAction(actionName, argsObj){
+    try {
+      const sock = sbClient?.socket;
+      if (!sock || sock.readyState !== 1) {
+        appendLog('#guess-log', 'Erreur: WebSocket non prêt pour DoAction brut.');
+        return;
+      }
+      const wireArgs = Object.assign({}, argsObj || {}, { _json: JSON.stringify(argsObj || {}) });
+      const payload = {
+        request: 'DoAction',
+        id: 'DoAction',
+        action: { name: actionName },
+        args: wireArgs
+      };
+      sock.send(JSON.stringify(payload));
+    } catch (e){
+      appendLog('#guess-log', 'Erreur DoAction brut: ' + (e?.message||e));
+    }
+  }
+
+  function safeDoAction(actionName, args){
+    try {
+      if (!sbClient){ appendLog('#guess-log', 'Client Streamer.bot non initialisé.'); return; }
+
+      try {
+        const wire = Object.assign({}, args || {}, { _json: JSON.stringify(args || {}) });
+        sbClient.doAction({ name: actionName, args: wire });
+      } catch (e) {
+        appendLog('#guess-log', 'doAction client a échoué, fallback DoAction brut…');
+        sendRawDoAction(actionName, args || {});
+      }
+    } catch (e) {
+      appendLog('#guess-log', 'Erreur safeDoAction: ' + (e?.message||e));
+    }
+  }
+
+  /******************************************************************
+   *                       🎛️ HANDLERS & START/END
+   ******************************************************************/
   function setGuessHandlers(){
     const debounce = (fn,ms)=>{ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
-    const debounceCount = debounce(requestPoolCount, 400); // limite le spam
+    const debounceCount = debounce(requestPoolCount, 400);
 
     [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinRatingSel, guessDurationMinInput].forEach(el=>{
       if (!el) return;
@@ -465,14 +508,12 @@
       }
     });
 
-    // Ajout exclusion via bouton
     guessExcludeAddBtn?.addEventListener('click', ()=>{
       const id = idFromGenreInputText(guessExcludeInput?.value || '');
       if (id){ GTG_EXCLUDED.add(String(id)); renderExcludeChips(); requestPoolCount(); }
       if (guessExcludeInput) guessExcludeInput.value = '';
     });
 
-    // Lancer / Terminer
     guessStartBtn?.addEventListener('click', ()=>{
       const { ok, errs, clean } = validateFilters(collectFilters());
       if (!ok){ setGuessMessage('Filtres invalides: ' + errs.join(' ; ')); return; }
@@ -526,8 +567,6 @@
   /******************************************************************
    *                 🌐 STREAMER.BOT CLIENT
    ******************************************************************/
-  let sbClient = null;
-
   function setConnected(on){ setWsIndicator(!!on); }
 
   function ensureSbPassword(){
@@ -541,15 +580,6 @@
       setStoredPwd(pwd);
     }
     return pwd;
-  }
-
-  function safeDoAction(actionName, args){
-    try {
-      if (!sbClient){ appendLog('#guess-log', 'Client Streamer.bot non initialisé.'); return; }
-      sbClient.doAction({ name: actionName, args: args || {} });
-    } catch (e) {
-      appendLog('#guess-log', 'Erreur doAction: ' + (e?.message||e));
-    }
   }
 
   function reconnectSB(){
@@ -776,47 +806,35 @@
       }
 
       // ---------- GTG payloads ----------
-     if (data && data.widget === 'gtg') {
+      if (data && data.widget === 'gtg') {
 
-  if (data.type === 'bootstrap') {
-    if (data.error) { setGuessMessage('Erreur: ' + data.error); return; }
+        if (data.type === 'bootstrap') {
+          if (data.error) { setGuessMessage('Erreur: ' + data.error); return; }
+          const genres = Array.isArray(data.genres) ? data.genres : [];
+          fillGenresUI(genres);
 
-    const genres = Array.isArray(data.genres) ? data.genres : [];
-    fillGenresUI(genres);
+          const OLServer = Number.isFinite(data.oldestYear) ? Number(data.oldestYear) : 1970;
+          const NWServer = Number.isFinite(data.newestYear) ? Number(data.newestYear) : (new Date().getFullYear());
+          const nowY = new Date().getFullYear();
+          const OL = Math.min(OLServer, nowY);
+          const NW = Math.min(NWServer, nowY);
 
-    // --- BORNE SERVEUR + clamp à l'année courante
-    const nowY    = new Date().getFullYear();
-    const olSrv   = Number.isFinite(data.oldestYear) ? Number(data.oldestYear) : 1970;
-    const nwSrv   = Number.isFinite(data.newestYear) ? Number(data.newestYear) : nowY;
-    const OL      = Math.min(olSrv, nowY);
-    const NW      = Math.min(nwSrv, nowY);
+          if (guessYearFromInput){ guessYearFromInput.min = String(OL); guessYearFromInput.max = String(NW); }
+          if (guessYearToInput){   guessYearToInput.min   = String(OL); guessYearToInput.max   = String(NW); }
 
-    // 1) bornes min/max des inputs
-    if (guessYearFromInput){ guessYearFromInput.min = String(OL); guessYearFromInput.max = String(NW); }
-    if (guessYearToInput){   guessYearToInput.min   = String(OL); guessYearToInput.max   = String(NW); }
+          // Appliquer immédiatement ces bornes aux champs si vides / incohérents
+          const yf0 = parseYear(guessYearFromInput?.value);
+          const yt0 = parseYear(guessYearToInput?.value);
+          if (guessYearFromInput && (yf0==null || yf0<OL || yf0>NW)) guessYearFromInput.value = String(OL);
+          if (guessYearToInput   && (yt0==null || yt0<OL || yt0>NW || yt0<Number(guessYearFromInput.value))) guessYearToInput.value = String(NW);
 
-    // 2) **forcer** les valeurs saisies à refléter la période serveur
-    if (guessYearFromInput) guessYearFromInput.value = String(OL);
-    if (guessYearToInput)   guessYearToInput.value   = String(NW);
-
-    // 3) enregistrer ces valeurs comme dernier setup (évite qu’un vieux localStorage les écrase)
-    saveLastSetup({ yearFrom: OL, yearTo: NW });
-
-    // 4) suite du bootstrap
-    fillRatingSteps(data.ratingSteps || [50,60,70,80,85,90,92,95]);
-    // ⚠️ on ne réécrit PAS les années via applyLastSetupAfterGenres(), pour ne pas écraser OL/NW
-    // on ne restaure que genres / exclusions / rating / durée
-    const tmp = loadLastSetup() || {};
-    applyLastSetupAfterGenres(); // si tu veux vraiment exclure les années, décommente les 2 lignes ci-dessous :
-    if (guessYearFromInput) guessYearFromInput.value = String(OL);
-    if (guessYearToInput)   guessYearToInput.value   = String(NW);
-
-    setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
-
-    // 5) déclencher un count immédiat avec ces bornes
-    requestPoolCount();
-    return;
-  }
+          normalizeYearInputs();
+          fillRatingSteps(data.ratingSteps || [50,60,70,80,85,90,92,95]);
+          applyLastSetupAfterGenres();
+          setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
+          requestPoolCount();
+          return;
+        }
 
         if (data.type === 'count') {
           if (data.error) {
@@ -970,51 +988,34 @@
   /******************************************************************
    *                📞 GAMES COUNT (à chaque changement)
    ******************************************************************/
-function requestPoolCount(){
-  // Toujours normaliser et récupérer la config nettoyée
-  const { ok, clean } = validateFilters(collectFilters());
-  if (!ok) return;
+  function requestPoolCount(){
+    const { ok, clean } = validateFilters(collectFilters());
+    if (!ok) return;
 
-  // Coercions pour ne JAMAIS envoyer null/undefined
-  const nowYear = new Date().getFullYear();
-  const safeYearFrom = (typeof clean.yearFrom === 'number' && Number.isFinite(clean.yearFrom))
-    ? clean.yearFrom
-    : 1970;
-  const safeYearTo = (typeof clean.yearTo === 'number' && Number.isFinite(clean.yearTo))
-    ? Math.min(clean.yearTo, nowYear)   // borne haute = année courante
-    : nowYear;
+    const nowYear = new Date().getFullYear();
+    const safeYearFrom = (typeof clean.yearFrom === 'number' && Number.isFinite(clean.yearFrom))
+      ? clean.yearFrom
+      : 1970;
+    const safeYearTo = (typeof clean.yearTo === 'number' && Number.isFinite(clean.yearTo))
+      ? Math.min(clean.yearTo, nowYear)
+      : nowYear;
 
-  const safeMin = (typeof clean.minRating === 'number' && Number.isFinite(clean.minRating))
-    ? Math.max(0, Math.min(100, Math.trunc(clean.minRating)))
-    : null;
+    const safeMin = (typeof clean.minRating === 'number' && Number.isFinite(clean.minRating))
+      ? Math.max(0, Math.min(100, Math.trunc(clean.minRating)))
+      : null;
 
-  const payload = {
-    nonce: makeNonce(),
-    includeGenreId: clean.includeGenreId || "",
-    excludeGenreIds: Array.isArray(clean.excludeGenreIds) ? clean.excludeGenreIds : [],
-    yearFrom: safeYearFrom,
-    yearTo: safeYearTo,
-    minRating: safeMin
-  };
+    const payload = {
+      nonce: makeNonce(),
+      includeGenreId: clean.includeGenreId || "",
+      excludeGenreIds: Array.isArray(clean.excludeGenreIds) ? clean.excludeGenreIds : [],
+      yearFrom: safeYearFrom,
+      yearTo: safeYearTo,
+      minRating: safeMin
+    };
 
-  // Log côté front pour vérifier ce qu'on envoie
-  appendLog('#guess-log', `→ FRONT send count: { include:${payload.includeGenreId||''}, exclude:[${payload.excludeGenreIds.join(',')}], years:${payload.yearFrom}-${payload.yearTo}, min:${payload.minRating==null?'—':payload.minRating} }`);
-
-  // ✅ Envoi FIABLE : tout dans _json (string)
-  const wire = {
-    _json: JSON.stringify(payload)
-    // (optionnel) on peut doubler avec des champs simples si tu veux :
-    // yearFrom: payload.yearFrom,
-    // yearTo: payload.yearTo,
-    // minRating: payload.minRating ?? "",
-    // includeGenreId: payload.includeGenreId,
-    // excludeGenreIds: JSON.stringify(payload.excludeGenreIds)
-  };
-
-  // Envoi à Streamer.bot
-  safeDoAction('GTG Games Count', wire);
-}
-
+    appendLog('#guess-log', `→ FRONT send count: { include:${payload.includeGenreId||''}, exclude:[${payload.excludeGenreIds.join(',')}], years:${payload.yearFrom}-${payload.yearTo}, min:${payload.minRating==null?'—':payload.minRating} }`);
+    safeDoAction('GTG Games Count', payload);
+  }
 
   /******************************************************************
    *                         🔊 TTS PANEL (UI only)
