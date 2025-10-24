@@ -438,6 +438,7 @@
       sbClient = new StreamerbotClient({
         host,
         port,
+        scheme: secure ? 'wss' : 'ws',
         endpoint: '/',          // identique TTS
         password,               // issu popup/LS/QS
         subscribe: '*',
