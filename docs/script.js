@@ -63,7 +63,7 @@
   }
 
   /******************************************************************
-   *                        📊 OVERVIEW EVENTS (optionnel)
+   *                        📊 OVERVIEW EVENTS
    ******************************************************************/
   function loadEvents(){ try { return JSON.parse(localStorage.getItem(EVENTS_KEY)||'[]') || []; } catch { return []; } }
   function saveEvents(list){ try { localStorage.setItem(EVENTS_KEY, JSON.stringify((list||[]).slice(-MAX_EVENTS))); } catch {} }
@@ -114,7 +114,7 @@
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
   }
 
-  // ⚠️ Rend du plus ancien -> au plus récent en PREPEND pour finir avec le plus récent en haut
+  // Rend du plus ancien -> au plus récent en PREPEND => le plus récent termine en haut
   function renderStoredEventsIntoUI(){
     const qv   = $('#qv-events-list');
     const full = $('#events-subs-list');
@@ -129,7 +129,6 @@
       return;
     }
 
-    // 👉 Itération ASCENDANTE + PREPEND => le dernier (le plus récent) est ajouté en dernier, donc tout en haut
     for (let i=0; i<eventsStore.length; i++){
       const e = eventsStore[i];
       const html = eventLine(e);
@@ -417,20 +416,19 @@
   }
 
   /******************************************************************
-   *                 🌐 STREAMER.BOT CLIENT — logique TTS
+   *                 🌐 STREAMER.BOT CLIENT
    ******************************************************************/
   let sbClient = null;
 
   function setConnected(on){ setWsIndicator(!!on); }
 
   function ensureSbPassword(){
-    // priorité: ?pwd=..., sinon localStorage, sinon popup
     const qsPwd = getQS('pwd');
     if (qsPwd != null) { setStoredPwd(qsPwd); return qsPwd; }
     let pwd = getStoredPwd();
     if (!pwd) {
       const val = window.prompt('Mot de passe Streamer.bot :', '');
-      if (val === null) return ""; // on tente sans (comme TTS possible)
+      if (val === null) return "";
       pwd = val.trim();
       setStoredPwd(pwd);
     }
@@ -453,7 +451,6 @@
 
   function connectSB(){
     try {
-      // Defaults identiques TTS ; overrides via QS
       const host = getQS('host') || '127.0.0.1';
       const port = Number(getQS('port') || 8080);
       const password = ensureSbPassword();
@@ -462,8 +459,8 @@
       sbClient = new StreamerbotClient({
         host,
         port,
-        endpoint: '/',          // identique TTS
-        /* password, */          // issu popup/LS/QS
+        endpoint: '/',
+        /* password, */
         password: 'streamer.bot',
         subscribe: '*',
         immediate: true,
@@ -485,14 +482,12 @@
         }
       });
 
-      // écoute unifiée
       sbClient.on('*', ({ event, data }) => {
         try { handleSBEvent(event, data); } catch (e) {
           appendLog('#guess-log', 'handleSBEvent error: ' + (e?.message||e));
         }
       });
 
-      // debug close code
       try {
         const sock = sbClient?.socket;
         if (sock && !sock._debugBound) {
@@ -510,17 +505,15 @@
   /******************************************************************
    *                    📬 ROUTAGE DES MESSAGES
    ******************************************************************/
-  // 🔧 Extraction robuste pour éviter "[object Object]"
+  // Extraction robuste pour éviter "[object Object]"
   function extractUserName(d){
     if (!d) return '—';
-    // Strings directes
     if (typeof d.displayName === 'string') return d.displayName;
     if (typeof d.userName === 'string')    return d.userName;
     if (typeof d.username === 'string')    return d.username;
     if (typeof d.user === 'string')        return d.user;
     if (typeof d.sender === 'string')      return d.sender;
     if (typeof d.gifter === 'string')      return d.gifter;
-    // Objets courants
     if (d.displayName && typeof d.displayName === 'object'){
       if (typeof d.displayName.displayName === 'string') return d.displayName.displayName;
       if (typeof d.displayName.name === 'string')        return d.displayName.name;
@@ -529,7 +522,6 @@
       if (typeof d.user.displayName === 'string') return d.user.displayName;
       if (typeof d.user.name === 'string')        return d.user.name;
     }
-    // Fallback raisonnables
     if (typeof d.name === 'string') return d.name;
     return '—';
   }
@@ -547,6 +539,30 @@
     return Number.isFinite(m) ? m : 0;
   }
 
+  // 🔎 Console payload logger pour Sub/Resub/GiftSub/GiftBomb (+ variantes)
+  const SUB_EVENT_TYPES = new Set([
+    'Sub','ReSub','GiftSub','GiftBomb',
+    'MassGift','MassSubGift','CommunitySub','CommunitySubGift'
+  ]);
+  function logSbSubEventToConsole(evt, payload){
+    try {
+      const type = evt?.type || 'Unknown';
+      const user = extractUserName(payload);
+      const msg  = `[Twitch:${type}] ${user}`;
+      // groupCollapsed pour spam-friendly
+      console.groupCollapsed(`🟣 ${msg}`);
+      console.log('event:', evt);
+      console.log('data :', payload);
+      // lignes utiles fréquemment consultées
+      console.log('tier     :', payload?.tier ?? payload?.plan ?? payload?.subPlan ?? '—');
+      console.log('months   :', payload?.cumulativeMonths ?? payload?.months ?? payload?.streak ?? '—');
+      console.log('gifter   :', payload?.gifter ?? payload?.sender ?? '—');
+      console.groupEnd();
+    } catch (e){
+      console.warn('Console log error:', e);
+    }
+  }
+
   function handleSBEvent(event, data){
     try {
       if (event && event.type === 'StreamUpdate'){ setLiveIndicator(!!data?.live); }
@@ -558,13 +574,16 @@
         return;
       }
 
-      if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
+      if (event?.source === 'Twitch' && SUB_EVENT_TYPES.has(event.type)){
+        // ▶ console output demandé
+        logSbSubEventToConsole(event, data);
+
         const d = data || {};
-        const user = extractUserName(d); // ✅ plus de [object Object]
+        const user = extractUserName(d);
         const tierLabel = tierLabelFromAny(d.tier ?? d.plan ?? d.subPlan ?? 'Prime');
         const months = extractMonths(d);
 
-        // push into store as unread, keep only last MAX_EVENTS, then rerender
+        // store + UI
         eventsStore.push({ id: Date.now(), type: event.type, user, tierLabel, months: months||0, ack: false });
         saveEvents(eventsStore);
         renderStoredEventsIntoUI();
