@@ -32,7 +32,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .tab{
   display:inline-flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);
   border:1px solid var(--border);border-radius:10px;cursor:pointer;font-weight:600;user-select:none;
-  color:var(--text); /* force texte blanc sur bouton */
+  color:var(--text);
 }
 .tab:hover{border-color:#3a3a3d}
 .tab.active{border-color:#414145;box-shadow:inset 0 -2px 0 var(--accent);color:#fff}
@@ -142,28 +142,21 @@ select:focus,input[type="number"]:focus,input[type="text"]:focus{
 }
 .chip button{background:transparent;border:none;color:#cfd2d6;cursor:pointer}
 .hint{font-size:12px;color:#9aa0a6}
+
 /* petit espace entre un bloc .card.stretch (ex: Filtres) et la grille suivante */
 .grid.gap-top { margin-top:16px; }
 
 /* cartes demi-largeur (2 colonnes égales dans la grille 12 colonnes) */
 .card.half { grid-column: span 6; }
 
-/* responsive : déjà géré plus bas (<=1100px .card -> span 6), donc OK */
-/* --- Header lock button (fond sombre, pas de blanc) --- */
-.lock-btn{
-  background: var(--panel);
-  border: 1px solid var(--border);
-  color: #cfcfcf;
-}
+/* --- Header lock button --- */
+.lock-btn{ background: var(--panel); border: 1px solid var(--border); color: #cfcfcf; }
 .lock-btn:hover{ border-color:#3a3a3d; color:#fff; transform:translateY(-1px); }
 
 /* --- Chips d’exclusion : bordure rouge discrète --- */
-.chip-excl{
-  border-color:#7a2f2f !important;
-  background:#181313 !important;
-}
+.chip-excl{ border-color:#7a2f2f !important; background:#181313 !important; }
 
-/* --- Bouton Terminer en rouge (utilise .btn.danger existant) --- */
+/* --- Bouton Terminer en rouge --- */
 .btn.danger{ background:#4a1f1f; border-color:#7a2f2f; }
 .btn.danger:hover{ border-color:#9b3a3a; }
 
@@ -181,4 +174,3 @@ select:focus,input[type="number"]:focus,input[type="text"]:focus{
   .form-group{flex:1 1 100%;min-width:0}
   .form-group.sm{flex:1 1 48%;max-width:none}
 }
-
