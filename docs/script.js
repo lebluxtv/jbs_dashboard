@@ -75,8 +75,14 @@
     if (e.type === 'GiftBomb') {
       const n = isNum(e.giftCount) ? e.giftCount : (Array.isArray(e.recipients) ? e.recipients.length : 0);
       const recShort = Array.isArray(e.recipients) ? e.recipients.slice(0,5).join(', ') + (e.recipients.length>5 ? '…' : '') : '';
-      return `<strong>${e.user}</strong> — Gift Bomb <span class="muted">${e.tierLabel}${n?` • ${n} gifts`:''}</span>` + (recShort?`<br><span class="muted">→ ${recShort}</span>`:'');
+      return `<strong>${e.user}</strong> — Gift Bomb <span class="muted">${e.tierLabel || ''}${n?`${e.tierLabel?' • ':''}${n} gifts`:''}</span>` + (recShort?`<br><span class="muted">→ ${recShort}</span>`:'');
     }
+    if (e.type === 'GiftSub') {
+      const tierTxt = e.tierLabel ? ` (${e.tierLabel})` : '';
+      const toTxt = e.recipient ? ` <span class="muted">to ${e.recipient}</span>` : '';
+      return `<strong>${e.user}</strong> — Gifted sub${tierTxt}${toTxt}`;
+    }
+    // Sub / ReSub
     return `<strong>${e.user}</strong> — ${e.type} • ${e.tier?('Tier '+e.tier):''} • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
   }
 
@@ -161,7 +167,8 @@
       btn.classList.toggle('active', act);
     });
     $$('.tab-panel').forEach(p=>{
-      p.style.display = (p.id===`tab-${name}`) ? 'block' : 'none';
+      p.style.display = (p.id===`${
+        'tab-'+name}`) ? 'block' : 'none';
     });
     try { localStorage.setItem('jbs.activeTab', name); } catch {}
   }
@@ -533,21 +540,28 @@
     return '—';
   }
 
+  function extractRecipientName(obj){
+    if (!obj) return '—';
+    if (typeof obj === 'string') return obj;
+    if (typeof obj.name  === 'string' && obj.name)  return obj.name;
+    if (typeof obj.login === 'string' && obj.login) return obj.login;
+    if (typeof obj.id    === 'string' && obj.id)    return obj.id;
+    return '—';
+  }
+
   function extractRecipientNames(arr){
     if (!Array.isArray(arr)) return [];
-    return arr.map(r => (typeof r?.name === 'string' && r.name) ||
-                        (typeof r?.login === 'string' && r.login) ||
-                        (typeof r?.id === 'string' && r.id) ||
-                        '—');
+    return arr.map(r => extractRecipientName(r));
   }
 
   function tierLabelFromAny(v){
-    const s = (v||'').toString().toLowerCase();
+    if (v == null) return '';
+    const s = String(v).toLowerCase();
     if (s.includes('prime')) return 'Prime';
-    if (s.includes('1000') || s.includes('tier 1')) return 'Tier 1';
-    if (s.includes('2000') || s.includes('tier 2')) return 'Tier 2';
-    if (s.includes('3000') || s.includes('tier 3')) return 'Tier 3';
-    return v ? String(v) : 'Sub';
+    if (s.includes('1000') || s.includes('tier 1') || s.includes('tier1')) return 'Tier 1';
+    if (s.includes('2000') || s.includes('tier 2') || s.includes('tier2')) return 'Tier 2';
+    if (s.includes('3000') || s.includes('tier 3') || s.includes('tier3')) return 'Tier 3';
+    return String(v);
   }
   function extractMonths(d){
     const m = Number(d?.cumulativeMonths ?? d?.months ?? d?.streak ?? 0);
@@ -559,6 +573,7 @@
     'MassGift','MassSubGift','CommunitySub','CommunitySubGift'
   ]);
 
+  // Console payload logger
   function logSbSubEventToConsole(evt, payload){
     try {
       const type = evt?.type || 'Unknown';
@@ -571,12 +586,19 @@
                       : (Array.isArray(payload?.recipients) ? payload.recipients.length : null);
         const tier   = tierLabelFromAny(payload?.sub_tier ?? payload?.tier ?? payload?.plan ?? payload?.subPlan);
         const rec    = extractRecipientNames(payload?.recipients);
-        console.log('gifter   :', gifter);
-        console.log('tier     :', tier);
-        console.log('total    :', total);
+        console.log('gifter    :', gifter);
+        console.log('tier      :', tier);
+        console.log('total     :', total);
         console.log('recipients:', rec);
+      } else if (type === 'GiftSub') {
+        const gifter = extractUserName(payload?.user || payload);
+        const recip  = extractRecipientName(payload?.recipient);
+        const tier   = tierLabelFromAny(payload?.subTier ?? payload?.tier ?? payload?.plan ?? payload?.subPlan);
+        console.log('gifter   :', gifter);
+        console.log('recipient:', recip);
+        console.log('tier     :', tier);
       } else {
-        console.log('tier     :', payload?.tier ?? payload?.plan ?? payload?.subPlan ?? '—');
+        console.log('tier     :', payload?.tier ?? payload?.plan ?? payload?.subPlan ?? payload?.subTier ?? '—');
         console.log('months   :', payload?.cumulativeMonths ?? payload?.months ?? payload?.streak ?? '—');
         console.log('gifter   :', payload?.gifter ?? payload?.sender ?? '—');
       }
@@ -598,12 +620,12 @@
       }
 
       if (event?.source === 'Twitch' && SUB_EVENT_TYPES.has(event.type)){
-        // ▶ console output demandé
+        // ► Console payload
         logSbSubEventToConsole(event, data);
 
         if (event.type === 'GiftBomb') {
           const d = data || {};
-          const gifter     = extractUserName(d.user || d); // user objet dans l'exemple
+          const gifter     = extractUserName(d.user || d);
           const recipients = extractRecipientNames(d.recipients);
           const giftCount  = Number.isFinite(Number(d.total)) ? Number(d.total)
                             : (Array.isArray(d.recipients) ? d.recipients.length : 0);
@@ -626,10 +648,32 @@
           return;
         }
 
-        // Sub / ReSub / GiftSub / variantes
+        if (event.type === 'GiftSub') {
+          const d = data || {};
+          const gifter    = extractUserName(d.user || d);                 // qui offre
+          const recipient = extractRecipientName(d.recipient);            // qui reçoit
+          const tierLabel = tierLabelFromAny(d.subTier ?? d.tier ?? d.plan ?? d.subPlan); // PAS de défaut "Prime"
+
+          eventsStore.push({
+            id: Date.now(),
+            type: 'GiftSub',
+            user: gifter,
+            tierLabel,              // peut être vide si inconnu
+            months: 0,
+            ack: false,
+            recipient
+          });
+          saveEvents(eventsStore);
+          renderStoredEventsIntoUI();
+
+          appendLog('#events-log', `GiftSub — ${gifter}${tierLabel?` (${tierLabel})`:''} → ${recipient || '—'}`);
+          return;
+        }
+
+        // Sub / ReSub / autres variantes
         const d = data || {};
         const user = extractUserName(d);
-        const tierLabel = tierLabelFromAny(d.tier ?? d.plan ?? d.subPlan ?? 'Prime');
+        const tierLabel = tierLabelFromAny(d.tier ?? d.plan ?? d.subPlan ?? d.subTier ?? 'Prime');
         const months = extractMonths(d);
 
         eventsStore.push({ id: Date.now(), type: event.type, user, tierLabel, months: months||0, ack: false });
