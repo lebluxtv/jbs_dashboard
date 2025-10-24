@@ -242,6 +242,7 @@
           target.closest('#filters, .filters, [data-filters], form#filtersForm') != null;
         if (!inFilters) return;
 
+        // Bloque la modif & re-lock au cas où
         e.preventDefault();
         e.stopImmediatePropagation();
         target.disabled = true;
@@ -254,9 +255,6 @@
    *                      🎮 GTG FILTERS & UI BINDINGS
    ******************************************************************/
   let GTG_GENRES = [];
-  let GTG_YEAR_MIN = 1970;
-  let GTG_YEAR_MAX = new Date().getFullYear()+1;
-
   const guessGenreSel         = $('#guess-genre');
   const guessDatalist         = $('#guess-genres-datalist');
   const guessExcludeInput     = $('#guess-exclude-input');
@@ -302,30 +300,34 @@
 
   function parseYear(val){
     const n = Number(val); if (!Number.isFinite(n)) return null;
+    if (n < 1970) return 1970;
+    if (n > 2100) return 2100;
     return Math.trunc(n);
   }
 
-  // 👉 Clamp une année à la fenêtre fournie par l’API
-  function clampYear(y){
-    if (!isNum(y)) return null;
-    if (y < GTG_YEAR_MIN) return GTG_YEAR_MIN;
-    if (y > GTG_YEAR_MAX) return GTG_YEAR_MAX;
-    return y;
-  }
-
+  // ⛔ Clamp “Année (à)” à l’année courante max (même si le bootstrap annonce plus loin)
   function normalizeYearInputs(){
-    let yf = clampYear(parseYear(guessYearFromInput?.value));
-    let yt = clampYear(parseYear(guessYearToInput?.value));
+    const yf = parseYear(guessYearFromInput?.value);
+    const yt = parseYear(guessYearToInput?.value);
 
-    // Si vide, on met par défaut la fenêtre complète
-    if (yf == null) yf = GTG_YEAR_MIN;
-    if (yt == null) yt = GTG_YEAR_MAX;
+    const nowYear = new Date().getFullYear();
+    // respect des min/max HTML si présents
+    const fromMin = isNum(Number(guessYearFromInput?.min)) ? Number(guessYearFromInput.min) : 1970;
+    const fromMax = isNum(Number(guessYearFromInput?.max)) ? Number(guessYearFromInput.max) : nowYear;
+    const toMin   = isNum(Number(guessYearToInput?.min))   ? Number(guessYearToInput.min)   : 1970;
+    // >>> borne supérieure forcée au présent
+    const toMax   = nowYear;
 
-    // Coherence: to >= from
-    if (yt < yf) yt = yf;
+    let yFrom = yf;
+    let yTo   = yt;
 
-    if (guessYearFromInput) guessYearFromInput.value = String(yf);
-    if (guessYearToInput)   guessYearToInput.value   = String(yt);
+    if (yFrom != null) yFrom = Math.max(fromMin, Math.min(fromMax, yFrom));
+    if (yTo   != null) yTo   = Math.max(toMin,   Math.min(toMax,   yTo));
+
+    if (isNum(yFrom) && isNum(yTo) && yTo < yFrom) yTo = yFrom;
+
+    if (guessYearFromInput && yFrom != null) guessYearFromInput.value = String(yFrom);
+    if (guessYearToInput   && yTo   != null) guessYearToInput.value   = String(yTo);
   }
 
   function idFromGenreInputText(txt){
@@ -367,8 +369,6 @@
   function loadLastSetup(){
     try { return JSON.parse(localStorage.getItem(LAST_SETUP_KEY)||'{}') || {}; } catch { return {}; }
   }
-
-  // 🧲 Applique le last setup mais le ramène dans [GTG_YEAR_MIN, GTG_YEAR_MAX]
   function applyLastSetupAfterGenres(){
     const s = loadLastSetup() || {};
     if (s.includeGenreId && guessGenreSel){
@@ -382,17 +382,8 @@
       }
       renderExcludeChips();
     }
-
-    // clamp années
-    let yf = clampYear(isNum(s.yearFrom) ? s.yearFrom : null);
-    let yt = clampYear(isNum(s.yearTo)   ? s.yearTo   : null);
-    if (yf == null) yf = GTG_YEAR_MIN;
-    if (yt == null) yt = GTG_YEAR_MAX;
-    if (yt < yf) yt = yf;
-
-    if (guessYearFromInput) guessYearFromInput.value = String(yf);
-    if (guessYearToInput)   guessYearToInput.value   = String(yt);
-
+    if (isNum(s.yearFrom)) guessYearFromInput.value = String(s.yearFrom);
+    if (isNum(s.yearTo))   guessYearToInput.value   = String(s.yearTo);
     if (isNum(s.minRating) && guessMinRatingSel) guessMinRatingSel.value = String(s.minRating);
     if (isNum(s.roundMinutes) && guessDurationMinInput) guessDurationMinInput.value = String(s.roundMinutes);
   }
@@ -428,11 +419,16 @@
     let yf = raw.yearFrom, yt = raw.yearTo;
     if (yf != null && !isNum(yf)) errs.push("Année (de) invalide.");
     if (yt != null && !isNum(yt)) errs.push("Année (à) invalide.");
-
-    // clamp aux bornes IGDB retournées
-    if (isNum(yf)) yf = clampYear(yf);
-    if (isNum(yt)) yt = clampYear(yt);
+    if (isNum(yf) && yf < 1970) yf = 1970;
+    if (isNum(yt) && yt < 1970) yt = 1970;
     if (isNum(yf) && isNum(yt) && yt < yf) yt = yf;
+
+    // borne sup UI : année courante
+    const nowYear = new Date().getFullYear();
+    if (isNum(yt) && yt > nowYear) yt = nowYear;
+
+    const cap = nowYear; // on n'autorise pas > année courante côté UI
+    if (isNum(yf) && yf > cap) yf = cap;
 
     let minRating = raw.minRating;
     if (minRating != null && (!isNum(minRating) || minRating < 0 || minRating > 100)) errs.push("Note minimale invalide.");
@@ -481,7 +477,7 @@
 
   function setGuessHandlers(){
     const debounce = (fn,ms)=>{ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
-    const debounceCount = debounce(requestPoolCount, 400); // limite le spam
+    const debounceCount = debounce(requestPoolCount, 400); // ⬆️ 400ms pour limiter le spam
 
     [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinRatingSel, guessDurationMinInput].forEach(el=>{
       if (!el) return;
@@ -596,7 +592,7 @@
         host,
         port,
         endpoint: '/',
-        password,                // ✅ utilise le vrai mot de passe stocké
+        password,
         subscribe: '*',
         immediate: true,
         autoReconnect: true,
@@ -773,9 +769,9 @@
 
         if (event.type === 'GiftSub') {
           const d = data || {};
-          const gifter    = extractUserName(d.user || d);                 // qui offre
-          const recipient = extractRecipientName(d.recipient);            // qui reçoit
-          const tierLabel = tierLabelFromAny(d.subTier ?? d.tier ?? d.plan ?? d.subPlan); // PAS de défaut "Prime"
+          const gifter    = extractUserName(d.user || d);
+          const recipient = extractRecipientName(d.recipient);
+          const tierLabel = tierLabelFromAny(d.subTier ?? d.tier ?? d.plan ?? d.subPlan);
 
           eventsStore.push({
             id: Date.now(),
@@ -812,30 +808,21 @@
 
         if (data.type === 'bootstrap') {
           if (data.error) { setGuessMessage('Erreur: ' + data.error); return; }
-
           const genres = Array.isArray(data.genres) ? data.genres : [];
           fillGenresUI(genres);
 
-          // 🎯 Applique la fenêtre renvoyée par l’API et CLAMP les inputs
-          GTG_YEAR_MIN = Number.isFinite(data.oldestYear) ? Number(data.oldestYear) : 1970;
-          GTG_YEAR_MAX = Number.isFinite(data.newestYear) ? Number(data.newestYear) : (new Date().getFullYear()+1);
+          const OL   = Number.isFinite(data.oldestYear) ? Number(data.oldestYear) : 1970;
+          const NW   = Number.isFinite(data.newestYear) ? Number(data.newestYear) : (new Date().getFullYear()+1);
+          const NOWY = new Date().getFullYear();
+          const YMAX_UI = Math.max(OL, Math.min(NW, NOWY)); // 👉 limite “Année (à)” à l’année courante
 
-          if (guessYearFromInput){
-            guessYearFromInput.min = String(GTG_YEAR_MIN);
-            guessYearFromInput.max = String(GTG_YEAR_MAX);
-          }
-          if (guessYearToInput){
-            guessYearToInput.min   = String(GTG_YEAR_MIN);
-            guessYearToInput.max   = String(GTG_YEAR_MAX);
-          }
+          if (guessYearFromInput){ guessYearFromInput.min = String(OL);   guessYearFromInput.max = String(YMAX_UI); }
+          if (guessYearToInput){   guessYearToInput.min   = String(OL);   guessYearToInput.max   = String(YMAX_UI); }
 
-          // Recharge last setup puis normalise dans la plage
-          applyLastSetupAfterGenres();
           normalizeYearInputs();
-
           fillRatingSteps(data.ratingSteps || [50,60,70,80,85,90,92,95]);
-
-          setGuessMessage(`Genres chargés (${genres.length}). Période ${GTG_YEAR_MIN} — ${GTG_YEAR_MAX}`);
+          applyLastSetupAfterGenres();
+          setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${YMAX_UI}`);
           requestPoolCount();
           return;
         }
