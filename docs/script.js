@@ -1,4 +1,3 @@
-<script>
 (function () {
   "use strict";
 
@@ -84,13 +83,14 @@
       const toTxt = e.recipient ? ` <span class="muted">to ${e.recipient}</span>` : '';
       return `<strong>${e.user}</strong> — Gifted sub${tierTxt}${toTxt}`;
     }
+    // Sub / ReSub
     return `<strong>${e.user}</strong> — ${e.type} • ${e.tier?('Tier '+e.tier):''} • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
   }
 
   function syncEventsStatusUI(){
     setDot('.dot-events', qvUnreadEvents > 0);
     const bQV = $('#qv-events-count'); if (bQV){ bQV.textContent = String(qvUnreadEvents); bQV.style.display = qvUnreadEvents>0?'':'none'; }
-    const bTab  = $('.badge-events'); 
+    const bTab  = $('.badge-events');
     const bHead = $('#events-counter');
     if (bTab)  bTab.textContent  = String(qvUnreadEvents);
     if (bHead) bHead.textContent = String(qvUnreadEvents);
@@ -127,6 +127,7 @@
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
   }
 
+  // Rend du plus ancien -> au plus récent en PREPEND => le plus récent termine en haut
   function renderStoredEventsIntoUI(){
     const qv   = $('#qv-events-list');
     const full = $('#events-subs-list');
@@ -156,6 +157,7 @@
     qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
     syncEventsStatusUI();
   }
+
   renderStoredEventsIntoUI();
 
   /******************************************************************
@@ -266,11 +268,6 @@
   const guessEndBtn           = $('#guess-end');
   const guessMsgEl            = $('#guess-msg');
 
-  // ⚙️ état bootstrap (période serveur)
-  let GTG_BOOTSTRAPPED = false;
-  let PERIOD_MIN = null;   // oldestYear (borné à l'année courante)
-  let PERIOD_MAX = null;   // newestYear (borné à l'année courante)
-
   function setGuessMessage(t){ if (guessMsgEl) guessMsgEl.textContent = t||''; }
 
   const GTG_EXCLUDED = new Set();
@@ -302,7 +299,7 @@
 
   function parseYear(val){
     const n = Number(val); if (!Number.isFinite(n)) return null;
-    if (n < 1900) return 1900;
+    if (n < 1970) return 1970;
     if (n > 2100) return 2100;
     return Math.trunc(n);
   }
@@ -404,15 +401,12 @@
     let yf = raw.yearFrom, yt = raw.yearTo;
     if (yf != null && !isNum(yf)) errs.push("Année (de) invalide.");
     if (yt != null && !isNum(yt)) errs.push("Année (à) invalide.");
-
-    // ⚠️ bornes visuelles = période serveur si connue, sinon borne sur l'année courante
-    const capMax = new Date().getFullYear();
-    const lo = (typeof PERIOD_MIN === 'number' ? PERIOD_MIN : 1970);
-    const hi = (typeof PERIOD_MAX === 'number' ? PERIOD_MAX : capMax);
-
-    if (isNum(yf)) yf = Math.max(lo, Math.min(hi, yf));
-    if (isNum(yt)) yt = Math.max(lo, Math.min(hi, yt));
+    if (isNum(yf) && yf < 1970) yf = 1970;
+    if (isNum(yt) && yt < 1970) yt = 1970;
     if (isNum(yf) && isNum(yt) && yt < yf) yt = yf;
+    const cap = new Date().getFullYear(); // borne max = année courante
+    if (isNum(yf) && yf > cap) yf = cap;
+    if (isNum(yt) && yt > cap) yt = cap;
 
     let minRating = raw.minRating;
     if (minRating != null && (!isNum(minRating) || minRating < 0 || minRating > 100)) errs.push("Note minimale invalide.");
@@ -461,7 +455,7 @@
 
   function setGuessHandlers(){
     const debounce = (fn,ms)=>{ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
-    const debounceCount = debounce(requestPoolCount, 400);
+    const debounceCount = debounce(requestPoolCount, 400); // limite le spam
 
     [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinRatingSel, guessDurationMinInput].forEach(el=>{
       if (!el) return;
@@ -471,12 +465,14 @@
       }
     });
 
+    // Ajout exclusion via bouton
     guessExcludeAddBtn?.addEventListener('click', ()=>{
       const id = idFromGenreInputText(guessExcludeInput?.value || '');
       if (id){ GTG_EXCLUDED.add(String(id)); renderExcludeChips(); requestPoolCount(); }
       if (guessExcludeInput) guessExcludeInput.value = '';
     });
 
+    // Lancer / Terminer
     guessStartBtn?.addEventListener('click', ()=>{
       const { ok, errs, clean } = validateFilters(collectFilters());
       if (!ok){ setGuessMessage('Filtres invalides: ' + errs.join(' ; ')); return; }
@@ -581,9 +577,8 @@
         onConnect: ()=>{
           setConnected(true);
           appendLog('#guess-log', `Connecté à Streamer.bot (${host}:${port})`);
-          // ⚠️ On DEMANDE d’abord le bootstrap
           safeDoAction('GTG Bootstrap Genres & Years & Ratings', {});
-          // ❌ NE PAS appeler requestPoolCount ici, on attend le bootstrap
+          requestPoolCount();
         },
         onDisconnect: ()=>{
           setConnected(false);
@@ -647,10 +642,12 @@
     if (typeof obj.id    === 'string' && obj.id)    return obj.id;
     return '—';
   }
+
   function extractRecipientNames(arr){
     if (!Array.isArray(arr)) return [];
     return arr.map(r => extractRecipientName(r));
   }
+
   function tierLabelFromAny(v){
     if (v == null) return '';
     const s = String(v).toLowerCase();
@@ -676,6 +673,28 @@
       console.groupCollapsed(`🟣 [Twitch:${type}]`);
       console.log('event:', evt);
       console.log('data :', payload);
+      if (type === 'GiftBomb') {
+        const gifter = extractUserName(payload?.user || payload);
+        const total  = Number.isFinite(Number(payload?.total)) ? Number(payload.total)
+                      : (Array.isArray(payload?.recipients) ? payload.recipients.length : null);
+        const tier   = tierLabelFromAny(payload?.sub_tier ?? payload?.tier ?? payload?.plan ?? payload?.subPlan);
+        const rec    = extractRecipientNames(payload?.recipients);
+        console.log('gifter    :', gifter);
+        console.log('tier      :', tier);
+        console.log('total     :', total);
+        console.log('recipients:', rec);
+      } else if (type === 'GiftSub') {
+        const gifter = extractUserName(payload?.user || payload);
+        const recip  = extractRecipientName(payload?.recipient);
+        const tier   = tierLabelFromAny(payload?.subTier ?? payload?.tier ?? payload?.plan ?? payload?.subPlan);
+        console.log('gifter   :', gifter);
+        console.log('recipient:', recip);
+        console.log('tier     :', tier);
+      } else {
+        console.log('tier     :', payload?.tier ?? payload?.plan ?? payload?.subPlan ?? payload?.subTier ?? '—');
+        console.log('months   :', payload?.cumulativeMonths ?? payload?.months ?? payload?.streak ?? '—');
+        console.log('gifter   :', payload?.gifter ?? payload?.sender ?? '—');
+      }
       console.groupEnd();
     } catch (e){
       console.warn('Console log error:', e);
@@ -695,6 +714,64 @@
 
       if (event?.source === 'Twitch' && SUB_EVENT_TYPES.has(event.type)){
         logSbSubEventToConsole(event, data);
+
+        if (event.type === 'GiftBomb') {
+          const d = data || {};
+          const gifter     = extractUserName(d.user || d);
+          const recipients = extractRecipientNames(d.recipients);
+          const giftCount  = Number.isFinite(Number(d.total)) ? Number(d.total)
+                            : (Array.isArray(d.recipients) ? d.recipients.length : 0);
+          const tierLabel  = tierLabelFromAny(d.sub_tier ?? d.tier ?? d.plan ?? d.subPlan);
+
+          eventsStore.push({
+            id: Date.now(),
+            type: 'GiftBomb',
+            user: gifter,
+            tierLabel,
+            months: 0,
+            ack: false,
+            recipients,
+            giftCount
+          });
+          saveEvents(eventsStore);
+          renderStoredEventsIntoUI();
+
+          appendLog('#events-log', `GiftBomb — ${gifter} (${tierLabel}${giftCount?`, ${giftCount} gifts`:''}) → ${recipients.join(', ') || '—'}`);
+          return;
+        }
+
+        if (event.type === 'GiftSub') {
+          const d = data || {};
+          const gifter    = extractUserName(d.user || d);
+          const recipient = extractRecipientName(d.recipient);
+          const tierLabel = tierLabelFromAny(d.subTier ?? d.tier ?? d.plan ?? d.subPlan);
+
+          eventsStore.push({
+            id: Date.now(),
+            type: 'GiftSub',
+            user: gifter,
+            tierLabel,
+            months: 0,
+            ack: false,
+            recipient
+          });
+          saveEvents(eventsStore);
+          renderStoredEventsIntoUI();
+
+          appendLog('#events-log', `GiftSub — ${gifter}${tierLabel?` (${tierLabel})`:''} → ${recipient || '—'}`);
+          return;
+        }
+
+        const d = data || {};
+        const user = extractUserName(d);
+        const tierLabel = tierLabelFromAny(d.tier ?? d.plan ?? d.subPlan ?? d.subTier ?? 'Prime');
+        const months = extractMonths(d);
+
+        eventsStore.push({ id: Date.now(), type: event.type, user, tierLabel, months: months||0, ack: false });
+        saveEvents(eventsStore);
+        renderStoredEventsIntoUI();
+
+        appendLog('#events-log', `${event.type} — ${user} (${tierLabel}${months>0?`, ${months} mois`:''})`);
         return;
       }
 
@@ -703,40 +780,27 @@
 
         if (data.type === 'bootstrap') {
           if (data.error) { setGuessMessage('Erreur: ' + data.error); return; }
-
           const genres = Array.isArray(data.genres) ? data.genres : [];
           fillGenresUI(genres);
 
-          // ➜ période serveur, bornée à l'année courante
-          const nowY = new Date().getFullYear();
           const OLServer = Number.isFinite(data.oldestYear) ? Number(data.oldestYear) : 1970;
-          const NWServer = Number.isFinite(data.newestYear) ? Number(data.newestYear) : nowY;
-          PERIOD_MIN = Math.min(OLServer, nowY);
-          PERIOD_MAX = Math.min(NWServer, nowY);
+          const NWServer = Number.isFinite(data.newestYear) ? Number(data.newestYear) : (new Date().getFullYear());
+          const nowY = new Date().getFullYear();
+          const OL = Math.min(OLServer, nowY);
+          const NW = Math.min(NWServer, nowY); // borne max = année courante
 
-          // Applique min/max sur les champs
-          if (guessYearFromInput){ guessYearFromInput.min = String(PERIOD_MIN); guessYearFromInput.max = String(PERIOD_MAX); }
-          if (guessYearToInput){   guessYearToInput.min   = String(PERIOD_MIN); guessYearToInput.max   = String(PERIOD_MAX); }
+          if (guessYearFromInput){ guessYearFromInput.min = String(OL); guessYearFromInput.max = String(NW); }
+          if (guessYearToInput){   guessYearToInput.min   = String(OL); guessYearToInput.max   = String(NW); }
 
-          // Charger l’éventuel setup sauvegardé (puis recadrer)
-          applyLastSetupAfterGenres();
+          // ⚙️ Positionner les valeurs visibles sur la fenêtre par défaut renvoyée
+          if (guessYearFromInput) guessYearFromInput.value = String(OL);
+          if (guessYearToInput)   guessYearToInput.value   = String(NW);
 
-          // Si vide ou hors bornes, caler sur la période serveur
-          let yf = parseYear(guessYearFromInput?.value);
-          let yt = parseYear(guessYearToInput?.value);
-          if (!isNum(yf) || yf < PERIOD_MIN || yf > PERIOD_MAX) yf = PERIOD_MIN;
-          if (!isNum(yt) || yt < PERIOD_MIN || yt > PERIOD_MAX) yt = PERIOD_MAX;
-          if (yt < yf) yt = yf;
-          if (guessYearFromInput) guessYearFromInput.value = String(yf);
-          if (guessYearToInput)   guessYearToInput.value   = String(yt);
-
-          normalizeYearInputs();
           fillRatingSteps(data.ratingSteps || [50,60,70,80,85,90,92,95]);
+          applyLastSetupAfterGenres();
+          setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
 
-          GTG_BOOTSTRAPPED = true; // ✅ prêt à compter
-          setGuessMessage(`Genres chargés (${genres.length}). Période ${PERIOD_MIN} — ${PERIOD_MAX}`);
-
-          // Premier count maintenant que tout est cadré
+          // 🔔 Lancer un count initial dès le bootstrap
           requestPoolCount();
           return;
         }
@@ -790,6 +854,58 @@
             const st = $('#guess-status-text'); if (st) st.textContent = data.running ? 'En cours' : 'En pause';
           }
           setRunning(false);
+
+          if (data.gameName){ const a=$('#guess-last-info'); if (a) a.textContent = data.gameName; }
+          if (data.lastWinner){
+            const winnerName = data.lastWinner.isStreamer ? 'Streamer' : (data.lastWinner.user || '');
+            const w=$('#guess-winner'); if (w) w.textContent = winnerName || '—';
+          }
+
+          try {
+            const d = data.details || {};
+            const genres = Array.isArray(d.genres) ? d.genres : [];
+            const pubs   = Array.isArray(d.publishers) ? d.publishers : [];
+            const devs   = Array.isArray(d.developers) ? d.developers : [];
+            const note   = (typeof d.rating === 'number') ? Math.round(d.rating) + '%' : '—';
+            const year   = (d.year != null) ? String(d.year) : '—';
+
+            const { clean:f } = validateFilters(collectFilters());
+            const checks = [];
+
+            if (f.minRating != null){
+              const ok = (typeof d.rating === 'number') && (d.rating >= f.minRating);
+              checks.push(ok ? 'note ✅' : ('note ❌ (attendu ≥ ' + f.minRating + ')'));
+            }
+            if (f.yearFrom != null || f.yearTo != null){
+              const y = Number(year);
+              const inWin = Number.isFinite(y) &&
+                (f.yearFrom == null || y >= f.yearFrom) &&
+                (f.yearTo   == null || y <= f.yearTo);
+              checks.push(inWin ? 'année ✅' : ('année ❌ (attendu ' + (f.yearFrom ?? '—') + '–' + (f.yearTo ?? '—') + ')'));
+            }
+            if (f.includeGenreId){
+              const wanted = (GTG_GENRES.find(g => String(g.id) === String(f.includeGenreId))?.name || '').toLowerCase();
+              const ok = wanted && genres.some(g => (g||'').toLowerCase() === wanted);
+              checks.push(ok ? 'genre incl. ✅' : 'genre incl. ❌');
+            } else if (Array.isArray(f.excludeGenreIds) && f.excludeGenreIds.length){
+              const names = f.excludeGenreIds
+                .map(id => GTG_GENRES.find(g => String(g.id) === String(id))?.name)
+                .filter(Boolean).map(s => s.toLowerCase());
+              const hit = genres.some(g => names.includes((g||'').toLowerCase()));
+              checks.push(hit ? 'exclu ❌' : 'exclu ✅');
+            }
+
+            appendLog('#guess-log',
+              'Dernier jeu: ' + (data.gameName || '—') +
+              '\nNote: ' + note + ' — Année: ' + year +
+              '\nGenres: ' + (genres.join(', ') || '—') +
+              '\nPublishers: ' + (pubs.join(', ') || '—') +
+              '\nDevs: ' + (devs.join(', ') || '—') +
+              '\nCheck filtres: ' + (checks.join(' · ') || '—')
+            );
+          } catch (e) {
+            appendLog('#guess-log', 'Reveal details parse error: ' + (e?.message||e));
+          }
           return;
         }
 
@@ -842,23 +958,16 @@
    *                📞 GAMES COUNT (à chaque changement)
    ******************************************************************/
   function requestPoolCount(){
-    // Ne compte qu’après bootstrap pour éviter 1970–1970
-    if (!GTG_BOOTSTRAPPED) return;
-
     const { ok, clean } = validateFilters(collectFilters());
     if (!ok) return;
 
     const nowYear = new Date().getFullYear();
-    const lo = (typeof PERIOD_MIN === 'number' ? PERIOD_MIN : 1970);
-    const hi = (typeof PERIOD_MAX === 'number' ? PERIOD_MAX : nowYear);
-
     const safeYearFrom = (typeof clean.yearFrom === 'number' && Number.isFinite(clean.yearFrom))
-      ? Math.max(lo, Math.min(hi, clean.yearFrom))
-      : lo;
-
+      ? clean.yearFrom
+      : 1970;
     const safeYearTo = (typeof clean.yearTo === 'number' && Number.isFinite(clean.yearTo))
-      ? Math.max(safeYearFrom, Math.min(hi, clean.yearTo))
-      : hi;
+      ? Math.min(clean.yearTo, nowYear)
+      : nowYear;
 
     const safeMin = (typeof clean.minRating === 'number' && Number.isFinite(clean.minRating))
       ? Math.max(0, Math.min(100, Math.trunc(clean.minRating)))
@@ -874,6 +983,7 @@
     };
 
     appendLog('#guess-log', `→ FRONT send count: { include:${payload.includeGenreId||''}, exclude:[${payload.excludeGenreIds.join(',')}], years:${payload.yearFrom}-${payload.yearTo}, min:${payload.minRating==null?'—':payload.minRating} }`);
+
     safeDoAction('GTG Games Count', payload);
   }
 
@@ -913,4 +1023,3 @@
   boot();
 
 })();
-</script>
