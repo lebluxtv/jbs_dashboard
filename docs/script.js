@@ -10,7 +10,7 @@
   const EVENTS_KEY     = "jbs.events.v1";
   const LAST_SETUP_KEY = "gtg.lastSetup.v1";
   const SB_PWD_KEY     = "sb_ws_password_v1";
-  const MAX_EVENTS     = 200;
+  const MAX_EVENTS     = 100;
 
   const isNum = (n)=> typeof n === 'number' && Number.isFinite(n);
 
@@ -101,7 +101,19 @@
     const limit = listEl.classList.contains('list--short') ? 6 : 60;
     while (listEl.children.length > limit) listEl.removeChild(listEl.firstChild);
   }
+  function prependListItem(listEl, htmlText, onToggle, ack=false, id=null){
+    if (!listEl) return;
+    if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')){
+      listEl.removeChild(listEl.firstElementChild);
+    }
+    const li = makeItem(htmlText, onToggle, ack, id);
+    listEl.insertBefore(li, listEl.firstChild);
+    const limit = listEl.classList.contains('list--short') ? 6 : 60;
+    while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
+  }
 
+
+  
   function renderStoredEventsIntoUI(){
     const qv   = $('#qv-events-list');
     const full = $('#events-subs-list');
@@ -110,17 +122,25 @@
     if (!eventsStore.length){
       if (qv)   qv.innerHTML   = '<li class="muted">Aucun sub récent</li>';
       if (full) full.innerHTML = '<li class="muted">Aucun sub</li>';
-      syncEventsStatusUI(); return;
+      qvUnreadEvents = 0;
+      syncEventsStatusUI();
+      return;
     }
-    for (let i=0;i<eventsStore.length;i++){
+    for (let i=eventsStore.length-1; i>=0; i--){
       const e = eventsStore[i];
       const html = eventLine(e);
-      appendListItem(qv,   html, ()=>{ e.ack = true; saveEvents(eventsStore); renderStoredEventsIntoUI(); }, e.ack, e.id);
-      appendListItem(full, html, ()=>{ e.ack = true; saveEvents(eventsStore); renderStoredEventsIntoUI(); }, e.ack, e.id);
+      const toggle = ()=>{
+        e.ack = !e.ack;
+        saveEvents(eventsStore);
+        renderStoredEventsIntoUI();
+      };
+      if (qv)   prependListItem(qv,   html, toggle, e.ack, e.id);
+      if (full) prependListItem(full, html, toggle, e.ack, e.id);
     }
     qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
     syncEventsStatusUI();
   }
+
   renderStoredEventsIntoUI();
 
   /******************************************************************
@@ -522,10 +542,10 @@
         const user = displayNameFromAny(d.displayName ?? d.user ?? d.userName ?? d.username ?? d.sender ?? d.gifter ?? '—');
         const tierLabel = tierLabelFromAny(d.tier ?? d.plan ?? d.subPlan ?? 'Prime');
         const months = extractMonths(d);
-        appendListItem($('#qv-events-list'), `<strong>${user}</strong> — ${event.type} • ${tierLabel}${months>0?` • ${months} mois`:''}`, ()=>{}, false, Date.now());
-        appendListItem($('#events-subs-list'), `<strong>${user}</strong> — ${event.type} • ${tierLabel}${months>0?` • ${months} mois`:''}`, ()=>{}, false, Date.now());
-        qvUnreadEvents++;
-        syncEventsStatusUI();
+        // push into store as unread, keep only last MAX_EVENTS, then rerender
+        eventsStore.push({ id: Date.now(), type: event.type, user, tierLabel, months: months||0, ack: false });
+        saveEvents(eventsStore);
+        renderStoredEventsIntoUI();
         appendLog('#events-log', `${event.type} — ${user} (${tierLabel}${months>0?`, ${months} mois`:''})`);
         return;
       }
