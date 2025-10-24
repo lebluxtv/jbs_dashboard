@@ -13,6 +13,7 @@
   const MAX_EVENTS     = 100;
 
   const isNum = (n)=> typeof n === 'number' && Number.isFinite(n);
+  const makeNonce = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
 
   function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
   function setStoredPwd(v){ try { localStorage.setItem(SB_PWD_KEY, v || ""); } catch {} }
@@ -89,7 +90,7 @@
   function syncEventsStatusUI(){
     setDot('.dot-events', qvUnreadEvents > 0);
     const bQV = $('#qv-events-count'); if (bQV){ bQV.textContent = String(qvUnreadEvents); bQV.style.display = qvUnreadEvents>0?'':'none'; }
-    const bTab  = $('.badge-events'); const bHead = $('#events-counter');
+    const bTab  = $('.badge-events'); const bHead = $('#events-counter'];
     if (bTab)  bTab.textContent  = String(qvUnreadEvents);
     if (bHead) bHead.textContent = String(qvUnreadEvents);
   }
@@ -428,6 +429,30 @@
     };
   }
 
+  // Normalisation locale (pour comparer à filtersEcho)
+  function normalizeForEcho(clean){
+    return {
+      includeGenreId: clean.includeGenreId || "",
+      excludeGenreIds: (Array.isArray(clean.excludeGenreIds) ? clean.excludeGenreIds : [])
+        .map(String).filter(Boolean).sort(),
+      yearFrom: clean.yearFrom ?? null,
+      yearTo: clean.yearTo ?? null,
+      minRating: clean.minRating ?? null
+    };
+  }
+  function sameFilters(a,b){
+    if (!a || !b) return false;
+    if (String(a.includeGenreId||"") !== String(b.includeGenreId||"")) return false;
+    const ax = (a.excludeGenreIds||[]).map(String).sort();
+    const bx = (b.excludeGenreIds||[]).map(String).sort();
+    if (ax.length !== bx.length) return false;
+    for (let i=0;i<ax.length;i++) if (ax[i]!==bx[i]) return false;
+    if (String(a.yearFrom||"") !== String(b.yearFrom||"")) return false;
+    if (String(a.yearTo||"")   !== String(b.yearTo||""))   return false;
+    if (String(a.minRating||"")!== String(b.minRating||""))return false;
+    return true;
+  }
+
   function setGuessHandlers(){
     const debounce = (fn,ms)=>{ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
     const debounceCount = debounce(requestPoolCount, 250);
@@ -452,7 +477,9 @@
       const { ok, errs, clean } = validateFilters(collectFilters());
       if (!ok){ setGuessMessage('Filtres invalides: ' + errs.join(' ; ')); return; }
       saveLastSetup(clean);
+      const nonce = makeNonce();
       safeDoAction('GTG Start', {
+        nonce,
         includeGenreId: clean.includeGenreId,
         excludeGenreIds: clean.excludeGenreIds,
         yearFrom: clean.yearFrom, yearTo: clean.yearTo,
@@ -780,7 +807,13 @@
             appendLog('#guess-log', 'Pool IGDB: erreur (' + (data.error||'') + ')');
           } else {
             const n = Number.isFinite(Number(data.poolCount)) ? Number(data.poolCount) : 0;
-            appendLog('#guess-log', 'Pool IGDB: ' + n + ' jeux correspondant aux filtres.');
+
+            // ► contrôle d’intégrité des filtres reçus côté C#
+            const fNow  = normalizeForEcho(validateFilters(collectFilters()).clean);
+            const fEcho = data.filtersEcho || null;
+            const same  = fEcho ? sameFilters(fEcho, fNow) : false;
+
+            appendLog('#guess-log', `Pool IGDB: ${n} jeux correspondant aux filtres. (args ${same ? 'OK ✅' : 'DIFF ❌'})`);
           }
           return;
         }
@@ -792,11 +825,18 @@
             // 🔐 Serveur confirme démarrage -> verrouille
             setRunning(!!data.running);
           } else {
-            // Par défaut si pas de flag
             setRunning(true);
           }
           const endMs = Number(data.roundEndsAt);
           if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
+
+          // S'il y a un echo côté serveur, contrôle aussi ici
+          if (data.filtersEcho) {
+            const fNow  = normalizeForEcho(validateFilters(collectFilters()).clean);
+            const same  = sameFilters(data.filtersEcho, fNow);
+            appendLog('#guess-log', `Start args ${same ? 'OK ✅' : 'DIFF ❌'}`);
+          }
+
           setGuessMessage('Manche lancée');
           return;
         }
@@ -915,7 +955,9 @@
   function requestPoolCount(){
     const { ok, clean } = validateFilters(collectFilters());
     if (!ok) return;
+    const nonce = makeNonce();
     safeDoAction('GTG Games Count', {
+      nonce,
       includeGenreId: clean.includeGenreId,
       excludeGenreIds: clean.excludeGenreIds,
       yearFrom: clean.yearFrom, yearTo: clean.yearTo,
