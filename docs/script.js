@@ -440,7 +440,8 @@
         port,
         scheme: secure ? 'wss' : 'ws',
         endpoint: '/',          // identique TTS
-        password,               // issu popup/LS/QS
+       /* password,               // issu popup/LS/QS */
+        password: 'streamer.bot',
         subscribe: '*',
         immediate: true,
         autoReconnect: true,
