@@ -90,7 +90,7 @@
   function syncEventsStatusUI(){
     setDot('.dot-events', qvUnreadEvents > 0);
     const bQV = $('#qv-events-count'); if (bQV){ bQV.textContent = String(qvUnreadEvents); bQV.style.display = qvUnreadEvents>0?'':'none'; }
-    const bTab  = $('.badge-events');
+    const bTab  = $('.badge-events'); 
     const bHead = $('#events-counter');
     if (bTab)  bTab.textContent  = String(qvUnreadEvents);
     if (bHead) bHead.textContent = String(qvUnreadEvents);
@@ -305,29 +305,11 @@
     return Math.trunc(n);
   }
 
-  // ⛔ Clamp “Année (à)” à l’année courante max (même si le bootstrap annonce plus loin)
   function normalizeYearInputs(){
     const yf = parseYear(guessYearFromInput?.value);
     const yt = parseYear(guessYearToInput?.value);
-
-    const nowYear = new Date().getFullYear();
-    // respect des min/max HTML si présents
-    const fromMin = isNum(Number(guessYearFromInput?.min)) ? Number(guessYearFromInput.min) : 1970;
-    const fromMax = isNum(Number(guessYearFromInput?.max)) ? Number(guessYearFromInput.max) : nowYear;
-    const toMin   = isNum(Number(guessYearToInput?.min))   ? Number(guessYearToInput.min)   : 1970;
-    // >>> borne supérieure forcée au présent
-    const toMax   = nowYear;
-
-    let yFrom = yf;
-    let yTo   = yt;
-
-    if (yFrom != null) yFrom = Math.max(fromMin, Math.min(fromMax, yFrom));
-    if (yTo   != null) yTo   = Math.max(toMin,   Math.min(toMax,   yTo));
-
-    if (isNum(yFrom) && isNum(yTo) && yTo < yFrom) yTo = yFrom;
-
-    if (guessYearFromInput && yFrom != null) guessYearFromInput.value = String(yFrom);
-    if (guessYearToInput   && yTo   != null) guessYearToInput.value   = String(yTo);
+    if (guessYearFromInput && yf != null) guessYearFromInput.value = String(yf);
+    if (guessYearToInput   && yt != null) guessYearToInput.value   = String(yt);
   }
 
   function idFromGenreInputText(txt){
@@ -422,13 +404,9 @@
     if (isNum(yf) && yf < 1970) yf = 1970;
     if (isNum(yt) && yt < 1970) yt = 1970;
     if (isNum(yf) && isNum(yt) && yt < yf) yt = yf;
-
-    // borne sup UI : année courante
-    const nowYear = new Date().getFullYear();
-    if (isNum(yt) && yt > nowYear) yt = nowYear;
-
-    const cap = nowYear; // on n'autorise pas > année courante côté UI
+    const cap = new Date().getFullYear(); // borne max = année courante (pas +1)
     if (isNum(yf) && yf > cap) yf = cap;
+    if (isNum(yt) && yt > cap) yt = cap;
 
     let minRating = raw.minRating;
     if (minRating != null && (!isNum(minRating) || minRating < 0 || minRating > 100)) errs.push("Note minimale invalide.");
@@ -477,7 +455,7 @@
 
   function setGuessHandlers(){
     const debounce = (fn,ms)=>{ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
-    const debounceCount = debounce(requestPoolCount, 400); // ⬆️ 400ms pour limiter le spam
+    const debounceCount = debounce(requestPoolCount, 400); // limite le spam
 
     [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinRatingSel, guessDurationMinInput].forEach(el=>{
       if (!el) return;
@@ -769,9 +747,9 @@
 
         if (event.type === 'GiftSub') {
           const d = data || {};
-          const gifter    = extractUserName(d.user || d);
-          const recipient = extractRecipientName(d.recipient);
-          const tierLabel = tierLabelFromAny(d.subTier ?? d.tier ?? d.plan ?? d.subPlan);
+          const gifter    = extractUserName(d.user || d);                 // qui offre
+          const recipient = extractRecipientName(d.recipient);            // qui reçoit
+          const tierLabel = tierLabelFromAny(d.subTier ?? d.tier ?? d.plan ?? d.subPlan); // PAS de défaut "Prime"
 
           eventsStore.push({
             id: Date.now(),
@@ -811,18 +789,18 @@
           const genres = Array.isArray(data.genres) ? data.genres : [];
           fillGenresUI(genres);
 
-          const OL   = Number.isFinite(data.oldestYear) ? Number(data.oldestYear) : 1970;
-          const NW   = Number.isFinite(data.newestYear) ? Number(data.newestYear) : (new Date().getFullYear()+1);
-          const NOWY = new Date().getFullYear();
-          const YMAX_UI = Math.max(OL, Math.min(NW, NOWY)); // 👉 limite “Année (à)” à l’année courante
+          const OLServer = Number.isFinite(data.oldestYear) ? Number(data.oldestYear) : 1970;
+          const NWServer = Number.isFinite(data.newestYear) ? Number(data.newestYear) : (new Date().getFullYear());
+          const nowY = new Date().getFullYear();
+          const OL = Math.min(OLServer, nowY);
+          const NW = Math.min(NWServer, nowY); // borne max = année courante
 
-          if (guessYearFromInput){ guessYearFromInput.min = String(OL);   guessYearFromInput.max = String(YMAX_UI); }
-          if (guessYearToInput){   guessYearToInput.min   = String(OL);   guessYearToInput.max   = String(YMAX_UI); }
-
+          if (guessYearFromInput){ guessYearFromInput.min = String(OL); guessYearFromInput.max = String(NW); }
+          if (guessYearToInput){   guessYearToInput.min   = String(OL); guessYearToInput.max   = String(NW); }
           normalizeYearInputs();
           fillRatingSteps(data.ratingSteps || [50,60,70,80,85,90,92,95]);
           applyLastSetupAfterGenres();
-          setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${YMAX_UI}`);
+          setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
           requestPoolCount();
           return;
         }
@@ -853,7 +831,6 @@
           if (typeof data.running === 'boolean'){
             setDot('.dot-guess', !!data.running);
             const st = $('#guess-status-text'); if (st) st.textContent = data.running ? 'En cours' : 'En pause';
-            // 🔐 Serveur confirme démarrage -> verrouille
             setRunning(!!data.running);
           } else {
             setRunning(true);
@@ -861,7 +838,6 @@
           const endMs = Number(data.roundEndsAt);
           if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
 
-          // S'il y a un echo côté serveur, contrôle aussi ici
           if (data.filtersEcho) {
             const fNow  = normalizeForEcho(validateFilters(collectFilters()).clean);
             const same  = sameFilters(data.filtersEcho, fNow);
@@ -878,7 +854,6 @@
             setDot('.dot-guess', !!data.running);
             const st = $('#guess-status-text'); if (st) st.textContent = data.running ? 'En cours' : 'En pause';
           }
-          // 🔓 Fin de manche -> déverrouille
           setRunning(false);
 
           if (data.gameName){ const a=$('#guess-last-info'); if (a) a.textContent = data.gameName; }
@@ -984,16 +959,38 @@
    *                📞 GAMES COUNT (à chaque changement)
    ******************************************************************/
   function requestPoolCount(){
+    // Toujours normaliser et récupérer la config nettoyée
     const { ok, clean } = validateFilters(collectFilters());
     if (!ok) return;
-    const nonce = makeNonce();
-    safeDoAction('GTG Games Count', {
-      nonce,
-      includeGenreId: clean.includeGenreId,
-      excludeGenreIds: clean.excludeGenreIds,
-      yearFrom: clean.yearFrom, yearTo: clean.yearTo,
-      minRating: clean.minRating
-    });
+
+    // ⚠️ Coercions pour ne JAMAIS envoyer null/undefined
+    const nowYear = new Date().getFullYear();
+    const safeYearFrom = (typeof clean.yearFrom === 'number' && Number.isFinite(clean.yearFrom))
+      ? clean.yearFrom
+      : 1970;
+    const safeYearTo = (typeof clean.yearTo === 'number' && Number.isFinite(clean.yearTo))
+      ? Math.min(clean.yearTo, nowYear)   // borne haute = année courante
+      : nowYear;
+
+    // minRating: envoyer entier ou null
+    const safeMin = (typeof clean.minRating === 'number' && Number.isFinite(clean.minRating))
+      ? Math.max(0, Math.min(100, Math.trunc(clean.minRating)))
+      : null;
+
+    const payload = {
+      nonce: makeNonce(),
+      includeGenreId: clean.includeGenreId || "",
+      excludeGenreIds: Array.isArray(clean.excludeGenreIds) ? clean.excludeGenreIds : [],
+      yearFrom: safeYearFrom,
+      yearTo: safeYearTo,
+      minRating: safeMin
+    };
+
+    // Log côté front pour vérifier ce qu'on envoie
+    appendLog('#guess-log', `→ FRONT send count: { include:${payload.includeGenreId||''}, exclude:[${payload.excludeGenreIds.join(',')}], years:${payload.yearFrom}-${payload.yearTo}, min:${payload.minRating==null?'—':payload.minRating} }`);
+
+    // Envoi à Streamer.bot
+    safeDoAction('GTG Games Count', payload);
   }
 
   /******************************************************************
