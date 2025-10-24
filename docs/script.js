@@ -439,6 +439,7 @@
         host,
         port,
         //scheme: secure ? 'wss' : 'ws',//
+        scheme: (location.protocol === 'https:') ? 'wss' : 'ws',
         endpoint: '/',          // identique TTS
        /* password,               // issu popup/LS/QS */
         password: 'streamer.bot',
