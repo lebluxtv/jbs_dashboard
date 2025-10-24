@@ -845,11 +845,41 @@
   }
 
   /******************************************************************
+   *                         🔊 TTS PANEL (UI only)
+   ******************************************************************/
+  function updateTtsUI(isOn){
+    // Pastilles (toutes les .dot-tts)
+    setDot('.dot-tts', !!isOn);
+    // Libellé du switch
+    const labelText = $('.switch-label-text');
+    if (labelText) labelText.textContent = isOn ? 'TTS ON' : 'TTS OFF';
+    // Libellé dans l’overview (card TTS)
+    const ov = $('#tts-status-text');
+    if (ov) ov.textContent = isOn ? 'Actif' : 'Inactif';
+    // Log
+    appendLog('#tts-log', `TTS ${isOn ? 'activé' : 'désactivé'}`);
+  }
+
+  function bindTtsSwitch(){
+    const ttsSwitch = $('#tts-switch');
+    if (!ttsSwitch || ttsSwitch._bound) return;
+    ttsSwitch._bound = true;
+    // Init UI selon l’état initial (checked dans le HTML si besoin)
+    updateTtsUI(!!ttsSwitch.checked);
+    // Sync au changement
+    ttsSwitch.addEventListener('change', ()=>{
+      updateTtsUI(!!ttsSwitch.checked);
+      // Si tu veux piloter SB: safeDoAction('TTS Toggle', { enabled: !!ttsSwitch.checked });
+    });
+  }
+
+  /******************************************************************
    *                              INIT
    ******************************************************************/
   function boot(){
     bindLockButton();
     setGuessHandlers();
+    bindTtsSwitch();   // ✅ ajoute le binding TTS
     connectSB();
   }
 
