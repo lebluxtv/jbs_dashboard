@@ -429,7 +429,7 @@
 
   function connectSB(){
     try {
-      const host = getQS('host') || location.hostname || '127.0.0.1';
+      const host = getQS('host') || '127.0.0.1';
       const port = Number(getQS('port') || 8080);
       const scheme = 'ws'; // ⚠️ comme avant en dev local HTTP
       const password = ensureSbPassword(); // ⚠️ prompt avant connexion
