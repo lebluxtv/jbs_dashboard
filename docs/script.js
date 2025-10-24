@@ -776,34 +776,47 @@
       }
 
       // ---------- GTG payloads ----------
-      if (data && data.widget === 'gtg') {
+     if (data && data.widget === 'gtg') {
 
-        if (data.type === 'bootstrap') {
-          if (data.error) { setGuessMessage('Erreur: ' + data.error); return; }
-          const genres = Array.isArray(data.genres) ? data.genres : [];
-          fillGenresUI(genres);
+  if (data.type === 'bootstrap') {
+    if (data.error) { setGuessMessage('Erreur: ' + data.error); return; }
 
-          const OLServer = Number.isFinite(data.oldestYear) ? Number(data.oldestYear) : 1970;
-          const NWServer = Number.isFinite(data.newestYear) ? Number(data.newestYear) : (new Date().getFullYear());
-          const nowY = new Date().getFullYear();
-          const OL = Math.min(OLServer, nowY);
-          const NW = Math.min(NWServer, nowY); // borne max = année courante
+    const genres = Array.isArray(data.genres) ? data.genres : [];
+    fillGenresUI(genres);
 
-          if (guessYearFromInput){ guessYearFromInput.min = String(OL); guessYearFromInput.max = String(NW); }
-          if (guessYearToInput){   guessYearToInput.min   = String(OL); guessYearToInput.max   = String(NW); }
+    // --- BORNE SERVEUR + clamp à l'année courante
+    const nowY    = new Date().getFullYear();
+    const olSrv   = Number.isFinite(data.oldestYear) ? Number(data.oldestYear) : 1970;
+    const nwSrv   = Number.isFinite(data.newestYear) ? Number(data.newestYear) : nowY;
+    const OL      = Math.min(olSrv, nowY);
+    const NW      = Math.min(nwSrv, nowY);
 
-          // ⚙️ Positionner les valeurs visibles sur la fenêtre par défaut renvoyée
-          if (guessYearFromInput) guessYearFromInput.value = String(OL);
-          if (guessYearToInput)   guessYearToInput.value   = String(NW);
+    // 1) bornes min/max des inputs
+    if (guessYearFromInput){ guessYearFromInput.min = String(OL); guessYearFromInput.max = String(NW); }
+    if (guessYearToInput){   guessYearToInput.min   = String(OL); guessYearToInput.max   = String(NW); }
 
-          fillRatingSteps(data.ratingSteps || [50,60,70,80,85,90,92,95]);
-          applyLastSetupAfterGenres();
-          setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
+    // 2) **forcer** les valeurs saisies à refléter la période serveur
+    if (guessYearFromInput) guessYearFromInput.value = String(OL);
+    if (guessYearToInput)   guessYearToInput.value   = String(NW);
 
-          // 🔔 Lancer un count initial dès le bootstrap
-          requestPoolCount();
-          return;
-        }
+    // 3) enregistrer ces valeurs comme dernier setup (évite qu’un vieux localStorage les écrase)
+    saveLastSetup({ yearFrom: OL, yearTo: NW });
+
+    // 4) suite du bootstrap
+    fillRatingSteps(data.ratingSteps || [50,60,70,80,85,90,92,95]);
+    // ⚠️ on ne réécrit PAS les années via applyLastSetupAfterGenres(), pour ne pas écraser OL/NW
+    // on ne restaure que genres / exclusions / rating / durée
+    const tmp = loadLastSetup() || {};
+    applyLastSetupAfterGenres(); // si tu veux vraiment exclure les années, décommente les 2 lignes ci-dessous :
+    if (guessYearFromInput) guessYearFromInput.value = String(OL);
+    if (guessYearToInput)   guessYearToInput.value   = String(NW);
+
+    setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
+
+    // 5) déclencher un count immédiat avec ces bornes
+    requestPoolCount();
+    return;
+  }
 
         if (data.type === 'count') {
           if (data.error) {
