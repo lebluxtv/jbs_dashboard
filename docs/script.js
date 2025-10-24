@@ -463,7 +463,7 @@
       sbClient = new StreamerbotClient({
         host,
         port,
-        scheme,
+        //scheme,
         password,
         immediate: true,
         autoReconnect: true,
