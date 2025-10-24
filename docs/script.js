@@ -71,7 +71,9 @@
   let eventsStore = loadEvents();
   let qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
 
-  function eventLine(e){ return `<strong>${e.user}</strong> — ${e.type} • ${e.tier?('Tier '+e.tier):''} • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`; }
+  function eventLine(e){
+    return `<strong>${e.user}</strong> — ${e.type} • ${e.tier?('Tier '+e.tier):''} • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
+  }
 
   function syncEventsStatusUI(){
     setDot('.dot-events', qvUnreadEvents > 0);
@@ -112,13 +114,13 @@
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
   }
 
-
-  
+  // ⚠️ Rend du plus ancien -> au plus récent en PREPEND pour finir avec le plus récent en haut
   function renderStoredEventsIntoUI(){
     const qv   = $('#qv-events-list');
     const full = $('#events-subs-list');
     if (qv)   qv.innerHTML   = '';
     if (full) full.innerHTML = '';
+
     if (!eventsStore.length){
       if (qv)   qv.innerHTML   = '<li class="muted">Aucun sub récent</li>';
       if (full) full.innerHTML = '<li class="muted">Aucun sub</li>';
@@ -126,7 +128,9 @@
       syncEventsStatusUI();
       return;
     }
-    for (let i=eventsStore.length-1; i>=0; i--){
+
+    // 👉 Itération ASCENDANTE + PREPEND => le dernier (le plus récent) est ajouté en dernier, donc tout en haut
+    for (let i=0; i<eventsStore.length; i++){
       const e = eventsStore[i];
       const html = eventLine(e);
       const toggle = ()=>{
@@ -137,6 +141,7 @@
       if (qv)   prependListItem(qv,   html, toggle, e.ack, e.id);
       if (full) prependListItem(full, html, toggle, e.ack, e.id);
     }
+
     qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
     syncEventsStatusUI();
   }
@@ -453,15 +458,12 @@
       const port = Number(getQS('port') || 8080);
       const password = ensureSbPassword();
 
-      // ⬇️ AUCUN scheme forcé ; endpoint '/' ; subscribe '*' — comme TTS
       // eslint-disable-next-line no-undef
       sbClient = new StreamerbotClient({
         host,
         port,
-        //scheme: secure ? 'wss' : 'ws',//
-        //scheme: (location.protocol === 'https:') ? 'wss' : 'ws',
         endpoint: '/',          // identique TTS
-       /* password,               // issu popup/LS/QS */
+        /* password, */          // issu popup/LS/QS
         password: 'streamer.bot',
         subscribe: '*',
         immediate: true,
@@ -483,14 +485,14 @@
         }
       });
 
-      // écoute unifiée — comme TTS
+      // écoute unifiée
       sbClient.on('*', ({ event, data }) => {
         try { handleSBEvent(event, data); } catch (e) {
           appendLog('#guess-log', 'handleSBEvent error: ' + (e?.message||e));
         }
       });
 
-      // debug close code (utile si ça coupe)
+      // debug close code
       try {
         const sock = sbClient?.socket;
         if (sock && !sock._debugBound) {
@@ -500,10 +502,6 @@
           });
         }
       } catch {}
-/*
-      if (sbClient && typeof sbClient.connect === 'function'){
-        sbClient.connect().catch(()=>{});
-      }*/
     } catch (e) {
       appendLog('#guess-log', 'Connexion impossible: ' + (e?.message||e));
     }
@@ -512,7 +510,30 @@
   /******************************************************************
    *                    📬 ROUTAGE DES MESSAGES
    ******************************************************************/
-  function displayNameFromAny(v){ return (v||'').toString(); }
+  // 🔧 Extraction robuste pour éviter "[object Object]"
+  function extractUserName(d){
+    if (!d) return '—';
+    // Strings directes
+    if (typeof d.displayName === 'string') return d.displayName;
+    if (typeof d.userName === 'string')    return d.userName;
+    if (typeof d.username === 'string')    return d.username;
+    if (typeof d.user === 'string')        return d.user;
+    if (typeof d.sender === 'string')      return d.sender;
+    if (typeof d.gifter === 'string')      return d.gifter;
+    // Objets courants
+    if (d.displayName && typeof d.displayName === 'object'){
+      if (typeof d.displayName.displayName === 'string') return d.displayName.displayName;
+      if (typeof d.displayName.name === 'string')        return d.displayName.name;
+    }
+    if (d.user && typeof d.user === 'object'){
+      if (typeof d.user.displayName === 'string') return d.user.displayName;
+      if (typeof d.user.name === 'string')        return d.user.name;
+    }
+    // Fallback raisonnables
+    if (typeof d.name === 'string') return d.name;
+    return '—';
+  }
+
   function tierLabelFromAny(v){
     const s = (v||'').toString().toLowerCase();
     if (s.includes('prime')) return 'Prime';
@@ -531,7 +552,7 @@
       if (event && event.type === 'StreamUpdate'){ setLiveIndicator(!!data?.live); }
 
       if (event?.source === 'Custom' && event.type === 'DashMessage'){
-        const u = data?.user || data?.userName || data?.username || 'Inconnu';
+        const u = extractUserName(data) || 'Inconnu';
         const t = data?.message || '';
         if (t) appendLog('#tts-log', `${u}: ${t}`);
         return;
@@ -539,13 +560,15 @@
 
       if (event?.source === 'Twitch' && ['Sub','ReSub','GiftSub'].includes(event.type)){
         const d = data || {};
-        const user = displayNameFromAny(d.displayName ?? d.user ?? d.userName ?? d.username ?? d.sender ?? d.gifter ?? '—');
+        const user = extractUserName(d); // ✅ plus de [object Object]
         const tierLabel = tierLabelFromAny(d.tier ?? d.plan ?? d.subPlan ?? 'Prime');
         const months = extractMonths(d);
+
         // push into store as unread, keep only last MAX_EVENTS, then rerender
         eventsStore.push({ id: Date.now(), type: event.type, user, tierLabel, months: months||0, ack: false });
         saveEvents(eventsStore);
         renderStoredEventsIntoUI();
+
         appendLog('#events-log', `${event.type} — ${user} (${tierLabel}${months>0?`, ${months} mois`:''})`);
         return;
       }
