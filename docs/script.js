@@ -71,9 +71,7 @@
   let eventsStore = loadEvents();
   let qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
 
-  function eventLine(e){
-    return `<strong>${e.user}</strong> — ${e.type} • ${e.tier?('Tier '+e.tier):''} • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
-  }
+  function eventLine(e){ return `<strong>${e.user}</strong> — ${e.type} • ${e.tier?('Tier '+e.tier):''} • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`; }
 
   function syncEventsStatusUI(){
     setDot('.dot-events', qvUnreadEvents > 0);
@@ -83,39 +81,21 @@
     if (bHead) bHead.textContent = String(qvUnreadEvents);
   }
 
-  /**
-   * Crée un <li> avec un <a> interne, clique sur TOUT le li.
-   * - Ajoute .acked visuellement dès le clic
-   * - Puis exécute onToggle(li) si fourni (pour persister, etc.)
-   */
   function makeItem(htmlText, onToggle, ack=false, id=null){
     const li = document.createElement('li');
     li.className = 'event';
-    if (ack) li.classList.add('acked');
-
     const a = document.createElement('a');
-    a.href = '#';
-    a.innerHTML = htmlText;
-    a.addEventListener('click', (ev)=>ev.preventDefault()); // neutralise l'ancre
-
+    a.href='#'; a.innerHTML = htmlText;
+    a.addEventListener('click', (ev)=>{ ev.preventDefault(); try { onToggle?.(); } catch {} });
     li.appendChild(a);
-
-    li.addEventListener('click', (ev)=>{
-      ev.preventDefault?.();
-      // feedback instantané même si pas d'onToggle (events live non stockés)
-      li.classList.add('acked');
-      try { onToggle?.(li); } catch {}
-    });
-
+    if (ack){ li.classList.add('acked'); }
     if (id!=null) li.dataset.id = String(id);
     return li;
   }
 
   function appendListItem(listEl, htmlText, onToggle, ack=false, id=null){
     if (!listEl) return;
-    if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')) {
-      listEl.removeChild(listEl.firstElementChild);
-    }
+    if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')) listEl.removeChild(listEl.firstElementChild);
     const li = makeItem(htmlText, onToggle, ack, id);
     listEl.appendChild(li);
     const limit = listEl.classList.contains('list--short') ? 6 : 60;
@@ -135,13 +115,8 @@
     for (let i=0;i<eventsStore.length;i++){
       const e = eventsStore[i];
       const html = eventLine(e);
-      const toggle = ()=>{
-        e.ack = true;
-        saveEvents(eventsStore);
-        renderStoredEventsIntoUI();
-      };
-      appendListItem($('#qv-events-list'),   html, toggle, e.ack, e.id);
-      appendListItem($('#events-subs-list'), html, toggle, e.ack, e.id);
+      appendListItem(qv,   html, ()=>{ e.ack = true; saveEvents(eventsStore); renderStoredEventsIntoUI(); }, e.ack, e.id);
+      appendListItem(full, html, ()=>{ e.ack = true; saveEvents(eventsStore); renderStoredEventsIntoUI(); }, e.ack, e.id);
     }
     qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
     syncEventsStatusUI();
@@ -417,20 +392,20 @@
   }
 
   /******************************************************************
-   *                 🌐 STREAMER.BOT CLIENT (flow “comme avant”)
+   *                 🌐 STREAMER.BOT CLIENT — logique TTS
    ******************************************************************/
   let sbClient = null;
 
   function setConnected(on){ setWsIndicator(!!on); }
 
   function ensureSbPassword(){
-    // priorité : query ?pwd= (utile pour démo), sinon localStorage, sinon prompt
+    // priorité: ?pwd=..., sinon localStorage, sinon popup
     const qsPwd = getQS('pwd');
     if (qsPwd != null) { setStoredPwd(qsPwd); return qsPwd; }
     let pwd = getStoredPwd();
     if (!pwd) {
       const val = window.prompt('Mot de passe Streamer.bot :', '');
-      if (val === null) return ""; // user cancelled, on tente sans
+      if (val === null) return ""; // on tente sans (comme TTS possible)
       pwd = val.trim();
       setStoredPwd(pwd);
     }
@@ -440,41 +415,39 @@
   function safeDoAction(actionName, args){
     try {
       if (!sbClient){ appendLog('#guess-log', 'Client Streamer.bot non initialisé.'); return; }
-      // eslint-disable-next-line no-undef
-      sbClient.triggerAction({ action: actionName, args: args || {} });
+      sbClient.doAction({ name: actionName, args: args || {} });
     } catch (e) {
-      appendLog('#guess-log', 'Erreur triggerAction: ' + (e?.message||e));
+      appendLog('#guess-log', 'Erreur doAction: ' + (e?.message||e));
     }
   }
 
   function reconnectSB(){
-    try { if (window.sbClient && sbClient && sbClient.disconnect) sbClient.disconnect(); } catch {}
+    try { if (window.sbClient && sbClient && typeof sbClient.disconnect === 'function') sbClient.disconnect(); } catch {}
     connectSB();
   }
 
   function connectSB(){
     try {
+      // Defaults identiques TTS ; overrides via QS
       const host = getQS('host') || '127.0.0.1';
       const port = Number(getQS('port') || 8080);
-      const scheme = 'ws'; // dev local HTTP
       const password = ensureSbPassword();
 
+      // ⬇️ AUCUN scheme forcé ; endpoint '/' ; subscribe '*' — comme TTS
       // eslint-disable-next-line no-undef
       sbClient = new StreamerbotClient({
         host,
         port,
-        //scheme,
-        password,
+        endpoint: '/',          // identique TTS
+        password,               // issu popup/LS/QS
+        subscribe: '*',
         immediate: true,
         autoReconnect: true,
         retries: -1,
-        subscribe: '*',
         log: false,
-
         onConnect: ()=>{
           setConnected(true);
-          appendLog('#guess-log', `Connecté à Streamer.bot (${scheme}://${host}:${port})`);
-          // bootstrap genres/années/ratings + pool initial
+          appendLog('#guess-log', `Connecté à Streamer.bot (${host}:${port})`);
           safeDoAction('GTG Bootstrap Genres & Years & Ratings', {});
           requestPoolCount();
         },
@@ -484,11 +457,26 @@
         },
         onError: (e)=>{
           appendLog('#guess-log', 'Erreur Streamer.bot: ' + (e?.message||e));
-        },
-        onData: (obj)=>{
-          try { handleSBEvent(obj?.event || obj, obj?.data || obj); } catch {}
         }
       });
+
+      // écoute unifiée — comme TTS
+      sbClient.on('*', ({ event, data }) => {
+        try { handleSBEvent(event, data); } catch (e) {
+          appendLog('#guess-log', 'handleSBEvent error: ' + (e?.message||e));
+        }
+      });
+
+      // debug close code (utile si ça coupe)
+      try {
+        const sock = sbClient?.socket;
+        if (sock && !sock._debugBound) {
+          sock._debugBound = true;
+          sock.addEventListener('close', (ev)=>{
+            appendLog('#guess-log', `WS close code=${ev.code} reason="${ev.reason}" wasClean=${ev.wasClean}`);
+          });
+        }
+      } catch {}
 
       if (sbClient && typeof sbClient.connect === 'function'){
         sbClient.connect().catch(()=>{});
@@ -531,14 +519,8 @@
         const user = displayNameFromAny(d.displayName ?? d.user ?? d.userName ?? d.username ?? d.sender ?? d.gifter ?? '—');
         const tierLabel = tierLabelFromAny(d.tier ?? d.plan ?? d.subPlan ?? 'Prime');
         const months = extractMonths(d);
-
-        const html = `<strong>${user}</strong> — ${event.type} • ${tierLabel}${months>0?` • ${months} mois`:''}`;
-
-        // Pour les events live non stockés, on veut quand même griser au clic
-        const noop = ()=>{};
-        appendListItem($('#qv-events-list'),   html, noop, false, Date.now());
-        appendListItem($('#events-subs-list'), html, noop, false, Date.now());
-
+        appendListItem($('#qv-events-list'), `<strong>${user}</strong> — ${event.type} • ${tierLabel}${months>0?` • ${months} mois`:''}`, ()=>{}, false, Date.now());
+        appendListItem($('#events-subs-list'), `<strong>${user}</strong> — ${event.type} • ${tierLabel}${months>0?` • ${months} mois`:''}`, ()=>{}, false, Date.now());
         qvUnreadEvents++;
         syncEventsStatusUI();
         appendLog('#events-log', `${event.type} — ${user} (${tierLabel}${months>0?`, ${months} mois`:''})`);
@@ -680,7 +662,7 @@
   }
 
   function fillRatingSteps(steps){
-    const sel = guessMinRatingSel; if (!sel) return;
+    const sel = $('#guess-min-rating'); if (!sel) return;
     sel.innerHTML = `<option value="">—</option>`;
     const arr = Array.isArray(steps) && steps.length ? steps : [50,60,70,80,85,90,92,95];
     for (const s of arr){
@@ -714,7 +696,6 @@
     connectSB();
   }
 
-  // script chargé en bas de page → DOM prêt; on boot direct
   boot();
 
 })();
