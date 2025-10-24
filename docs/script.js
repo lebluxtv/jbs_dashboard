@@ -186,6 +186,71 @@
   }
 
   /******************************************************************
+   *                  🔐 GTG RUNNING: LOCK DES FILTRES
+   ******************************************************************/
+  let GTG_RUNNING = false;
+
+  function getFilterControls() {
+    const roots = [
+      document.querySelector('#filters'),
+      document.querySelector('.filters'),
+      document.querySelector('[data-filters]'),
+      document.querySelector('form#filtersForm')
+    ].filter(Boolean);
+
+    const ctrls = new Set();
+    roots.forEach(root => {
+      root.querySelectorAll('input, select, textarea, button').forEach(el => {
+        const id = (el.id || '').toLowerCase();
+        const cls = (el.className || '').toLowerCase();
+        const txt = (el.textContent || '').toLowerCase();
+        const isStartEnd =
+          id.includes('start') || id.includes('end') ||
+          cls.includes('start') || cls.includes('end') ||
+          txt.includes('lancer') || txt.includes('terminer') || txt.includes('stop');
+        if (!isStartEnd) ctrls.add(el);
+      });
+    });
+    return Array.from(ctrls);
+  }
+
+  function setFiltersLocked(locked) {
+    const ctrls = getFilterControls();
+    ctrls.forEach(el => {
+      el.disabled = locked;
+      if (locked) el.setAttribute('aria-disabled', 'true');
+      else el.removeAttribute('aria-disabled');
+    });
+    document.body.classList.toggle('gtg-running', !!locked);
+  }
+
+  function setRunning(running) {
+    GTG_RUNNING = !!running;
+    setFiltersLocked(GTG_RUNNING);
+  }
+
+  function installFilterChangeGuard(){
+    if (document._gtgGuardInstalled) return;
+    document._gtgGuardInstalled = true;
+    ['change','input'].forEach(evt => {
+      document.addEventListener(evt, (e) => {
+        if (!GTG_RUNNING) return;
+        const target = e.target;
+        if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
+        const inFilters =
+          target.closest('#filters, .filters, [data-filters], form#filtersForm') != null;
+        if (!inFilters) return;
+
+        // Bloque la modif & re-lock au cas où
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        target.disabled = true;
+        console.warn('Filtres verrouillés pendant la manche GTG en cours.');
+      }, true);
+    });
+  }
+
+  /******************************************************************
    *                      🎮 GTG FILTERS & UI BINDINGS
    ******************************************************************/
   let GTG_GENRES = [];
@@ -394,9 +459,15 @@
         minRating: clean.minRating,
         roundMinutes: clean.roundMinutes
       });
+      // 🔐 Verrouiller immédiatement côté UI
+      setRunning(true);
     });
 
-    guessEndBtn?.addEventListener('click', ()=> safeDoAction('GTG End', {}));
+    guessEndBtn?.addEventListener('click', ()=>{
+      safeDoAction('GTG End', {});
+      // 🔓 Déverrouiller tout de suite côté UI (on reverrouillera si le serveur dit autre chose)
+      setRunning(false);
+    });
 
     renderExcludeChips();
   }
@@ -718,6 +789,11 @@
           if (typeof data.running === 'boolean'){
             setDot('.dot-guess', !!data.running);
             const st = $('#guess-status-text'); if (st) st.textContent = data.running ? 'En cours' : 'En pause';
+            // 🔐 Serveur confirme démarrage -> verrouille
+            setRunning(!!data.running);
+          } else {
+            // Par défaut si pas de flag
+            setRunning(true);
           }
           const endMs = Number(data.roundEndsAt);
           if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
@@ -731,6 +807,9 @@
             setDot('.dot-guess', !!data.running);
             const st = $('#guess-status-text'); if (st) st.textContent = data.running ? 'En cours' : 'En pause';
           }
+          // 🔓 Fin de manche -> déverrouille
+          setRunning(false);
+
           if (data.gameName){ const a=$('#guess-last-info'); if (a) a.textContent = data.gameName; }
           if (data.lastWinner){
             const winnerName = data.lastWinner.isStreamer ? 'Streamer' : (data.lastWinner.user || '');
@@ -879,7 +958,8 @@
   function boot(){
     bindLockButton();
     setGuessHandlers();
-    bindTtsSwitch();   // ✅ ajoute le binding TTS
+    bindTtsSwitch();
+    installFilterChangeGuard();   // ✅ garde anti-modif
     connectSB();
   }
 
