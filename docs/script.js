@@ -71,7 +71,9 @@
   let eventsStore = loadEvents();
   let qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
 
-  function eventLine(e){ return `<strong>${e.user}</strong> — ${e.type} • ${e.tier?('Tier '+e.tier):''} • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`; }
+  function eventLine(e){
+    return `<strong>${e.user}</strong> — ${e.type} • ${e.tier?('Tier '+e.tier):''} • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
+  }
 
   function syncEventsStatusUI(){
     setDot('.dot-events', qvUnreadEvents > 0);
@@ -81,21 +83,39 @@
     if (bHead) bHead.textContent = String(qvUnreadEvents);
   }
 
+  /**
+   * Crée un <li> avec un <a> interne, clique sur TOUT le li.
+   * - Ajoute .acked visuellement dès le clic
+   * - Puis exécute onToggle(li) si fourni (pour persister, etc.)
+   */
   function makeItem(htmlText, onToggle, ack=false, id=null){
     const li = document.createElement('li');
     li.className = 'event';
+    if (ack) li.classList.add('acked');
+
     const a = document.createElement('a');
-    a.href='#'; a.innerHTML = htmlText;
-    a.addEventListener('click', (ev)=>{ ev.preventDefault(); try { onToggle?.(); } catch {} });
+    a.href = '#';
+    a.innerHTML = htmlText;
+    a.addEventListener('click', (ev)=>ev.preventDefault()); // neutralise l'ancre
+
     li.appendChild(a);
-    if (ack){ li.classList.add('acked'); }
+
+    li.addEventListener('click', (ev)=>{
+      ev.preventDefault?.();
+      // feedback instantané même si pas d'onToggle (events live non stockés)
+      li.classList.add('acked');
+      try { onToggle?.(li); } catch {}
+    });
+
     if (id!=null) li.dataset.id = String(id);
     return li;
   }
 
   function appendListItem(listEl, htmlText, onToggle, ack=false, id=null){
     if (!listEl) return;
-    if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')) listEl.removeChild(listEl.firstElementChild);
+    if (listEl.firstElementChild && listEl.firstElementChild.classList.contains('muted')) {
+      listEl.removeChild(listEl.firstElementChild);
+    }
     const li = makeItem(htmlText, onToggle, ack, id);
     listEl.appendChild(li);
     const limit = listEl.classList.contains('list--short') ? 6 : 60;
@@ -115,8 +135,13 @@
     for (let i=0;i<eventsStore.length;i++){
       const e = eventsStore[i];
       const html = eventLine(e);
-      appendListItem(qv,   html, ()=>{ e.ack = true; saveEvents(eventsStore); renderStoredEventsIntoUI(); }, e.ack, e.id);
-      appendListItem(full, html, ()=>{ e.ack = true; saveEvents(eventsStore); renderStoredEventsIntoUI(); }, e.ack, e.id);
+      const toggle = ()=>{
+        e.ack = true;
+        saveEvents(eventsStore);
+        renderStoredEventsIntoUI();
+      };
+      appendListItem($('#qv-events-list'),   html, toggle, e.ack, e.id);
+      appendListItem($('#events-subs-list'), html, toggle, e.ack, e.id);
     }
     qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
     syncEventsStatusUI();
@@ -154,17 +179,17 @@
    ******************************************************************/
   let GTG_GENRES = [];
   const guessGenreSel         = $('#guess-genre');
-  const guessDatalist         = $('#guess-genres-datalist');        // ⚠️ aligné HTML
+  const guessDatalist         = $('#guess-genres-datalist');
   const guessExcludeInput     = $('#guess-exclude-input');
   const guessExcludeAddBtn    = $('#guess-exclude-add');
   const guessExcludeChips     = $('#guess-exclude-chips');
   const guessYearFromInput    = $('#guess-year-from');
   const guessYearToInput      = $('#guess-year-to');
   const guessMinRatingSel     = $('#guess-min-rating');
-  const guessDurationMinInput = $('#guess-duration-min');           // ⚠️ aligné HTML
+  const guessDurationMinInput = $('#guess-duration-min');
 
-  const guessStartBtn         = $('#guess-start');                   // ⚠️ aligné HTML
-  const guessEndBtn           = $('#guess-end');                     // ⚠️ aligné HTML
+  const guessStartBtn         = $('#guess-start');
+  const guessEndBtn           = $('#guess-end');
   const guessMsgEl            = $('#guess-msg');
 
   function setGuessMessage(t){ if (guessMsgEl) guessMsgEl.textContent = t||''; }
@@ -431,19 +456,19 @@
     try {
       const host = getQS('host') || '127.0.0.1';
       const port = Number(getQS('port') || 8080);
-      const scheme = 'ws'; // ⚠️ comme avant en dev local HTTP
-      const password = ensureSbPassword(); // ⚠️ prompt avant connexion
+      const scheme = 'ws'; // dev local HTTP
+      const password = ensureSbPassword();
 
       // eslint-disable-next-line no-undef
       sbClient = new StreamerbotClient({
         host,
         port,
-        scheme,                  // ← important (dev HTTP local)
+        scheme,
         password,
-        immediate: true,         // connexion auto
-        autoReconnect: true,     // reco auto
-        retries: -1,             // illimité
-        subscribe: '*',          // souscrire à tout
+        immediate: true,
+        autoReconnect: true,
+        retries: -1,
+        subscribe: '*',
         log: false,
 
         onConnect: ()=>{
@@ -465,8 +490,6 @@
         }
       });
 
-      // si la lib n’ouvre pas immédiatement malgré immediate:true,
-      // on force une tentative :
       if (sbClient && typeof sbClient.connect === 'function'){
         sbClient.connect().catch(()=>{});
       }
@@ -508,9 +531,14 @@
         const user = displayNameFromAny(d.displayName ?? d.user ?? d.userName ?? d.username ?? d.sender ?? d.gifter ?? '—');
         const tierLabel = tierLabelFromAny(d.tier ?? d.plan ?? d.subPlan ?? 'Prime');
         const months = extractMonths(d);
-        // QV + Events
-        appendListItem($('#qv-events-list'), `<strong>${user}</strong> — ${event.type} • ${tierLabel}${months>0?` • ${months} mois`:''}`, ()=>{}, false, Date.now());
-        appendListItem($('#events-subs-list'), `<strong>${user}</strong> — ${event.type} • ${tierLabel}${months>0?` • ${months} mois`:''}`, ()=>{}, false, Date.now());
+
+        const html = `<strong>${user}</strong> — ${event.type} • ${tierLabel}${months>0?` • ${months} mois`:''}`;
+
+        // Pour les events live non stockés, on veut quand même griser au clic
+        const noop = ()=>{};
+        appendListItem($('#qv-events-list'),   html, noop, false, Date.now());
+        appendListItem($('#events-subs-list'), html, noop, false, Date.now());
+
         qvUnreadEvents++;
         syncEventsStatusUI();
         appendLog('#events-log', `${event.type} — ${user} (${tierLabel}${months>0?`, ${months} mois`:''})`);
@@ -683,10 +711,4 @@
   function boot(){
     bindLockButton();
     setGuessHandlers();
-    connectSB();
-  }
-
-  // script chargé en bas de page → DOM prêt; on boot direct
-  boot();
-
-})();
+    conn
