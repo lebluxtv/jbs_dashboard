@@ -169,8 +169,7 @@
       btn.classList.toggle('active', act);
     });
     $$('.tab-panel').forEach(p=>{
-      p.style.display = (p.id===`${
-        'tab-'+name}`) ? 'block' : 'none';
+      p.style.display = (p.id===`${'tab-'+name}`) ? 'block' : 'none';
     });
     try { localStorage.setItem('jbs.activeTab', name); } catch {}
   }
@@ -456,7 +455,7 @@
 
   function setGuessHandlers(){
     const debounce = (fn,ms)=>{ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
-    const debounceCount = debounce(requestPoolCount, 250);
+    const debounceCount = debounce(requestPoolCount, 400); // ⬆️ 400ms pour limiter le spam
 
     [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinRatingSel, guessDurationMinInput].forEach(el=>{
       if (!el) return;
@@ -813,7 +812,13 @@
             const fEcho = data.filtersEcho || null;
             const same  = fEcho ? sameFilters(fEcho, fNow) : false;
 
-            appendLog('#guess-log', `Pool IGDB: ${n} jeux correspondant aux filtres. (args ${same ? 'OK ✅' : 'DIFF ❌'})`);
+            appendLog(
+              '#guess-log',
+              `Pool IGDB: ${n} jeux correspondant aux filtres. (args ${same ? 'OK ✅' : 'DIFF ❌'})` +
+              (fEcho
+                ? `\n↳ echo={include:${fEcho.includeGenreId||''}, exclude:[${(fEcho.excludeGenreIds||[]).join(',')}], years:${fEcho.yearFrom}-${fEcho.yearTo}, min:${fEcho.minRating==null?'—':fEcho.minRating}}`
+                : '')
+            );
           }
           return;
         }
