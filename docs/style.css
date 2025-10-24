@@ -68,11 +68,31 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 /* Logs, lists, kv */
 .log{height:220px;overflow:auto;border:1px dashed #2a2a2d;padding:10px;border-radius:8px;font-family:var(--mono);font-size:12px;background:#121214}
 .log p{margin:0 0 6px 0;color:#cfd2d6}
+
 .qv-list{list-style:none;margin:0;padding:0;width:100%}
 .qv-list.big li{padding:8px 0}
 .qv-list li{padding:6px 0;border-bottom:1px dashed #2a2a2d}
-.qv-list li.ack{color:#777;background:rgba(255,255,255,0.03)}
-.qv-list.clickable li{cursor:pointer}
+
+/* FIX: état "cliqué/validé" */
+.qv-list li.acked{
+  color:#777;
+  background:rgba(255,255,255,0.03);
+}
+
+/* FIX: liens neutres, pas de bleu ni soulignement + zone cliquable pleine largeur */
+.qv-list a{
+  color:inherit;
+  text-decoration:none;
+  display:block;
+}
+
+/* Feedback visuel */
+.qv-list li:hover{background:rgba(255,255,255,0.04)}
+
+/* Curseur main pour les listes d’événements */
+#qv-events-list li,
+#events-subs-list li{cursor:pointer}
+
 .qv-kv{width:100%;display:grid;gap:10px}
 .qv-kv div{display:flex;align-items:center;justify-content:space-between}
 .qv-kv span{color:var(--muted)}
