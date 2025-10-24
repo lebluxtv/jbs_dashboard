@@ -72,6 +72,11 @@
   let qvUnreadEvents = eventsStore.filter(e=>!e.ack).length;
 
   function eventLine(e){
+    if (e.type === 'GiftBomb') {
+      const n = isNum(e.giftCount) ? e.giftCount : (Array.isArray(e.recipients) ? e.recipients.length : 0);
+      const recShort = Array.isArray(e.recipients) ? e.recipients.slice(0,5).join(', ') + (e.recipients.length>5 ? '…' : '') : '';
+      return `<strong>${e.user}</strong> — Gift Bomb <span class="muted">${e.tierLabel}${n?` • ${n} gifts`:''}</span>` + (recShort?`<br><span class="muted">→ ${recShort}</span>`:'');
+    }
     return `<strong>${e.user}</strong> — ${e.type} • ${e.tier?('Tier '+e.tier):''} • ${e.tierLabel}${e.months>0 ? ` • ${e.months} mois` : ''}`;
   }
 
@@ -514,6 +519,8 @@
     if (typeof d.user === 'string')        return d.user;
     if (typeof d.sender === 'string')      return d.sender;
     if (typeof d.gifter === 'string')      return d.gifter;
+    if (typeof d.login === 'string')       return d.login;
+    if (typeof d.name === 'string')        return d.name;
     if (d.displayName && typeof d.displayName === 'object'){
       if (typeof d.displayName.displayName === 'string') return d.displayName.displayName;
       if (typeof d.displayName.name === 'string')        return d.displayName.name;
@@ -521,9 +528,17 @@
     if (d.user && typeof d.user === 'object'){
       if (typeof d.user.displayName === 'string') return d.user.displayName;
       if (typeof d.user.name === 'string')        return d.user.name;
+      if (typeof d.user.login === 'string')       return d.user.login;
     }
-    if (typeof d.name === 'string') return d.name;
     return '—';
+  }
+
+  function extractRecipientNames(arr){
+    if (!Array.isArray(arr)) return [];
+    return arr.map(r => (typeof r?.name === 'string' && r.name) ||
+                        (typeof r?.login === 'string' && r.login) ||
+                        (typeof r?.id === 'string' && r.id) ||
+                        '—');
   }
 
   function tierLabelFromAny(v){
@@ -532,31 +547,39 @@
     if (s.includes('1000') || s.includes('tier 1')) return 'Tier 1';
     if (s.includes('2000') || s.includes('tier 2')) return 'Tier 2';
     if (s.includes('3000') || s.includes('tier 3')) return 'Tier 3';
-    return 'Sub';
+    return v ? String(v) : 'Sub';
   }
   function extractMonths(d){
     const m = Number(d?.cumulativeMonths ?? d?.months ?? d?.streak ?? 0);
     return Number.isFinite(m) ? m : 0;
   }
 
-  // 🔎 Console payload logger pour Sub/Resub/GiftSub/GiftBomb (+ variantes)
   const SUB_EVENT_TYPES = new Set([
     'Sub','ReSub','GiftSub','GiftBomb',
     'MassGift','MassSubGift','CommunitySub','CommunitySubGift'
   ]);
+
   function logSbSubEventToConsole(evt, payload){
     try {
       const type = evt?.type || 'Unknown';
-      const user = extractUserName(payload);
-      const msg  = `[Twitch:${type}] ${user}`;
-      // groupCollapsed pour spam-friendly
-      console.groupCollapsed(`🟣 ${msg}`);
+      console.groupCollapsed(`🟣 [Twitch:${type}]`);
       console.log('event:', evt);
       console.log('data :', payload);
-      // lignes utiles fréquemment consultées
-      console.log('tier     :', payload?.tier ?? payload?.plan ?? payload?.subPlan ?? '—');
-      console.log('months   :', payload?.cumulativeMonths ?? payload?.months ?? payload?.streak ?? '—');
-      console.log('gifter   :', payload?.gifter ?? payload?.sender ?? '—');
+      if (type === 'GiftBomb') {
+        const gifter = extractUserName(payload?.user || payload);
+        const total  = Number.isFinite(Number(payload?.total)) ? Number(payload.total)
+                      : (Array.isArray(payload?.recipients) ? payload.recipients.length : null);
+        const tier   = tierLabelFromAny(payload?.sub_tier ?? payload?.tier ?? payload?.plan ?? payload?.subPlan);
+        const rec    = extractRecipientNames(payload?.recipients);
+        console.log('gifter   :', gifter);
+        console.log('tier     :', tier);
+        console.log('total    :', total);
+        console.log('recipients:', rec);
+      } else {
+        console.log('tier     :', payload?.tier ?? payload?.plan ?? payload?.subPlan ?? '—');
+        console.log('months   :', payload?.cumulativeMonths ?? payload?.months ?? payload?.streak ?? '—');
+        console.log('gifter   :', payload?.gifter ?? payload?.sender ?? '—');
+      }
       console.groupEnd();
     } catch (e){
       console.warn('Console log error:', e);
@@ -578,12 +601,37 @@
         // ▶ console output demandé
         logSbSubEventToConsole(event, data);
 
+        if (event.type === 'GiftBomb') {
+          const d = data || {};
+          const gifter     = extractUserName(d.user || d); // user objet dans l'exemple
+          const recipients = extractRecipientNames(d.recipients);
+          const giftCount  = Number.isFinite(Number(d.total)) ? Number(d.total)
+                            : (Array.isArray(d.recipients) ? d.recipients.length : 0);
+          const tierLabel  = tierLabelFromAny(d.sub_tier ?? d.tier ?? d.plan ?? d.subPlan);
+
+          eventsStore.push({
+            id: Date.now(),
+            type: 'GiftBomb',
+            user: gifter,
+            tierLabel,
+            months: 0,
+            ack: false,
+            recipients,
+            giftCount
+          });
+          saveEvents(eventsStore);
+          renderStoredEventsIntoUI();
+
+          appendLog('#events-log', `GiftBomb — ${gifter} (${tierLabel}${giftCount?`, ${giftCount} gifts`:''}) → ${recipients.join(', ') || '—'}`);
+          return;
+        }
+
+        // Sub / ReSub / GiftSub / variantes
         const d = data || {};
         const user = extractUserName(d);
         const tierLabel = tierLabelFromAny(d.tier ?? d.plan ?? d.subPlan ?? 'Prime');
         const months = extractMonths(d);
 
-        // store + UI
         eventsStore.push({ id: Date.now(), type: event.type, user, tierLabel, months: months||0, ack: false });
         saveEvents(eventsStore);
         renderStoredEventsIntoUI();
