@@ -90,8 +90,8 @@
   function syncEventsStatusUI(){
     setDot('.dot-events', qvUnreadEvents > 0);
     const bQV = $('#qv-events-count'); if (bQV){ bQV.textContent = String(qvUnreadEvents); bQV.style.display = qvUnreadEvents>0?'':'none'; }
-    const bTab  = $('.badge-events'); 
-    const bHead = $('#events-counter'); // ✅ fix: parenthèse correcte
+    const bTab  = $('.badge-events');
+    const bHead = $('#events-counter');
     if (bTab)  bTab.textContent  = String(qvUnreadEvents);
     if (bHead) bHead.textContent = String(qvUnreadEvents);
   }
@@ -242,7 +242,6 @@
           target.closest('#filters, .filters, [data-filters], form#filtersForm') != null;
         if (!inFilters) return;
 
-        // Bloque la modif & re-lock au cas où
         e.preventDefault();
         e.stopImmediatePropagation();
         target.disabled = true;
@@ -255,6 +254,9 @@
    *                      🎮 GTG FILTERS & UI BINDINGS
    ******************************************************************/
   let GTG_GENRES = [];
+  let GTG_YEAR_MIN = 1970;
+  let GTG_YEAR_MAX = new Date().getFullYear()+1;
+
   const guessGenreSel         = $('#guess-genre');
   const guessDatalist         = $('#guess-genres-datalist');
   const guessExcludeInput     = $('#guess-exclude-input');
@@ -300,16 +302,30 @@
 
   function parseYear(val){
     const n = Number(val); if (!Number.isFinite(n)) return null;
-    if (n < 1970) return 1970;
-    if (n > 2100) return 2100;
     return Math.trunc(n);
   }
 
+  // 👉 Clamp une année à la fenêtre fournie par l’API
+  function clampYear(y){
+    if (!isNum(y)) return null;
+    if (y < GTG_YEAR_MIN) return GTG_YEAR_MIN;
+    if (y > GTG_YEAR_MAX) return GTG_YEAR_MAX;
+    return y;
+  }
+
   function normalizeYearInputs(){
-    const yf = parseYear(guessYearFromInput?.value);
-    const yt = parseYear(guessYearToInput?.value);
-    if (guessYearFromInput && yf != null) guessYearFromInput.value = String(yf);
-    if (guessYearToInput   && yt != null) guessYearToInput.value   = String(yt);
+    let yf = clampYear(parseYear(guessYearFromInput?.value));
+    let yt = clampYear(parseYear(guessYearToInput?.value));
+
+    // Si vide, on met par défaut la fenêtre complète
+    if (yf == null) yf = GTG_YEAR_MIN;
+    if (yt == null) yt = GTG_YEAR_MAX;
+
+    // Coherence: to >= from
+    if (yt < yf) yt = yf;
+
+    if (guessYearFromInput) guessYearFromInput.value = String(yf);
+    if (guessYearToInput)   guessYearToInput.value   = String(yt);
   }
 
   function idFromGenreInputText(txt){
@@ -351,6 +367,8 @@
   function loadLastSetup(){
     try { return JSON.parse(localStorage.getItem(LAST_SETUP_KEY)||'{}') || {}; } catch { return {}; }
   }
+
+  // 🧲 Applique le last setup mais le ramène dans [GTG_YEAR_MIN, GTG_YEAR_MAX]
   function applyLastSetupAfterGenres(){
     const s = loadLastSetup() || {};
     if (s.includeGenreId && guessGenreSel){
@@ -364,8 +382,17 @@
       }
       renderExcludeChips();
     }
-    if (isNum(s.yearFrom)) guessYearFromInput.value = String(s.yearFrom);
-    if (isNum(s.yearTo))   guessYearToInput.value   = String(s.yearTo);
+
+    // clamp années
+    let yf = clampYear(isNum(s.yearFrom) ? s.yearFrom : null);
+    let yt = clampYear(isNum(s.yearTo)   ? s.yearTo   : null);
+    if (yf == null) yf = GTG_YEAR_MIN;
+    if (yt == null) yt = GTG_YEAR_MAX;
+    if (yt < yf) yt = yf;
+
+    if (guessYearFromInput) guessYearFromInput.value = String(yf);
+    if (guessYearToInput)   guessYearToInput.value   = String(yt);
+
     if (isNum(s.minRating) && guessMinRatingSel) guessMinRatingSel.value = String(s.minRating);
     if (isNum(s.roundMinutes) && guessDurationMinInput) guessDurationMinInput.value = String(s.roundMinutes);
   }
@@ -401,12 +428,11 @@
     let yf = raw.yearFrom, yt = raw.yearTo;
     if (yf != null && !isNum(yf)) errs.push("Année (de) invalide.");
     if (yt != null && !isNum(yt)) errs.push("Année (à) invalide.");
-    if (isNum(yf) && yf < 1970) yf = 1970;
-    if (isNum(yt) && yt < 1970) yt = 1970;
+
+    // clamp aux bornes IGDB retournées
+    if (isNum(yf)) yf = clampYear(yf);
+    if (isNum(yt)) yt = clampYear(yt);
     if (isNum(yf) && isNum(yt) && yt < yf) yt = yf;
-    const cap = new Date().getFullYear()+1;
-    if (isNum(yf) && yf > cap) yf = cap;
-    if (isNum(yt) && yt > cap) yt = cap;
 
     let minRating = raw.minRating;
     if (minRating != null && (!isNum(minRating) || minRating < 0 || minRating > 100)) errs.push("Note minimale invalide.");
@@ -455,7 +481,7 @@
 
   function setGuessHandlers(){
     const debounce = (fn,ms)=>{ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
-    const debounceCount = debounce(requestPoolCount, 400); // ⬆️ 400ms pour limiter le spam
+    const debounceCount = debounce(requestPoolCount, 400); // limite le spam
 
     [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinRatingSel, guessDurationMinInput].forEach(el=>{
       if (!el) return;
@@ -755,7 +781,7 @@
             id: Date.now(),
             type: 'GiftSub',
             user: gifter,
-            tierLabel,              // peut être vide si inconnu
+            tierLabel,
             months: 0,
             ack: false,
             recipient
@@ -786,17 +812,30 @@
 
         if (data.type === 'bootstrap') {
           if (data.error) { setGuessMessage('Erreur: ' + data.error); return; }
+
           const genres = Array.isArray(data.genres) ? data.genres : [];
           fillGenresUI(genres);
 
-          const OL = Number.isFinite(data.oldestYear) ? Number(data.oldestYear) : 1970;
-          const NW = Number.isFinite(data.newestYear) ? Number(data.newestYear) : (new Date().getFullYear()+1);
-          if (guessYearFromInput){ guessYearFromInput.min = String(OL); guessYearFromInput.max = String(NW); }
-          if (guessYearToInput){   guessYearToInput.min   = String(OL); guessYearToInput.max   = String(NW); }
-          normalizeYearInputs();
-          fillRatingSteps(data.ratingSteps || [50,60,70,80,85,90,92,95]);
+          // 🎯 Applique la fenêtre renvoyée par l’API et CLAMP les inputs
+          GTG_YEAR_MIN = Number.isFinite(data.oldestYear) ? Number(data.oldestYear) : 1970;
+          GTG_YEAR_MAX = Number.isFinite(data.newestYear) ? Number(data.newestYear) : (new Date().getFullYear()+1);
+
+          if (guessYearFromInput){
+            guessYearFromInput.min = String(GTG_YEAR_MIN);
+            guessYearFromInput.max = String(GTG_YEAR_MAX);
+          }
+          if (guessYearToInput){
+            guessYearToInput.min   = String(GTG_YEAR_MIN);
+            guessYearToInput.max   = String(GTG_YEAR_MAX);
+          }
+
+          // Recharge last setup puis normalise dans la plage
           applyLastSetupAfterGenres();
-          setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
+          normalizeYearInputs();
+
+          fillRatingSteps(data.ratingSteps || [50,60,70,80,85,90,92,95]);
+
+          setGuessMessage(`Genres chargés (${genres.length}). Période ${GTG_YEAR_MIN} — ${GTG_YEAR_MAX}`);
           requestPoolCount();
           return;
         }
@@ -974,15 +1013,11 @@
    *                         🔊 TTS PANEL (UI only)
    ******************************************************************/
   function updateTtsUI(isOn){
-    // Pastilles (toutes les .dot-tts)
     setDot('.dot-tts', !!isOn);
-    // Libellé du switch
     const labelText = $('.switch-label-text');
     if (labelText) labelText.textContent = isOn ? 'TTS ON' : 'TTS OFF';
-    // Libellé dans l’overview (card TTS)
     const ov = $('#tts-status-text');
     if (ov) ov.textContent = isOn ? 'Actif' : 'Inactif';
-    // Log
     appendLog('#tts-log', `TTS ${isOn ? 'activé' : 'désactivé'}`);
   }
 
@@ -990,12 +1025,10 @@
     const ttsSwitch = $('#tts-switch');
     if (!ttsSwitch || ttsSwitch._bound) return;
     ttsSwitch._bound = true;
-    // Init UI selon l’état initial (checked dans le HTML si besoin)
     updateTtsUI(!!ttsSwitch.checked);
-    // Sync au changement
     ttsSwitch.addEventListener('change', ()=>{
       updateTtsUI(!!ttsSwitch.checked);
-      // Si tu veux piloter SB: safeDoAction('TTS Toggle', { enabled: !!ttsSwitch.checked });
+      // safeDoAction('TTS Toggle', { enabled: !!ttsSwitch.checked });
     });
   }
 
@@ -1006,7 +1039,7 @@
     bindLockButton();
     setGuessHandlers();
     bindTtsSwitch();
-    installFilterChangeGuard();   // ✅ garde anti-modif
+    installFilterChangeGuard();
     connectSB();
   }
 
