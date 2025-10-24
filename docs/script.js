@@ -711,4 +711,10 @@
   function boot(){
     bindLockButton();
     setGuessHandlers();
-    conn
+    connectSB();
+  }
+
+  // script chargé en bas de page → DOM prêt; on boot direct
+  boot();
+
+})();
