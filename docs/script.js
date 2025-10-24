@@ -90,7 +90,8 @@
   function syncEventsStatusUI(){
     setDot('.dot-events', qvUnreadEvents > 0);
     const bQV = $('#qv-events-count'); if (bQV){ bQV.textContent = String(qvUnreadEvents); bQV.style.display = qvUnreadEvents>0?'':'none'; }
-    const bTab  = $('.badge-events'); const bHead = $('#events-counter'];
+    const bTab  = $('.badge-events'); 
+    const bHead = $('#events-counter'); // ✅ fix: parenthèse correcte
     if (bTab)  bTab.textContent  = String(qvUnreadEvents);
     if (bHead) bHead.textContent = String(qvUnreadEvents);
   }
@@ -570,8 +571,7 @@
         host,
         port,
         endpoint: '/',
-        /* password, */
-        password: 'streamer.bot',
+        password,                // ✅ utilise le vrai mot de passe stocké
         subscribe: '*',
         immediate: true,
         autoReconnect: true,
