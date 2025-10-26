@@ -598,6 +598,7 @@ function validateFilters(raw){
    ******************************************************************/
   let GTG_TIMER_ID = null;
   let GTG_TIMER_END = 0;
+  let GTG_TIMER_FIRED = false; // ✅ pour éviter double "End"
 
   function startRoundTimer(endMs){
     stopRoundTimer();
@@ -606,13 +607,24 @@ function validateFilters(raw){
       return;
     }
     GTG_TIMER_END = endMs;
+    GTG_TIMER_FIRED = false; // reset à chaque début de manche
     function tick(){
       const ms = Math.max(0, GTG_TIMER_END - Date.now());
       const s = Math.ceil(ms/1000);
       const m = Math.floor(s/60);
       const sec = String(s%60).padStart(2,'0');
       setTimerText(`${m}:${sec}`); // 🔁 maj de TOUS les emplacements
-      if (ms <= 0) stopRoundTimer();
+      if (ms <= 0) {
+        if (!GTG_TIMER_FIRED) {
+          GTG_TIMER_FIRED = true;
+          // 👉 Auto-terminer la manche quand le timer atteint 0
+          safeDoAction('GTG End', {});
+          setRunning(false);
+          setDot('.dot-guess', false);
+          setStatusText('Terminé');
+        }
+        stopRoundTimer();
+      }
     }
     tick();
     GTG_TIMER_ID = setInterval(tick, 250);
