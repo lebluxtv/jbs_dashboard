@@ -399,52 +399,55 @@
     return { includeGenreId, excludeGenreIds, yearFrom: yFrom ?? null, yearTo: yTo ?? null, minRating, durationMin };
   }
 
-  function validateFilters(raw){
-    const errs = [];
-    if (raw.includeGenreId){
-      const ok = GTG_GENRES.some(g => String(g.id) === String(raw.includeGenreId));
-      if (!ok) errs.push("Genre d'inclusion invalide.");
-    }
-    const validExcl = [];
-    const seen = new Set();
-    for (const id of (raw.excludeGenreIds || [])){
-      const s = String(id);
-      if (seen.has(s)) continue;
-      if (GTG_GENRES.some(g => String(g.id) === s)){ seen.add(s); validExcl.push(s); }
-    }
-    const excludeClean = raw.includeGenreId ? [] : validExcl;
-
-    let yf = raw.yearFrom, yt = raw.yearTo;
-    if (yf != null && !isNum(yf)) errs.push("Année (de) invalide.");
-    if (yt != null && !isNum(yt)) errs.push("Année (à) invalide.");
-    if (isNum(yf) && yf < 1970) yf = 1970;
-    if (isNum(yt) && yt < 1970) yt = 1970;
-    if (isNum(yf) && isNum(yt) && yt < yf) yt = yf;
-
-    const cap = new Date().getFullYear();
-    if (isNum(yf) && yf > cap) yf = cap;
-    if (isNum(yt) && yt > cap) yt = cap;
-
-    let minRating = raw.minRating;
-    if (minRating != null && (!isNum(minRating) || minRating < 0 || minRating > 100)) errs.push("Note minimale invalide.");
-
-    let roundMinutes = Number(raw.durationMin);
-    if (!isNum(roundMinutes)) roundMinutes = 2;
-    roundMinutes = Math.max(1, Math.min(120, Math.trunc(roundMinutes)));
-
-    return {
-      ok: errs.length === 0,
-      errs,
-      clean: {
-        includeGenreId: raw.includeGenreId || null,
-        excludeGenreIds: excludeClean,
-        yearFrom: isNum(yf) ? yf : null,
-        yearTo:   isNum(yt) ? yt : null,
-        minRating: (minRating == null ? null : Math.trunc(minRating)),
-        roundMinutes
-      }
-    };
+function validateFilters(raw){
+  const errs = [];
+  if (raw.includeGenreId){
+    const ok = GTG_GENRES.some(g => String(g.id) === String(raw.includeGenreId));
+    if (!ok) errs.push("Genre d'inclusion invalide.");
   }
+  const validExcl = [];
+  const seen = new Set();
+  for (const id of (raw.excludeGenreIds || [])){
+    const s = String(id);
+    if (seen.has(s)) continue;
+    if (GTG_GENRES.some(g => String(g.id) === s)){ seen.add(s); validExcl.push(s); }
+  }
+
+  // ✅ Autoriser exclusion même si inclusion existe
+  const excludeClean = validExcl;
+
+  let yf = raw.yearFrom, yt = raw.yearTo;
+  if (yf != null && !isNum(yf)) errs.push("Année (de) invalide.");
+  if (yt != null && !isNum(yt)) errs.push("Année (à) invalide.");
+  if (isNum(yf) && yf < 1970) yf = 1970;
+  if (isNum(yt) && yt < 1970) yt = 1970;
+  if (isNum(yf) && isNum(yt) && yt < yf) yt = yf;
+
+  const cap = new Date().getFullYear();
+  if (isNum(yf) && yf > cap) yf = cap;
+  if (isNum(yt) && yt > cap) yt = cap;
+
+  let minRating = raw.minRating;
+  if (minRating != null && (!isNum(minRating) || minRating < 0 || minRating > 100)) errs.push("Note minimale invalide.");
+
+  let roundMinutes = Number(raw.durationMin);
+  if (!isNum(roundMinutes)) roundMinutes = 2;
+  roundMinutes = Math.max(1, Math.min(120, Math.trunc(roundMinutes)));
+
+  return {
+    ok: errs.length === 0,
+    errs,
+    clean: {
+      includeGenreId: raw.includeGenreId || null,
+      excludeGenreIds: excludeClean,
+      yearFrom: isNum(yf) ? yf : null,
+      yearTo:   isNum(yt) ? yt : null,
+      minRating: (minRating == null ? null : Math.trunc(minRating)),
+      roundMinutes
+    }
+  };
+}
+
 
   // Normalisation locale (pour comparer à filtersEcho)
   function normalizeForEcho(clean){
