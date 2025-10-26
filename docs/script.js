@@ -348,22 +348,33 @@
   function loadLastSetup(){
     try { return JSON.parse(localStorage.getItem(LAST_SETUP_KEY)||'{}') || {}; } catch { return {}; }
   }
+
   function applyLastSetupAfterGenres(){
     const s = loadLastSetup() || {};
+    // include
     if (s.includeGenreId && guessGenreSel){
       const ok = GTG_GENRES.some(g => String(g.id) === String(s.includeGenreId));
       guessGenreSel.value = ok ? String(s.includeGenreId) : '';
+    } else if (guessGenreSel){
+      guessGenreSel.value = '';
     }
+    // exclude
+    GTG_EXCLUDED.clear();
     if (Array.isArray(s.excludeGenreIds)){
-      GTG_EXCLUDED.clear();
       for (const id of s.excludeGenreIds){
         if (GTG_GENRES.some(g => String(g.id) === String(id))) GTG_EXCLUDED.add(String(id));
       }
-      renderExcludeChips();
     }
+    renderExcludeChips();
+    // years
     if (isNum(s.yearFrom)) guessYearFromInput.value = String(s.yearFrom);
     if (isNum(s.yearTo))   guessYearToInput.value   = String(s.yearTo);
-    if (isNum(s.minRating) && guessMinRatingSel) guessMinRatingSel.value = String(s.minRating);
+    // rating
+    if (guessMinRatingSel){
+      if (isNum(s.minRating)) guessMinRatingSel.value = String(s.minRating);
+      else guessMinRatingSel.value = '';
+    }
+    // duration
     if (isNum(s.roundMinutes) && guessDurationMinInput) guessDurationMinInput.value = String(s.roundMinutes);
   }
 
@@ -373,7 +384,7 @@
     const excludeGenreIds = Array.from(GTG_EXCLUDED);
     const yFrom = parseYear(guessYearFromInput?.value);
     const yTo   = parseYear(guessYearToInput?.value);
-    const minRating = guessMinRatingSel && guessMinRatingSel.value !== '' ? Number(guessMinRatingSel.value) : null;
+    const minRating = (guessMinRatingSel && guessMinRatingSel.value !== '') ? Number(guessMinRatingSel.value) : null;
     const mins = guessDurationMinInput ? Number(guessDurationMinInput.value) : 2;
     const durationMin = Number.isFinite(mins) ? Math.max(1, Math.min(120, Math.trunc(mins))) : 2;
 
@@ -402,7 +413,7 @@
     if (isNum(yt) && yt < 1970) yt = 1970;
     if (isNum(yf) && isNum(yt) && yt < yf) yt = yf;
 
-    const cap = new Date().getFullYear(); // borne max = année courante
+    const cap = new Date().getFullYear();
     if (isNum(yf) && yf > cap) yf = cap;
     if (isNum(yt) && yt > cap) yt = cap;
 
@@ -456,7 +467,6 @@
    ******************************************************************/
   let sbClient = null;
 
-  // ajout : cache d'IDs et résolveur Nom → ID
   const ACTION_ID_CACHE = new Map();
   async function resolveActionIdByName(name){
     if (!name) throw new Error('Nom action requis');
@@ -468,7 +478,6 @@
     return found.id;
   }
 
-  // Fallback natif WebSocket (format protocole Streamer.bot) — ENVOI PAR ID
   function sendRawDoActionById(actionId, argsObj){
     try {
       const sock = sbClient?.socket;
@@ -480,7 +489,7 @@
       const payload = {
         request: 'DoAction',
         id: 'DoAction',
-        action: { id: actionId }, // ✅ par ID (et plus par "name")
+        action: { id: actionId },
         args: wireArgs
       };
       sock.send(JSON.stringify(payload));
@@ -491,26 +500,17 @@
     }
   }
 
-  // Appel haut niveau + fallback brut (ID + _json) — signature correcte
   async function safeDoAction(actionName, args){
     try {
       if (!sbClient){ appendLog('#guess-log', 'Client Streamer.bot non initialisé.'); return; }
-
-      // Toujours injecter _json (string) — le C# lit _json
       const wire = Object.assign({}, args || {}, { _json: JSON.stringify(args || {}) });
-
-      // 1) Résoudre l'ID par le nom
       const actionId = await resolveActionIdByName(actionName);
-
-      // 2) Tentative API haut niveau (signature doc)
       try {
-        await sbClient.doAction(actionId, wire);  // ✅ (id:string, args:object)
+        await sbClient.doAction(actionId, wire);
         return;
       } catch (e) {
         appendLog('#guess-log', 'doAction client a échoué, fallback DoAction brut…');
       }
-
-      // 3) Fallback brut (ID)
       const ok = sendRawDoActionById(actionId, wire);
       if (!ok) appendLog('#guess-log', 'Fallback DoAction brut a échoué.');
     } catch (e) {
@@ -544,13 +544,18 @@
       const { ok, errs, clean } = validateFilters(collectFilters());
       if (!ok){ setGuessMessage('Filtres invalides: ' + errs.join(' ; ')); return; }
 
-      // Sauvegarde locale
-      saveLastSetup(clean);
+      // Sauvegarde du preset dès maintenant
+      saveLastSetup({
+        includeGenreId: clean.includeGenreId,
+        excludeGenreIds: clean.excludeGenreIds,
+        yearFrom: clean.yearFrom, yearTo: clean.yearTo,
+        minRating: clean.minRating,
+        roundMinutes: clean.roundMinutes
+      });
 
       const nonce = makeNonce();
       const durationSec = (clean.roundMinutes || 2) * 60;
 
-      // Envoi Start (⚠️ C# attend durationSec — pas roundMinutes)
       safeDoAction('GTG Start', {
         nonce,
         includeGenreId: clean.includeGenreId,
@@ -560,7 +565,7 @@
         durationSec
       });
 
-      setRunning(true); // lock immédiat; le timer démarrera via le WS 'start'
+      setRunning(true); // lock immédiat; le timer démarre quand on reçoit le payload start
     });
 
     // TERMINER
@@ -641,8 +646,8 @@
         onConnect: ()=>{
           setConnected(true);
           appendLog('#guess-log', `Connecté à Streamer.bot (${host}:${port})`);
+          // ⚠️ Ne PAS lancer de count ici (on attend le bootstrap pour restaurer les filtres).
           safeDoAction('GTG Bootstrap Genres & Years & Ratings', {});
-          requestPoolCount();
         },
         onDisconnect: ()=>{
           setConnected(false);
@@ -844,6 +849,7 @@
 
         if (data.type === 'bootstrap') {
           if (data.error) { setGuessMessage('Erreur: ' + data.error); return; }
+
           const genres = Array.isArray(data.genres) ? data.genres : [];
           fillGenresUI(genres);
 
@@ -856,16 +862,23 @@
           if (guessYearFromInput){ guessYearFromInput.min = String(OL); guessYearFromInput.max = String(NW); }
           if (guessYearToInput){   guessYearToInput.min   = String(OL); guessYearToInput.max   = String(NW); }
 
-          // Appliquer immédiatement ces bornes aux champs si vides / incohérents
+          // Si champs vides, on met des bornes raisonnables (sera écrasé par le preset restauré s'il existe)
           const yf0 = parseYear(guessYearFromInput?.value);
           const yt0 = parseYear(guessYearToInput?.value);
           if (guessYearFromInput && (yf0==null || yf0<OL || yf0>NW)) guessYearFromInput.value = String(OL);
           if (guessYearToInput   && (yt0==null || yt0<OL || yt0>NW || yt0<Number(guessYearFromInput.value))) guessYearToInput.value = String(NW);
 
           normalizeYearInputs();
-          fillRatingSteps(data.ratingSteps || [50,60,70,80,85,90,92,95]);
+
+          // Steps rating depuis le backend (peuvent contenir 0)
+          fillRatingSteps(Array.isArray(data.ratingSteps) && data.ratingSteps.length ? data.ratingSteps : [0,50,60,70,80,85,90]);
+
+          // ✅ RESTAURE LE DERNIER PRESET (tous les filtres + durée)
           applyLastSetupAfterGenres();
+
           setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
+
+          // ✅ Count déclenché après restauration du preset
           requestPoolCount();
           return;
         }
@@ -892,15 +905,16 @@
         }
 
         if (data.type === 'start') {
-          // On force l'état running côté UI (le payload start peut ne pas contenir 'running')
+          // ✅ état visuel & lock
           setRunning(true);
           setDot('.dot-guess', true);
           const st = $('#guess-status-text'); if (st) st.textContent = 'En cours';
 
-          // Timer : C# Start envoie endsAtUtcMs
+          // ✅ Timer (compat 2 noms)
           const endMs = Number(data.endsAtUtcMs ?? data.roundEndsAt);
           if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
 
+          // Log écho
           if (data.filtersEcho) {
             const fNow  = normalizeForEcho(validateFilters(collectFilters()).clean);
             const same  = sameFilters(data.filtersEcho, fNow);
@@ -1009,7 +1023,7 @@
   function fillRatingSteps(steps){
     const sel = $('#guess-min-rating'); if (!sel) return;
     sel.innerHTML = `<option value="">—</option>`;
-    const arr = Array.isArray(steps) && steps.length ? steps : [50,60,70,80,85,90,92,95];
+    const arr = Array.isArray(steps) && steps.length ? steps : [0,50,60,70,80,85,90];
     for (const s of arr){
       const opt = document.createElement('option');
       opt.value = String(s);
@@ -1036,6 +1050,16 @@
     const safeMin = (typeof clean.minRating === 'number' && Number.isFinite(clean.minRating))
       ? Math.max(0, Math.min(100, Math.trunc(clean.minRating)))
       : null;
+
+    // ✅ Sauvegarde auto du preset à chaque changement (sans attendre "Lancer")
+    saveLastSetup({
+      includeGenreId: clean.includeGenreId || null,
+      excludeGenreIds: Array.isArray(clean.excludeGenreIds) ? clean.excludeGenreIds : [],
+      yearFrom: safeYearFrom,
+      yearTo: safeYearTo,
+      minRating: safeMin,
+      roundMinutes: clean.roundMinutes
+    });
 
     const payload = {
       nonce: makeNonce(),
