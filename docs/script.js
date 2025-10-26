@@ -399,55 +399,54 @@
     return { includeGenreId, excludeGenreIds, yearFrom: yFrom ?? null, yearTo: yTo ?? null, minRating, durationMin };
   }
 
-function validateFilters(raw){
-  const errs = [];
-  if (raw.includeGenreId){
-    const ok = GTG_GENRES.some(g => String(g.id) === String(raw.includeGenreId));
-    if (!ok) errs.push("Genre d'inclusion invalide.");
-  }
-  const validExcl = [];
-  const seen = new Set();
-  for (const id of (raw.excludeGenreIds || [])){
-    const s = String(id);
-    if (seen.has(s)) continue;
-    if (GTG_GENRES.some(g => String(g.id) === s)){ seen.add(s); validExcl.push(s); }
-  }
-
-  // ✅ Autoriser exclusion même si inclusion existe
-  const excludeClean = validExcl;
-
-  let yf = raw.yearFrom, yt = raw.yearTo;
-  if (yf != null && !isNum(yf)) errs.push("Année (de) invalide.");
-  if (yt != null && !isNum(yt)) errs.push("Année (à) invalide.");
-  if (isNum(yf) && yf < 1970) yf = 1970;
-  if (isNum(yt) && yt < 1970) yt = 1970;
-  if (isNum(yf) && isNum(yt) && yt < yf) yt = yf;
-
-  const cap = new Date().getFullYear();
-  if (isNum(yf) && yf > cap) yf = cap;
-  if (isNum(yt) && yt > cap) yt = cap;
-
-  let minRating = raw.minRating;
-  if (minRating != null && (!isNum(minRating) || minRating < 0 || minRating > 100)) errs.push("Note minimale invalide.");
-
-  let roundMinutes = Number(raw.durationMin);
-  if (!isNum(roundMinutes)) roundMinutes = 2;
-  roundMinutes = Math.max(1, Math.min(120, Math.trunc(roundMinutes)));
-
-  return {
-    ok: errs.length === 0,
-    errs,
-    clean: {
-      includeGenreId: raw.includeGenreId || null,
-      excludeGenreIds: excludeClean,
-      yearFrom: isNum(yf) ? yf : null,
-      yearTo:   isNum(yt) ? yt : null,
-      minRating: (minRating == null ? null : Math.trunc(minRating)),
-      roundMinutes
+  function validateFilters(raw){
+    const errs = [];
+    if (raw.includeGenreId){
+      const ok = GTG_GENRES.some(g => String(g.id) === String(raw.includeGenreId));
+      if (!ok) errs.push("Genre d'inclusion invalide.");
     }
-  };
-}
+    const validExcl = [];
+    const seen = new Set();
+    for (const id of (raw.excludeGenreIds || [])){
+      const s = String(id);
+      if (seen.has(s)) continue;
+      if (GTG_GENRES.some(g => String(g.id) === s)){ seen.add(s); validExcl.push(s); }
+    }
 
+    // ✅ Autoriser exclusion même si inclusion existe
+    const excludeClean = validExcl;
+
+    let yf = raw.yearFrom, yt = raw.yearTo;
+    if (yf != null && !isNum(yf)) errs.push("Année (de) invalide.");
+    if (yt != null && !isNum(yt)) errs.push("Année (à) invalide.");
+    if (isNum(yf) && yf < 1970) yf = 1970;
+    if (isNum(yt) && yt < 1970) yt = 1970;
+    if (isNum(yf) && isNum(yt) && yt < yf) yt = yf;
+
+    const cap = new Date().getFullYear();
+    if (isNum(yf) && yf > cap) yf = cap;
+    if (isNum(yt) && yt > cap) yt = cap;
+
+    let minRating = raw.minRating;
+    if (minRating != null && (!isNum(minRating) || minRating < 0 || minRating > 100)) errs.push("Note minimale invalide.");
+
+    let roundMinutes = Number(raw.durationMin);
+    if (!isNum(roundMinutes)) roundMinutes = 2;
+    roundMinutes = Math.max(1, Math.min(120, Math.trunc(roundMinutes)));
+
+    return {
+      ok: errs.length === 0,
+      errs,
+      clean: {
+        includeGenreId: raw.includeGenreId || null,
+        excludeGenreIds: excludeClean,
+        yearFrom: isNum(yf) ? yf : null,
+        yearTo:   isNum(yt) ? yt : null,
+        minRating: (minRating == null ? null : Math.trunc(minRating)),
+        roundMinutes
+      }
+    };
+  }
 
   // Normalisation locale (pour comparer à filtersEcho)
   function normalizeForEcho(clean){
@@ -530,6 +529,12 @@ function validateFilters(raw){
   }
 
   /******************************************************************
+   *                 🔐 ROUND-LOCK (roundId) – FRONT STATE
+   ******************************************************************/
+  // roundId courant (provenant du broadcast "start" côté SB)
+  let GTG_ROUND_ID = null;
+
+  /******************************************************************
    *                       🎛️ HANDLERS & START/END
    ******************************************************************/
   function setGuessHandlers(){
@@ -567,6 +572,7 @@ function validateFilters(raw){
       const nonce = makeNonce();
       const durationSec = (clean.roundMinutes || 2) * 60;
 
+      // Envoi START — roundId sera renvoyé par SB dans le broadcast "start"
       safeDoAction('GTG Start', {
         nonce,
         includeGenreId: clean.includeGenreId,
@@ -579,15 +585,18 @@ function validateFilters(raw){
       setRunning(true);
       setDot('.dot-guess', true);
       setStatusText('En cours'); // maj des deux emplacements
+      // le timer sera positionné à réception de endsAtUtcMs
     });
 
-    // TERMINER
+    // TERMINER (manuel) — oblige la présence d’un roundId
     guessEndBtn?.addEventListener('click', ()=>{
-      safeDoAction('GTG End', {});
-      setRunning(false);
-      setDot('.dot-guess', false);
-      setStatusText('Terminé');
-      stopRoundTimer();
+      if (!GTG_ROUND_ID) {
+        appendLog('#guess-log', 'End ignoré: aucun roundId en cours (pas de manche active).');
+        return;
+      }
+      safeDoAction('GTG End', { roundId: GTG_ROUND_ID, reason: 'manual' });
+      // On ne coupe pas brutalement l’état local ici : on attend le broadcast "reveal"
+      // pour rester strictement piloté par le serveur (idempotence côté SB).
     });
 
     renderExcludeChips();
@@ -598,16 +607,30 @@ function validateFilters(raw){
    ******************************************************************/
   let GTG_TIMER_ID = null;
   let GTG_TIMER_END = 0;
-  let GTG_TIMER_FIRED = false; // ✅ pour éviter double "End"
+  // Garde anti-double tir (timer)
+  let GTG_TIMER_SENT = false;
+
+  function autoEndIfNeeded(){
+    if (GTG_TIMER_SENT) return;
+    if (!GTG_ROUND_ID) {
+      appendLog('#guess-log', 'Timer=0 mais aucun roundId — End non envoyé.');
+      GTG_TIMER_SENT = true; // évite de spammer
+      return;
+    }
+    GTG_TIMER_SENT = true;
+    appendLog('#guess-log', `Timer écoulé → demande "GTG End" (roundId=${GTG_ROUND_ID})`);
+    safeDoAction('GTG End', { roundId: GTG_ROUND_ID, reason: 'timeout' });
+  }
 
   function startRoundTimer(endMs){
     stopRoundTimer();
+    GTG_TIMER_SENT = false;
     if (!Number.isFinite(endMs) || endMs <= Date.now()){
       setTimerText('--:--');
+      // si endMs invalide on n’envoie rien, on attend reveal/start suivant
       return;
     }
     GTG_TIMER_END = endMs;
-    GTG_TIMER_FIRED = false; // reset à chaque début de manche
     function tick(){
       const ms = Math.max(0, GTG_TIMER_END - Date.now());
       const s = Math.ceil(ms/1000);
@@ -615,15 +638,8 @@ function validateFilters(raw){
       const sec = String(s%60).padStart(2,'0');
       setTimerText(`${m}:${sec}`); // 🔁 maj de TOUS les emplacements
       if (ms <= 0) {
-        if (!GTG_TIMER_FIRED) {
-          GTG_TIMER_FIRED = true;
-          // 👉 Auto-terminer la manche quand le timer atteint 0
-          safeDoAction('GTG End', {});
-          setRunning(false);
-          setDot('.dot-guess', false);
-          setStatusText('Terminé');
-        }
         stopRoundTimer();
+        autoEndIfNeeded(); // 🔒 envoie End 1 seule fois, avec roundId
       }
     }
     tick();
@@ -937,17 +953,25 @@ function validateFilters(raw){
         }
 
         if (data.type === 'start') {
+          // 🔐 Récupération du roundId émis par SB
+          GTG_ROUND_ID = data.roundId || null;
+          // reset du flag timer
+          GTG_TIMER_SENT = false;
+
           setRunning(true);
           setDot('.dot-guess', true);
           setStatusText('En cours');
 
           const endMs = Number(data.endsAtUtcMs ?? data.roundEndsAt);
           if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
+          else stopRoundTimer();
 
           if (data.filtersEcho) {
             const fNow  = normalizeForEcho(validateFilters(collectFilters()).clean);
             const same  = sameFilters(data.filtersEcho, fNow);
-            appendLog('#guess-log', `Start args ${same ? 'OK ✅' : 'DIFF ❌'}`);
+            appendLog('#guess-log', `Start (roundId=${GTG_ROUND_ID||'—'}) — args ${same ? 'OK ✅' : 'DIFF ❌'}`);
+          } else {
+            appendLog('#guess-log', `Start reçu (roundId=${GTG_ROUND_ID||'—'})`);
           }
 
           setGuessMessage('Manche lancée');
@@ -955,10 +979,21 @@ function validateFilters(raw){
         }
 
         if (data.type === 'reveal') {
+          // On passe en « Terminé » quoi qu’il arrive — la logique idempotente est côté SB
           stopRoundTimer();
           setRunning(false);
           setDot('.dot-guess', !!data.running);
           setStatusText(data.running ? 'En cours' : 'Terminé');
+
+          // Reset du verrou local
+          GTG_TIMER_SENT = false;
+
+          const recvRound = data.roundId || null;
+          if (GTG_ROUND_ID && recvRound && String(GTG_ROUND_ID) !== String(recvRound)) {
+            appendLog('#guess-log', `⚠️ Reveal roundId différent (local=${GTG_ROUND_ID}, recv=${recvRound}) — affichage forcé.`);
+          }
+          // On oublie le roundId courant après reveal
+          GTG_ROUND_ID = null;
 
           const gameName = data.game?.name || data.gameName || '—';
           const a=$('#guess-last-info'); if (a) a.textContent = gameName;
@@ -971,7 +1006,7 @@ function validateFilters(raw){
           try {
             const d = data.details || {};
             const genres = Array.isArray(d.genres) ? d.genres : [];
-            const pubs   = Array.isArray(d.publishers) ? d.publishers : [];
+            const pubs   = Array.isArray(d.publishers) ? d.publishers : (Array.isArray(d.companies)? d.companies: []);
             const devs   = Array.isArray(d.developers) ? d.developers : [];
             const note   = (typeof d.rating === 'number') ? Math.round(d.rating) + '%' : '—';
             const year   = (d.year != null) ? String(d.year) : '—';
@@ -1006,8 +1041,8 @@ function validateFilters(raw){
               'Dernier jeu: ' + gameName +
               '\nNote: ' + note + ' — Année: ' + year +
               '\nGenres: ' + (genres.join(', ') || '—') +
-              '\nPublishers: ' + (pubs.join(', ') || '—') +
-              '\nDevs: ' + (devs.join(', ') || '—') +
+              '\nPublishers/Companies: ' + (pubs.join(', ') || '—') +
+              (devs.length ? '\nDevs: ' + devs.join(', ') : '') +
               '\nCheck filtres: ' + (checks.join(' · ') || '—')
             );
           } catch (e) {
