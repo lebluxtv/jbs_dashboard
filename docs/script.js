@@ -234,6 +234,11 @@
   function setRunning(running) {
     GTG_RUNNING = !!running;
     setFiltersLocked(GTG_RUNNING);
+    // 🔒 gestion centralisée des boutons Start/End
+    const startBtn = $('#guess-start');
+    const endBtn   = $('#guess-end');
+    if (startBtn) startBtn.disabled = GTG_RUNNING;
+    if (endBtn)   endBtn.disabled   = !GTG_RUNNING;
   }
 
   function installFilterChangeGuard(){
@@ -595,8 +600,7 @@
         return;
       }
       safeDoAction('GTG End', { roundId: GTG_ROUND_ID, reason: 'manual' });
-      // On ne coupe pas brutalement l’état local ici : on attend le broadcast "reveal"
-      // pour rester strictement piloté par le serveur (idempotence côté SB).
+      // On ne coupe pas l’état local ici : on attend le broadcast "reveal" (source de vérité).
     });
 
     renderExcludeChips();
@@ -1168,6 +1172,12 @@
     setGuessHandlers();
     bindTtsSwitch();
     installFilterChangeGuard();
+
+    // État initial UX (Start actif, End inactif)
+    setRunning(false);
+    setStatusText('Prêt');
+    setTimerText('--:--');
+
     connectSB();
   }
 
