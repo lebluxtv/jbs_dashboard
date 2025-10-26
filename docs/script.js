@@ -35,9 +35,10 @@
     });
   }
 
-  // helpers statut/timer multi-emplacements
+  // statut/timer MAJ multi-emplacements (corrige #guess-status-info figé)
   function setStatusText(txt){
-    $$('#guess-status-text, #gtg-status-text').forEach(el => { if (el) el.textContent = txt; });
+    $$('#guess-status-text, #gtg-status-text, #guess-status-info, #qv-guess-status')
+      .forEach(el => { if (el) el.textContent = txt; });
   }
   function setTimerText(txt){
     $$('#guess-timer, #gtg-timer').forEach(el => { if (el) el.textContent = txt; });
@@ -231,14 +232,16 @@
     document.body.classList.toggle('gtg-running', !!locked);
   }
 
+  // => met aussi à jour Start/End + puces + texte
   function setRunning(running) {
     GTG_RUNNING = !!running;
     setFiltersLocked(GTG_RUNNING);
-    // 🔒 gestion centralisée des boutons Start/End
     const startBtn = $('#guess-start');
     const endBtn   = $('#guess-end');
     if (startBtn) startBtn.disabled = GTG_RUNNING;
     if (endBtn)   endBtn.disabled   = !GTG_RUNNING;
+    setDot('.dot-guess', GTG_RUNNING);
+    setStatusText(GTG_RUNNING ? 'En cours' : 'En pause');
   }
 
   function installFilterChangeGuard(){
@@ -364,14 +367,12 @@
 
   function applyLastSetupAfterGenres(){
     const s = loadLastSetup() || {};
-    // include
     if (s.includeGenreId && guessGenreSel){
       const ok = GTG_GENRES.some(g => String(g.id) === String(s.includeGenreId));
       guessGenreSel.value = ok ? String(s.includeGenreId) : '';
     } else if (guessGenreSel){
       guessGenreSel.value = '';
     }
-    // exclude
     GTG_EXCLUDED.clear();
     if (Array.isArray(s.excludeGenreIds)){
       for (const id of s.excludeGenreIds){
@@ -379,15 +380,12 @@
       }
     }
     renderExcludeChips();
-    // years
     if (isNum(s.yearFrom)) guessYearFromInput.value = String(s.yearFrom);
     if (isNum(s.yearTo))   guessYearToInput.value   = String(s.yearTo);
-    // rating
     if (guessMinRatingSel){
       if (isNum(s.minRating)) guessMinRatingSel.value = String(s.minRating);
       else guessMinRatingSel.value = '';
     }
-    // duration
     if (isNum(s.roundMinutes) && guessDurationMinInput) guessDurationMinInput.value = String(s.roundMinutes);
   }
 
@@ -417,8 +415,6 @@
       if (seen.has(s)) continue;
       if (GTG_GENRES.some(g => String(g.id) === s)){ seen.add(s); validExcl.push(s); }
     }
-
-    // ✅ Autoriser exclusion même si inclusion existe
     const excludeClean = validExcl;
 
     let yf = raw.yearFrom, yt = raw.yearTo;
@@ -453,7 +449,6 @@
     };
   }
 
-  // Normalisation locale (pour comparer à filtersEcho)
   function normalizeForEcho(clean){
     return {
       includeGenreId: clean.includeGenreId || "",
@@ -536,7 +531,6 @@
   /******************************************************************
    *                 🔐 ROUND-LOCK (roundId) – FRONT STATE
    ******************************************************************/
-  // roundId courant (provenant du broadcast "start" côté SB)
   let GTG_ROUND_ID = null;
 
   /******************************************************************
@@ -565,7 +559,6 @@
       const { ok, errs, clean } = validateFilters(collectFilters());
       if (!ok){ setGuessMessage('Filtres invalides: ' + errs.join(' ; ')); return; }
 
-      // Sauvegarde du preset dès maintenant
       saveLastSetup({
         includeGenreId: clean.includeGenreId,
         excludeGenreIds: clean.excludeGenreIds,
@@ -577,7 +570,6 @@
       const nonce = makeNonce();
       const durationSec = (clean.roundMinutes || 2) * 60;
 
-      // Envoi START — roundId sera renvoyé par SB dans le broadcast "start"
       safeDoAction('GTG Start', {
         nonce,
         includeGenreId: clean.includeGenreId,
@@ -588,19 +580,17 @@
       });
 
       setRunning(true);
-      setDot('.dot-guess', true);
-      setStatusText('En cours'); // maj des deux emplacements
-      // le timer sera positionné à réception de endsAtUtcMs
+      // timer réglé à la réception du broadcast start
     });
 
-    // TERMINER (manuel) — oblige la présence d’un roundId
+    // TERMINER (manuel)
     guessEndBtn?.addEventListener('click', ()=>{
       if (!GTG_ROUND_ID) {
         appendLog('#guess-log', 'End ignoré: aucun roundId en cours (pas de manche active).');
         return;
       }
       safeDoAction('GTG End', { roundId: GTG_ROUND_ID, reason: 'manual' });
-      // On ne coupe pas l’état local ici : on attend le broadcast "reveal" (source de vérité).
+      // on attend le broadcast reveal pour refléter l’état
     });
 
     renderExcludeChips();
@@ -611,14 +601,13 @@
    ******************************************************************/
   let GTG_TIMER_ID = null;
   let GTG_TIMER_END = 0;
-  // Garde anti-double tir (timer)
   let GTG_TIMER_SENT = false;
 
   function autoEndIfNeeded(){
     if (GTG_TIMER_SENT) return;
     if (!GTG_ROUND_ID) {
       appendLog('#guess-log', 'Timer=0 mais aucun roundId — End non envoyé.');
-      GTG_TIMER_SENT = true; // évite de spammer
+      GTG_TIMER_SENT = true;
       return;
     }
     GTG_TIMER_SENT = true;
@@ -631,7 +620,6 @@
     GTG_TIMER_SENT = false;
     if (!Number.isFinite(endMs) || endMs <= Date.now()){
       setTimerText('--:--');
-      // si endMs invalide on n’envoie rien, on attend reveal/start suivant
       return;
     }
     GTG_TIMER_END = endMs;
@@ -640,10 +628,10 @@
       const s = Math.ceil(ms/1000);
       const m = Math.floor(s/60);
       const sec = String(s%60).padStart(2,'0');
-      setTimerText(`${m}:${sec}`); // 🔁 maj de TOUS les emplacements
+      setTimerText(`${m}:${sec}`);
       if (ms <= 0) {
         stopRoundTimer();
-        autoEndIfNeeded(); // 🔒 envoie End 1 seule fois, avec roundId
+        autoEndIfNeeded();
       }
     }
     tick();
@@ -653,7 +641,7 @@
     if (GTG_TIMER_ID != null) clearInterval(GTG_TIMER_ID);
     GTG_TIMER_ID = null;
     GTG_TIMER_END = 0;
-    setTimerText('--:--'); // remet partout
+    setTimerText('--:--');
   }
 
   /******************************************************************
@@ -699,7 +687,6 @@
         onConnect: ()=>{
           setConnected(true);
           appendLog('#guess-log', `Connecté à Streamer.bot (${host}:${port})`);
-          // on attend bootstrap pour restaurer les filtres puis on fera le count
           safeDoAction('GTG Bootstrap Genres & Years & Ratings', {});
         },
         onDisconnect: ()=>{
@@ -823,6 +810,18 @@
     }
   }
 
+  /******************************************************************
+   *            🧱 DÉDOUBLONNAGE COUNT (envoi + log)
+   ******************************************************************/
+  let LAST_COUNT_SEND_SIG = null;
+  let LAST_COUNT_SEND_TS  = 0;
+  let LAST_COUNT_LOG_SIG  = null;
+  let LAST_COUNT_LOG_TS   = 0;
+  const DEDUPE_MS = 1500;
+
+  /******************************************************************
+   *                    📬 ROUTAGE DES MESSAGES
+   ******************************************************************/
   function handleSBEvent(event, data){
     try {
       if (event && event.type === 'StreamUpdate'){ setLiveIndicator(!!data?.live); }
@@ -915,7 +914,6 @@
           if (guessYearFromInput){ guessYearFromInput.min = String(OL); guessYearFromInput.max = String(NW); }
           if (guessYearToInput){   guessYearToInput.min   = String(OL); guessYearToInput.max   = String(NW); }
 
-          // bornes par défaut si vides (seront écrasées par le preset)
           const yf0 = parseYear(guessYearFromInput?.value);
           const yt0 = parseYear(guessYearToInput?.value);
           if (guessYearFromInput && (yf0==null || yf0<OL || yf0>NW)) guessYearFromInput.value = String(OL);
@@ -925,17 +923,27 @@
 
           fillRatingSteps(Array.isArray(data.ratingSteps) && data.ratingSteps.length ? data.ratingSteps : [0,50,60,70,80,85,90]);
 
-          // ✅ restauration complète du preset
           applyLastSetupAfterGenres();
 
           setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
 
-          // ✅ Count après restauration
           requestPoolCount();
           return;
         }
 
         if (data.type === 'count') {
+          // --- DEDUPE LOG ---
+          const logSig = JSON.stringify({
+            pool: Number.isFinite(Number(data.poolCount)) ? Number(data.poolCount) : 0,
+            echo: normalizeForEcho(data.filtersEcho || {})
+          });
+          const now2 = Date.now();
+          if (logSig === LAST_COUNT_LOG_SIG && (now2 - LAST_COUNT_LOG_TS) < DEDUPE_MS) {
+            return;
+          }
+          LAST_COUNT_LOG_SIG = logSig;
+          LAST_COUNT_LOG_TS  = now2;
+
           if (data.error) {
             appendLog('#guess-log', 'Pool IGDB: erreur (' + (data.error||'') + ')');
           } else {
@@ -957,14 +965,10 @@
         }
 
         if (data.type === 'start') {
-          // 🔐 Récupération du roundId émis par SB
           GTG_ROUND_ID = data.roundId || null;
-          // reset du flag timer
           GTG_TIMER_SENT = false;
 
           setRunning(true);
-          setDot('.dot-guess', true);
-          setStatusText('En cours');
 
           const endMs = Number(data.endsAtUtcMs ?? data.roundEndsAt);
           if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
@@ -983,20 +987,17 @@
         }
 
         if (data.type === 'reveal') {
-          // On passe en « Terminé » quoi qu’il arrive — la logique idempotente est côté SB
           stopRoundTimer();
           setRunning(false);
           setDot('.dot-guess', !!data.running);
           setStatusText(data.running ? 'En cours' : 'Terminé');
 
-          // Reset du verrou local
           GTG_TIMER_SENT = false;
 
           const recvRound = data.roundId || null;
           if (GTG_ROUND_ID && recvRound && String(GTG_ROUND_ID) !== String(recvRound)) {
             appendLog('#guess-log', `⚠️ Reveal roundId différent (local=${GTG_ROUND_ID}, recv=${recvRound}) — affichage forcé.`);
           }
-          // On oublie le roundId courant après reveal
           GTG_ROUND_ID = null;
 
           const gameName = data.game?.name || data.gameName || '—';
@@ -1119,7 +1120,6 @@
       ? Math.max(0, Math.min(100, Math.trunc(clean.minRating)))
       : null;
 
-    // sauvegarde automatique du preset
     saveLastSetup({
       includeGenreId: clean.includeGenreId || null,
       excludeGenreIds: Array.isArray(clean.excludeGenreIds) ? clean.excludeGenreIds : [],
@@ -1137,6 +1137,18 @@
       yearTo: safeYearTo,
       minRating: safeMin
     };
+
+    // --- DEDUPE ENVOI ---
+    const sendSig = JSON.stringify({
+      include: payload.includeGenreId || "",
+      exclude: (payload.excludeGenreIds||[]).slice().sort(),
+      y1: payload.yearFrom, y2: payload.yearTo,
+      min: payload.minRating
+    });
+    const now = Date.now();
+    if (sendSig === LAST_COUNT_SEND_SIG && (now - LAST_COUNT_SEND_TS) < DEDUPE_MS) return;
+    LAST_COUNT_SEND_SIG = sendSig;
+    LAST_COUNT_SEND_TS  = now;
 
     appendLog('#guess-log', `→ FRONT send count: { include:${payload.includeGenreId||''}, exclude:[${payload.excludeGenreIds.join(',')}], years:${payload.yearFrom}-${payload.yearTo}, min:${payload.minRating==null?'—':payload.minRating} }`);
     safeDoAction('GTG Games Count', payload);
@@ -1173,7 +1185,6 @@
     bindTtsSwitch();
     installFilterChangeGuard();
 
-    // État initial UX (Start actif, End inactif)
     setRunning(false);
     setStatusText('Prêt');
     setTimerText('--:--');
