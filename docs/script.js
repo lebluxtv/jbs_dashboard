@@ -539,22 +539,31 @@
       if (guessExcludeInput) guessExcludeInput.value = '';
     });
 
+    // LANCER
     guessStartBtn?.addEventListener('click', ()=>{
       const { ok, errs, clean } = validateFilters(collectFilters());
       if (!ok){ setGuessMessage('Filtres invalides: ' + errs.join(' ; ')); return; }
+
+      // Sauvegarde locale
       saveLastSetup(clean);
+
       const nonce = makeNonce();
+      const durationSec = (clean.roundMinutes || 2) * 60;
+
+      // Envoi Start (⚠️ C# attend durationSec — pas roundMinutes)
       safeDoAction('GTG Start', {
         nonce,
         includeGenreId: clean.includeGenreId,
         excludeGenreIds: clean.excludeGenreIds,
         yearFrom: clean.yearFrom, yearTo: clean.yearTo,
         minRating: clean.minRating,
-        roundMinutes: clean.roundMinutes
+        durationSec
       });
-      setRunning(true);
+
+      setRunning(true); // lock immédiat; le timer démarrera via le WS 'start'
     });
 
+    // TERMINER
     guessEndBtn?.addEventListener('click', ()=>{
       safeDoAction('GTG End', {});
       setRunning(false);
@@ -746,7 +755,7 @@
         console.log('recipient:', recip);
         console.log('tier     :', tier);
       } else {
-        console.log('tier     :', payload?.tier ?? payload?.plan ?? payload?.subPlan ?? payload?.subTier ?? '—');
+        console.log('tier     :', payload?.tier ?? payload?.plan ?? payload?.subPlan ?? payload?.subTier ?? 'Prime');
         console.log('months   :', payload?.cumulativeMonths ?? payload?.months ?? payload?.streak ?? '—');
         console.log('gifter   :', payload?.gifter ?? payload?.sender ?? '—');
       }
@@ -883,14 +892,13 @@
         }
 
         if (data.type === 'start') {
-          if (typeof data.running === 'boolean'){
-            setDot('.dot-guess', !!data.running);
-            const st = $('#guess-status-text'); if (st) st.textContent = data.running ? 'En cours' : 'En pause';
-            setRunning(!!data.running);
-          } else {
-            setRunning(true);
-          }
-          const endMs = Number(data.roundEndsAt);
+          // On force l'état running côté UI (le payload start peut ne pas contenir 'running')
+          setRunning(true);
+          setDot('.dot-guess', true);
+          const st = $('#guess-status-text'); if (st) st.textContent = 'En cours';
+
+          // Timer : C# Start envoie endsAtUtcMs
+          const endMs = Number(data.endsAtUtcMs ?? data.roundEndsAt);
           if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
 
           if (data.filtersEcho) {
@@ -905,13 +913,13 @@
 
         if (data.type === 'reveal') {
           stopRoundTimer();
-          if (typeof data.running === 'boolean'){
-            setDot('.dot-guess', !!data.running);
-            const st = $('#guess-status-text'); if (st) st.textContent = data.running ? 'En cours' : 'En pause';
-          }
           setRunning(false);
+          setDot('.dot-guess', !!data.running);
+          const st = $('#guess-status-text'); if (st) st.textContent = data.running ? 'En cours' : 'Terminé';
 
-          if (data.gameName){ const a=$('#guess-last-info'); if (a) a.textContent = data.gameName; }
+          const gameName = data.game?.name || data.gameName || '—';
+          const a=$('#guess-last-info'); if (a) a.textContent = gameName;
+
           if (data.lastWinner){
             const winnerName = data.lastWinner.isStreamer ? 'Streamer' : (data.lastWinner.user || '');
             const w=$('#guess-winner'); if (w) w.textContent = winnerName || '—';
@@ -952,7 +960,7 @@
             }
 
             appendLog('#guess-log',
-              'Dernier jeu: ' + (data.gameName || '—') +
+              'Dernier jeu: ' + gameName +
               '\nNote: ' + note + ' — Année: ' + year +
               '\nGenres: ' + (genres.join(', ') || '—') +
               '\nPublishers: ' + (pubs.join(', ') || '—') +
