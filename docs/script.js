@@ -35,7 +35,7 @@
     });
   }
 
-  // statut/timer MAJ multi-emplacements (corrige #guess-status-info figé)
+  // statut/timer MAJ multi-emplacements
   function setStatusText(txt){
     $$('#guess-status-text, #gtg-status-text, #guess-status-info, #qv-guess-status')
       .forEach(el => { if (el) el.textContent = txt; });
@@ -43,11 +43,23 @@
   function setTimerText(txt){
     $$('#guess-timer, #gtg-timer').forEach(el => { if (el) el.textContent = txt; });
   }
-  // libellé sous les boutons : "Manche lancée/terminée"
+
+  // === Label sous les boutons: robuste + fallback auto-détection ===
   function setRoundNote(running){
     const txt = running ? 'Manche lancée' : 'Manche terminée';
-    $$('#guess-round-note, #gtg-round-note, .round-note')
-      .forEach(el => { if (el) el.textContent = txt; });
+    // 1) cibles prévues
+    let targets = $$('#guess-round-note, #gtg-round-note, .round-note');
+    // 2) si rien trouvé, on tente de détecter un petit libellé à proximité des boutons
+    if (!targets.length) {
+      const scope = $('#guess-start')?.closest('#filters, .filters, form, .panel, .card, section') || document;
+      const candidates = Array.from(scope.querySelectorAll('small, .muted, .hint, span, div'))
+        .filter(el => el && typeof el.textContent === 'string');
+      const m = candidates.find(el => /manche\s+(lancée|terminée)/i.test(el.textContent.trim()));
+      if (m) targets = [m];
+    }
+    targets.forEach(el => { el.textContent = txt; });
+    // 3) data-flag pour du CSS éventuel
+    document.body.dataset.round = running ? 'running' : 'ended';
   }
 
   /******************************************************************
@@ -238,7 +250,7 @@
     document.body.classList.toggle('gtg-running', !!locked);
   }
 
-  // => met aussi à jour Start/End + puces + texte + note
+  // => met à jour boutons + puces + texte + round-note + data-flag
   function setRunning(running) {
     GTG_RUNNING = !!running;
     setFiltersLocked(GTG_RUNNING);
@@ -399,7 +411,7 @@
   function collectFilters(){
     normalizeYearInputs();
     const includeGenreId = guessGenreSel?.value ? String(guessGenreSel.value) : "";
-    const excludeGenreIds = Array.from(GTG_EXCLUDED);
+       const excludeGenreIds = Array.from(GTG_EXCLUDED);
     const yFrom = parseYear(guessYearFromInput?.value);
     const yTo   = parseYear(guessYearToInput?.value);
     const minRating = (guessMinRatingSel && guessMinRatingSel.value !== '') ? Number(guessMinRatingSel.value) : null;
@@ -586,8 +598,7 @@
         durationSec
       });
 
-      setRunning(true);
-      // timer réglé à la réception du broadcast start
+      setRunning(true);   // round-note mis à jour ici aussi
     });
 
     // TERMINER (manuel)
@@ -597,7 +608,7 @@
         return;
       }
       safeDoAction('GTG End', { roundId: GTG_ROUND_ID, reason: 'manual' });
-      // on attend le broadcast reveal pour refléter l’état
+      // on attend "reveal" pour refléter localement
     });
 
     renderExcludeChips();
@@ -972,8 +983,8 @@
           GTG_ROUND_ID = data.roundId || null;
           GTG_TIMER_SENT = false;
 
-          setRunning(true);          // ⇒ setRoundNote(true) via setRunning
-          setRoundNote(true);        // renforcement explicite
+          setRunning(true);          // ⇒ setRoundNote(true)
+          setRoundNote(true);        // renfort explicite
 
           const endMs = Number(data.endsAtUtcMs ?? data.roundEndsAt);
           if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
@@ -993,8 +1004,8 @@
 
         if (data.type === 'reveal') {
           stopRoundTimer();
-          setRunning(false);         // ⇒ setRoundNote(false) via setRunning
-          setRoundNote(false);       // renforcement explicite
+          setRunning(false);         // ⇒ setRoundNote(false)
+          setRoundNote(false);       // renfort explicite
           setDot('.dot-guess', !!data.running);
           setStatusText(data.running ? 'En cours' : 'Terminé');
 
@@ -1096,7 +1107,7 @@
   }
 
   function fillRatingSteps(steps){
-    const sel = $('#guess-min-rating'); if (!sel) return;
+    const sel = $('#guess-min-rating'); if (!Sel) return;
     sel.innerHTML = `<option value="">—</option>`;
     const arr = Array.isArray(steps) && steps.length ? steps : [0,50,60,70,80,85,90];
     for (const s of arr){
@@ -1144,7 +1155,6 @@
       minRating: safeMin
     };
 
-    // --- DEDUPE ENVOI ---
     const sendSig = JSON.stringify({
       include: payload.includeGenreId || "",
       exclude: (payload.excludeGenreIds||[]).slice().sort(),
@@ -1193,7 +1203,7 @@
 
     setRunning(false);
     setStatusText('Prêt');
-    setRoundNote(false);
+    setRoundNote(false);   // force un état initial cohérent
     setTimerText('--:--');
 
     connectSB();
