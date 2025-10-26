@@ -1106,17 +1106,18 @@
     }
   }
 
-  function fillRatingSteps(steps){
-    const sel = $('#guess-min-rating'); if (!Sel) return;
-    sel.innerHTML = `<option value="">—</option>`;
-    const arr = Array.isArray(steps) && steps.length ? steps : [0,50,60,70,80,85,90];
-    for (const s of arr){
-      const opt = document.createElement('option');
-      opt.value = String(s);
-      opt.textContent = `≥ ${s}%`;
-      sel.appendChild(opt);
-    }
+function fillRatingSteps(steps){
+  const sel = $('#guess-min-rating'); // <-- minuscule
+  if (!sel) return;
+  sel.innerHTML = `<option value="">—</option>`;
+  const arr = Array.isArray(steps) && steps.length ? steps : [0,50,60,70,80,85,90];
+  for (const s of arr){
+    const opt = document.createElement('option');
+    opt.value = String(s);
+    opt.textContent = `≥ ${s}%`;
+    sel.appendChild(opt);
   }
+}
 
   /******************************************************************
    *                📞 GAMES COUNT (à chaque changement)
