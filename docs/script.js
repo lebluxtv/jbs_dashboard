@@ -35,6 +35,14 @@
     });
   }
 
+  // helpers statut/timer multi-emplacements
+  function setStatusText(txt){
+    $$('#guess-status-text, #gtg-status-text').forEach(el => { if (el) el.textContent = txt; });
+  }
+  function setTimerText(txt){
+    $$('#guess-timer, #gtg-timer').forEach(el => { if (el) el.textContent = txt; });
+  }
+
   /******************************************************************
    *                         🔒 LOCK / PASSWORD
    ******************************************************************/
@@ -565,13 +573,18 @@
         durationSec
       });
 
-      setRunning(true); // lock immédiat; le timer démarre quand on reçoit le payload start
+      setRunning(true);
+      setDot('.dot-guess', true);
+      setStatusText('En cours'); // maj des deux emplacements
     });
 
     // TERMINER
     guessEndBtn?.addEventListener('click', ()=>{
       safeDoAction('GTG End', {});
       setRunning(false);
+      setDot('.dot-guess', false);
+      setStatusText('Terminé');
+      stopRoundTimer();
     });
 
     renderExcludeChips();
@@ -580,27 +593,32 @@
   /******************************************************************
    *                       ⏱️ ROUND TIMER UTILS
    ******************************************************************/
+  let GTG_TIMER_ID = null;
+  let GTG_TIMER_END = 0;
+
   function startRoundTimer(endMs){
-    const el = $('#guess-timer');
     stopRoundTimer();
-    if (!el || !Number.isFinite(endMs) || endMs <= Date.now()) return;
+    if (!Number.isFinite(endMs) || endMs <= Date.now()){
+      setTimerText('--:--');
+      return;
+    }
+    GTG_TIMER_END = endMs;
     function tick(){
-      const ms = Math.max(0, endMs - Date.now());
+      const ms = Math.max(0, GTG_TIMER_END - Date.now());
       const s = Math.ceil(ms/1000);
       const m = Math.floor(s/60);
       const sec = String(s%60).padStart(2,'0');
-      el.textContent = `${m}:${sec}`;
+      setTimerText(`${m}:${sec}`); // 🔁 maj de TOUS les emplacements
       if (ms <= 0) stopRoundTimer();
     }
     tick();
-    el.dataset._timer = String(setInterval(tick, 250));
+    GTG_TIMER_ID = setInterval(tick, 250);
   }
   function stopRoundTimer(){
-    const el = $('#guess-timer');
-    const id = Number(el?.dataset?._timer);
-    if (Number.isFinite(id)) clearInterval(id);
-    if (el) el.textContent = '--:--';
-    if (el?.dataset) delete el.dataset._timer;
+    if (GTG_TIMER_ID != null) clearInterval(GTG_TIMER_ID);
+    GTG_TIMER_ID = null;
+    GTG_TIMER_END = 0;
+    setTimerText('--:--'); // remet partout
   }
 
   /******************************************************************
@@ -646,7 +664,7 @@
         onConnect: ()=>{
           setConnected(true);
           appendLog('#guess-log', `Connecté à Streamer.bot (${host}:${port})`);
-          // ⚠️ Ne PAS lancer de count ici (on attend le bootstrap pour restaurer les filtres).
+          // on attend bootstrap pour restaurer les filtres puis on fera le count
           safeDoAction('GTG Bootstrap Genres & Years & Ratings', {});
         },
         onDisconnect: ()=>{
@@ -862,7 +880,7 @@
           if (guessYearFromInput){ guessYearFromInput.min = String(OL); guessYearFromInput.max = String(NW); }
           if (guessYearToInput){   guessYearToInput.min   = String(OL); guessYearToInput.max   = String(NW); }
 
-          // Si champs vides, on met des bornes raisonnables (sera écrasé par le preset restauré s'il existe)
+          // bornes par défaut si vides (seront écrasées par le preset)
           const yf0 = parseYear(guessYearFromInput?.value);
           const yt0 = parseYear(guessYearToInput?.value);
           if (guessYearFromInput && (yf0==null || yf0<OL || yf0>NW)) guessYearFromInput.value = String(OL);
@@ -870,15 +888,14 @@
 
           normalizeYearInputs();
 
-          // Steps rating depuis le backend (peuvent contenir 0)
           fillRatingSteps(Array.isArray(data.ratingSteps) && data.ratingSteps.length ? data.ratingSteps : [0,50,60,70,80,85,90]);
 
-          // ✅ RESTAURE LE DERNIER PRESET (tous les filtres + durée)
+          // ✅ restauration complète du preset
           applyLastSetupAfterGenres();
 
           setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
 
-          // ✅ Count déclenché après restauration du preset
+          // ✅ Count après restauration
           requestPoolCount();
           return;
         }
@@ -905,16 +922,13 @@
         }
 
         if (data.type === 'start') {
-          // ✅ état visuel & lock
           setRunning(true);
           setDot('.dot-guess', true);
-          const st = $('#guess-status-text'); if (st) st.textContent = 'En cours';
+          setStatusText('En cours');
 
-          // ✅ Timer (compat 2 noms)
           const endMs = Number(data.endsAtUtcMs ?? data.roundEndsAt);
           if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
 
-          // Log écho
           if (data.filtersEcho) {
             const fNow  = normalizeForEcho(validateFilters(collectFilters()).clean);
             const same  = sameFilters(data.filtersEcho, fNow);
@@ -929,7 +943,7 @@
           stopRoundTimer();
           setRunning(false);
           setDot('.dot-guess', !!data.running);
-          const st = $('#guess-status-text'); if (st) st.textContent = data.running ? 'En cours' : 'Terminé';
+          setStatusText(data.running ? 'En cours' : 'Terminé');
 
           const gameName = data.game?.name || data.gameName || '—';
           const a=$('#guess-last-info'); if (a) a.textContent = gameName;
@@ -1051,7 +1065,7 @@
       ? Math.max(0, Math.min(100, Math.trunc(clean.minRating)))
       : null;
 
-    // ✅ Sauvegarde auto du preset à chaque changement (sans attendre "Lancer")
+    // sauvegarde automatique du preset
     saveLastSetup({
       includeGenreId: clean.includeGenreId || null,
       excludeGenreIds: Array.isArray(clean.excludeGenreIds) ? clean.excludeGenreIds : [],
