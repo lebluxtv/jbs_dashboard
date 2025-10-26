@@ -43,6 +43,12 @@
   function setTimerText(txt){
     $$('#guess-timer, #gtg-timer').forEach(el => { if (el) el.textContent = txt; });
   }
+  // libellé sous les boutons : "Manche lancée/terminée"
+  function setRoundNote(running){
+    const txt = running ? 'Manche lancée' : 'Manche terminée';
+    $$('#guess-round-note, #gtg-round-note, .round-note')
+      .forEach(el => { if (el) el.textContent = txt; });
+  }
 
   /******************************************************************
    *                         🔒 LOCK / PASSWORD
@@ -232,7 +238,7 @@
     document.body.classList.toggle('gtg-running', !!locked);
   }
 
-  // => met aussi à jour Start/End + puces + texte
+  // => met aussi à jour Start/End + puces + texte + note
   function setRunning(running) {
     GTG_RUNNING = !!running;
     setFiltersLocked(GTG_RUNNING);
@@ -242,6 +248,7 @@
     if (endBtn)   endBtn.disabled   = !GTG_RUNNING;
     setDot('.dot-guess', GTG_RUNNING);
     setStatusText(GTG_RUNNING ? 'En cours' : 'En pause');
+    setRoundNote(GTG_RUNNING);
   }
 
   function installFilterChangeGuard(){
@@ -719,8 +726,22 @@
   }
 
   /******************************************************************
+   *            🧱 DÉDOUBLONNAGE COUNT (envoi + log)
+   ******************************************************************/
+  let LAST_COUNT_SEND_SIG = null;
+  let LAST_COUNT_SEND_TS  = 0;
+  let LAST_COUNT_LOG_SIG  = null;
+  let LAST_COUNT_LOG_TS   = 0;
+  const DEDUPE_MS = 1500;
+
+  /******************************************************************
    *                    📬 ROUTAGE DES MESSAGES
    ******************************************************************/
+  const SUB_EVENT_TYPES = new Set([
+    'Sub','ReSub','GiftSub','GiftBomb',
+    'MassGift','MassSubGift','CommunitySub','CommunitySubGift'
+  ]);
+
   function extractUserName(d){
     if (!d) return '—';
     if (typeof d.displayName === 'string') return d.displayName;
@@ -771,11 +792,6 @@
     return Number.isFinite(m) ? m : 0;
   }
 
-  const SUB_EVENT_TYPES = new Set([
-    'Sub','ReSub','GiftSub','GiftBomb',
-    'MassGift','MassSubGift','CommunitySub','CommunitySubGift'
-  ]);
-
   function logSbSubEventToConsole(evt, payload){
     try {
       const type = evt?.type || 'Unknown';
@@ -810,18 +826,6 @@
     }
   }
 
-  /******************************************************************
-   *            🧱 DÉDOUBLONNAGE COUNT (envoi + log)
-   ******************************************************************/
-  let LAST_COUNT_SEND_SIG = null;
-  let LAST_COUNT_SEND_TS  = 0;
-  let LAST_COUNT_LOG_SIG  = null;
-  let LAST_COUNT_LOG_TS   = 0;
-  const DEDUPE_MS = 1500;
-
-  /******************************************************************
-   *                    📬 ROUTAGE DES MESSAGES
-   ******************************************************************/
   function handleSBEvent(event, data){
     try {
       if (event && event.type === 'StreamUpdate'){ setLiveIndicator(!!data?.live); }
@@ -968,7 +972,8 @@
           GTG_ROUND_ID = data.roundId || null;
           GTG_TIMER_SENT = false;
 
-          setRunning(true);
+          setRunning(true);          // ⇒ setRoundNote(true) via setRunning
+          setRoundNote(true);        // renforcement explicite
 
           const endMs = Number(data.endsAtUtcMs ?? data.roundEndsAt);
           if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
@@ -988,7 +993,8 @@
 
         if (data.type === 'reveal') {
           stopRoundTimer();
-          setRunning(false);
+          setRunning(false);         // ⇒ setRoundNote(false) via setRunning
+          setRoundNote(false);       // renforcement explicite
           setDot('.dot-guess', !!data.running);
           setStatusText(data.running ? 'En cours' : 'Terminé');
 
@@ -1187,6 +1193,7 @@
 
     setRunning(false);
     setStatusText('Prêt');
+    setRoundNote(false);
     setTimerText('--:--');
 
     connectSB();
