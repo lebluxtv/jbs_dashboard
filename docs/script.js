@@ -22,8 +22,8 @@
 
   function appendLog(sel, text){
     const el = $(sel); if (!el) return;
-    const p = document.createElement('p');
     const ts = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const p = document.createElement('p');
     p.textContent = `[${ts}] ${text}`;
     el.appendChild(p); el.scrollTop = el.scrollHeight;
   }
@@ -456,38 +456,63 @@
    ******************************************************************/
   let sbClient = null;
 
-  // Fallback natif WebSocket (format protocole Streamer.bot)
-  function sendRawDoAction(actionName, argsObj){
+  // ajout : cache d'IDs et résolveur Nom → ID
+  const ACTION_ID_CACHE = new Map();
+  async function resolveActionIdByName(name){
+    if (!name) throw new Error('Nom action requis');
+    if (ACTION_ID_CACHE.has(name)) return ACTION_ID_CACHE.get(name);
+    const { actions } = await sbClient.getActions();
+    const found = actions.find(a => a.name === name);
+    if (!found) throw new Error(`Action introuvable: "${name}"`);
+    ACTION_ID_CACHE.set(name, found.id);
+    return found.id;
+  }
+
+  // Fallback natif WebSocket (format protocole Streamer.bot) — ENVOI PAR ID
+  function sendRawDoActionById(actionId, argsObj){
     try {
       const sock = sbClient?.socket;
       if (!sock || sock.readyState !== 1) {
         appendLog('#guess-log', 'Erreur: WebSocket non prêt pour DoAction brut.');
-        return;
+        return false;
       }
       const wireArgs = Object.assign({}, argsObj || {}, { _json: JSON.stringify(argsObj || {}) });
       const payload = {
         request: 'DoAction',
         id: 'DoAction',
-        action: { name: actionName },
+        action: { id: actionId }, // ✅ par ID (et plus par "name")
         args: wireArgs
       };
       sock.send(JSON.stringify(payload));
+      return true;
     } catch (e){
       appendLog('#guess-log', 'Erreur DoAction brut: ' + (e?.message||e));
+      return false;
     }
   }
 
-  function safeDoAction(actionName, args){
+  // Appel haut niveau + fallback brut (ID + _json) — signature correcte
+  async function safeDoAction(actionName, args){
     try {
       if (!sbClient){ appendLog('#guess-log', 'Client Streamer.bot non initialisé.'); return; }
 
+      // Toujours injecter _json (string) — le C# lit _json
+      const wire = Object.assign({}, args || {}, { _json: JSON.stringify(args || {}) });
+
+      // 1) Résoudre l'ID par le nom
+      const actionId = await resolveActionIdByName(actionName);
+
+      // 2) Tentative API haut niveau (signature doc)
       try {
-        const wire = Object.assign({}, args || {}, { _json: JSON.stringify(args || {}) });
-        sbClient.doAction({ name: actionName, args: wire });
+        await sbClient.doAction(actionId, wire);  // ✅ (id:string, args:object)
+        return;
       } catch (e) {
         appendLog('#guess-log', 'doAction client a échoué, fallback DoAction brut…');
-        sendRawDoAction(actionName, args || {});
       }
+
+      // 3) Fallback brut (ID)
+      const ok = sendRawDoActionById(actionId, wire);
+      if (!ok) appendLog('#guess-log', 'Fallback DoAction brut a échoué.');
     } catch (e) {
       appendLog('#guess-log', 'Erreur safeDoAction: ' + (e?.message||e));
     }
