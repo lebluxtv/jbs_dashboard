@@ -49,7 +49,7 @@
     const txt = running ? 'Manche lancée' : 'Manche terminée';
     // 1) cibles prévues
     let targets = $$('#guess-round-note, #gtg-round-note, .round-note');
-    // 2) si rien trouvé, on tente de détecter un petit libellé à proximité des boutons
+    // 2) auto-détection
     if (!targets.length) {
       const scope = $('#guess-start')?.closest('#filters, .filters, form, .panel, .card, section') || document;
       const candidates = Array.from(scope.querySelectorAll('small, .muted, .hint, span, div'))
@@ -295,6 +295,7 @@
   const guessYearFromInput    = $('#guess-year-from');
   const guessYearToInput      = $('#guess-year-to');
   const guessMinRatingSel     = $('#guess-min-rating');
+  const guessMinVotesInput    = $('#guess-min-votes');         // NEW
   const guessDurationMinInput = $('#guess-duration-min');
 
   const guessStartBtn         = $('#guess-start');
@@ -405,20 +406,30 @@
       if (isNum(s.minRating)) guessMinRatingSel.value = String(s.minRating);
       else guessMinRatingSel.value = '';
     }
+    // NEW: minVotes (valeur par défaut raisonnable = 20 si absent)
+    if (guessMinVotesInput){
+      const mv = (isNum(s.minVotes) ? Math.max(0, Math.trunc(s.minVotes)) : 20);
+      guessMinVotesInput.value = String(mv);
+    }
     if (isNum(s.roundMinutes) && guessDurationMinInput) guessDurationMinInput.value = String(s.roundMinutes);
   }
 
   function collectFilters(){
     normalizeYearInputs();
     const includeGenreId = guessGenreSel?.value ? String(guessGenreSel.value) : "";
-       const excludeGenreIds = Array.from(GTG_EXCLUDED);
+    const excludeGenreIds = Array.from(GTG_EXCLUDED);
     const yFrom = parseYear(guessYearFromInput?.value);
     const yTo   = parseYear(guessYearToInput?.value);
     const minRating = (guessMinRatingSel && guessMinRatingSel.value !== '') ? Number(guessMinRatingSel.value) : null;
+
     const mins = guessDurationMinInput ? Number(guessDurationMinInput.value) : 2;
     const durationMin = Number.isFinite(mins) ? Math.max(1, Math.min(120, Math.trunc(mins))) : 2;
 
-    return { includeGenreId, excludeGenreIds, yearFrom: yFrom ?? null, yearTo: yTo ?? null, minRating, durationMin };
+    // NEW: minVotes
+    const mvRaw = guessMinVotesInput ? Number(guessMinVotesInput.value) : null;
+    const minVotes = Number.isFinite(mvRaw) ? Math.max(0, Math.trunc(mvRaw)) : null;
+
+    return { includeGenreId, excludeGenreIds, yearFrom: yFrom ?? null, yearTo: yTo ?? null, minRating, durationMin, minVotes };
   }
 
   function validateFilters(raw){
@@ -454,6 +465,11 @@
     if (!isNum(roundMinutes)) roundMinutes = 2;
     roundMinutes = Math.max(1, Math.min(120, Math.trunc(roundMinutes)));
 
+    // NEW: minVotes validation
+    let minVotes = raw.minVotes;
+    if (minVotes != null && (!isNum(minVotes) || minVotes < 0)) errs.push("Votes min invalide.");
+    if (isNum(minVotes) && minVotes > 100000) minVotes = 100000;
+
     return {
       ok: errs.length === 0,
       errs,
@@ -463,6 +479,7 @@
         yearFrom: isNum(yf) ? yf : null,
         yearTo:   isNum(yt) ? yt : null,
         minRating: (minRating == null ? null : Math.trunc(minRating)),
+        minVotes:  (minVotes == null ? null : Math.trunc(minVotes)),   // NEW
         roundMinutes
       }
     };
@@ -475,7 +492,8 @@
         .map(String).filter(Boolean).sort(),
       yearFrom: clean.yearFrom ?? null,
       yearTo: clean.yearTo ?? null,
-      minRating: clean.minRating ?? null
+      minRating: clean.minRating ?? null,
+      minVotes: clean.minVotes ?? null           // NEW (pour comparer avec filtersEcho)
     };
   }
   function sameFilters(a,b){
@@ -488,6 +506,7 @@
     if (String(a.yearFrom||"") !== String(b.yearFrom||"")) return false;
     if (String(a.yearTo||"")   !== String(b.yearTo||""))   return false;
     if (String(a.minRating||"")!== String(b.minRating||""))return false;
+    if (String(a.minVotes||"") !== String(b.minVotes||"")) return false; // NEW
     return true;
   }
 
@@ -559,10 +578,10 @@
     const debounce = (fn,ms)=>{ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
     const debounceCount = debounce(requestPoolCount, 400);
 
-    [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinRatingSel, guessDurationMinInput].forEach(el=>{
+    [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinRatingSel, guessMinVotesInput, guessDurationMinInput].forEach(el=>{
       if (!el) return;
       el.addEventListener('change', ()=>{ debounceCount(); });
-      if (el === guessYearFromInput || el === guessYearToInput){
+      if (el === guessYearFromInput || el === guessYearToInput || el === guessMinVotesInput){
         el.addEventListener('input', ()=>{ debounceCount(); });
       }
     });
@@ -583,6 +602,7 @@
         excludeGenreIds: clean.excludeGenreIds,
         yearFrom: clean.yearFrom, yearTo: clean.yearTo,
         minRating: clean.minRating,
+        minVotes:  clean.minVotes,              // NEW
         roundMinutes: clean.roundMinutes
       });
 
@@ -595,10 +615,11 @@
         excludeGenreIds: clean.excludeGenreIds,
         yearFrom: clean.yearFrom, yearTo: clean.yearTo,
         minRating: clean.minRating,
+        minVotes: (isNum(clean.minVotes) && clean.minVotes > 0) ? Math.trunc(clean.minVotes) : null, // NEW
         durationSec
       });
 
-      setRunning(true);   // round-note mis à jour ici aussi
+      setRunning(true);
     });
 
     // TERMINER (manuel)
@@ -972,7 +993,7 @@
               '#guess-log',
               `Pool IGDB: ${n} jeux correspondant aux filtres. (args ${same ? 'OK ✅' : 'DIFF ❌'})` +
               (fEcho
-                ? `\n↳ echo={include:${fEcho.includeGenreId||''}, exclude:[${(fEcho.excludeGenreIds||[]).join(',')}], years:${fEcho.yearFrom}-${fEcho.yearTo}, min:${fEcho.minRating==null?'—':fEcho.minRating}}`
+                ? `\n↳ echo={include:${fEcho.includeGenreId||''}, exclude:[${(fEcho.excludeGenreIds||[]).join(',')}], years:${fEcho.yearFrom}-${fEcho.yearTo}, min:${fEcho.minRating==null?'—':fEcho.minRating}, votes:${fEcho.minVotes==null?'—':fEcho.minVotes}}`
                 : '')
             );
           }
@@ -983,8 +1004,8 @@
           GTG_ROUND_ID = data.roundId || null;
           GTG_TIMER_SENT = false;
 
-          setRunning(true);          // ⇒ setRoundNote(true)
-          setRoundNote(true);        // renfort explicite
+          setRunning(true);
+          setRoundNote(true);
 
           const endMs = Number(data.endsAtUtcMs ?? data.roundEndsAt);
           if (Number.isFinite(endMs) && endMs > Date.now()) startRoundTimer(endMs);
@@ -1004,8 +1025,8 @@
 
         if (data.type === 'reveal') {
           stopRoundTimer();
-          setRunning(false);         // ⇒ setRoundNote(false)
-          setRoundNote(false);       // renfort explicite
+          setRunning(false);
+          setRoundNote(false);
           setDot('.dot-guess', !!data.running);
           setStatusText(data.running ? 'En cours' : 'Terminé');
 
@@ -1106,18 +1127,18 @@
     }
   }
 
-function fillRatingSteps(steps){
-  const sel = $('#guess-min-rating'); // <-- minuscule
-  if (!sel) return;
-  sel.innerHTML = `<option value="">—</option>`;
-  const arr = Array.isArray(steps) && steps.length ? steps : [0,50,60,70,80,85,90];
-  for (const s of arr){
-    const opt = document.createElement('option');
-    opt.value = String(s);
-    opt.textContent = `≥ ${s}%`;
-    sel.appendChild(opt);
+  function fillRatingSteps(steps){
+    const sel = $('#guess-min-rating'); // <-- minuscule
+    if (!sel) return;
+    sel.innerHTML = `<option value="">—</option>`;
+    const arr = Array.isArray(steps) && steps.length ? steps : [0,50,60,70,80,85,90];
+    for (const s of arr){
+      const opt = document.createElement('option');
+      opt.value = String(s);
+      opt.textContent = `≥ ${s}%`;
+      sel.appendChild(opt);
+    }
   }
-}
 
   /******************************************************************
    *                📞 GAMES COUNT (à chaque changement)
@@ -1138,12 +1159,17 @@ function fillRatingSteps(steps){
       ? Math.max(0, Math.min(100, Math.trunc(clean.minRating)))
       : null;
 
+    const safeMinVotes = (typeof clean.minVotes === 'number' && Number.isFinite(clean.minVotes) && clean.minVotes > 0)
+      ? Math.trunc(clean.minVotes)
+      : null;
+
     saveLastSetup({
       includeGenreId: clean.includeGenreId || null,
       excludeGenreIds: Array.isArray(clean.excludeGenreIds) ? clean.excludeGenreIds : [],
       yearFrom: safeYearFrom,
       yearTo: safeYearTo,
       minRating: safeMin,
+      minVotes: safeMinVotes ?? (guessMinVotesInput ? Number(guessMinVotesInput.value) : null),
       roundMinutes: clean.roundMinutes
     });
 
@@ -1153,21 +1179,25 @@ function fillRatingSteps(steps){
       excludeGenreIds: Array.isArray(clean.excludeGenreIds) ? clean.excludeGenreIds : [],
       yearFrom: safeYearFrom,
       yearTo: safeYearTo,
-      minRating: safeMin
+      minRating: safeMin,
+      minVotes: safeMinVotes                                  // NEW
     };
 
     const sendSig = JSON.stringify({
       include: payload.includeGenreId || "",
       exclude: (payload.excludeGenreIds||[]).slice().sort(),
       y1: payload.yearFrom, y2: payload.yearTo,
-      min: payload.minRating
+      min: payload.minRating,
+      votes: payload.minVotes                                  // NEW
     });
     const now = Date.now();
     if (sendSig === LAST_COUNT_SEND_SIG && (now - LAST_COUNT_SEND_TS) < DEDUPE_MS) return;
     LAST_COUNT_SEND_SIG = sendSig;
     LAST_COUNT_SEND_TS  = now;
 
-    appendLog('#guess-log', `→ FRONT send count: { include:${payload.includeGenreId||''}, exclude:[${payload.excludeGenreIds.join(',')}], years:${payload.yearFrom}-${payload.yearTo}, min:${payload.minRating==null?'—':payload.minRating} }`);
+    appendLog('#guess-log',
+      `→ FRONT send count: { include:${payload.includeGenreId||''}, exclude:[${payload.excludeGenreIds.join(',')}], years:${payload.yearFrom}-${payload.yearTo}, min:${payload.minRating==null?'—':payload.minRating}, votes:${payload.minVotes==null?'—':payload.minVotes} }`
+    );
     safeDoAction('GTG Games Count', payload);
   }
 
@@ -1204,7 +1234,7 @@ function fillRatingSteps(steps){
 
     setRunning(false);
     setStatusText('Prêt');
-    setRoundNote(false);   // force un état initial cohérent
+    setRoundNote(false);
     setTimerText('--:--');
 
     connectSB();
