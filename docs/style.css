@@ -63,6 +63,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
 .card{grid-column:span 4;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:12px;box-shadow:var(--shadow)}
 .card.stretch{grid-column:span 12}
+.card.half{grid-column:span 6}
 .card h3{margin:0 0 8px 0;font-size:15px}
 
 /* Logs, lists, kv */
@@ -72,17 +73,9 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .qv-list{list-style:none;margin:0;padding:0;width:100%}
 .qv-list.big li{padding:8px 0}
 .qv-list li{padding:6px 0;border-bottom:1px dashed #2a2a2d}
-
-/* Etat cliqué/validé */
 .qv-list li.acked{color:#777;background:rgba(255,255,255,0.03)}
-
-/* Liens neutres & zone cliquable */
 .qv-list a{color:inherit;text-decoration:none;display:block}
-
-/* Feedback visuel */
 .qv-list li:hover{background:rgba(255,255,255,0.04)}
-
-/* Curseur main pour les listes d’événements */
 #qv-events-list li,#events-subs-list li{cursor:pointer}
 
 .qv-kv{width:100%;display:grid;gap:10px}
@@ -99,8 +92,6 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .qv-head h2{margin:0;font-size:16px;cursor:pointer}
 .qv-body{padding:12px;min-height:220px}
 .qv-foot{padding:8px 12px;border-top:1px dashed var(--border);text-align:center;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px}
-
-/* Quick-view scroll */
 #qv-events-list,#qv-tts-list{max-height:300px;overflow:auto}
 
 /* Text utils + footer */
@@ -109,16 +100,14 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .app-footer{padding:14px 16px;border-top:1px solid var(--border);text-align:right;color:#cfd2d6}
 
 /* Timer emphasis */
-#guess-timer{font-family:var(--mono);font-weight:700;letter-spacing:.5px}
+#guess-timer,#gtg-timer{font-family:var(--mono);font-weight:700;letter-spacing:.5px}
 
 /* ---------- Guess The Game – UI ---------- */
 .form-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start}
 .form-group{display:flex;flex-direction:column;gap:6px;min-width:200px;flex:1 1 240px}
 .form-group.grow{flex:2 1 360px}
-/* champs compacts : un peu plus large pour caser les 4 nouveaux */
 .form-group.sm{min-width:140px;max-width:180px;flex:0 0 180px}
 .form-group label{font-weight:600;line-height:1.2;margin-bottom:2px;color:#d9d9d9}
-
 .inline{display:flex;gap:8px;align-items:center;width:100%}
 
 select,input[type="number"],input[type="text"]{
@@ -155,17 +144,12 @@ body[data-round="ended"]   .round-note:empty::before{content:"Manche terminée"}
   display:inline-flex;gap:8px;align-items:center;background:#121214;
   border:1px solid var(--border);border-radius:999px;padding:6px 10px
 }
-/* bouton réel (tes chips sont des <button class="chip">) */
-button.chip{
-  background:#121214;border:1px solid var(--border);color:#cfd2d6;cursor:pointer;
-}
+button.chip{background:#121214;border:1px solid var(--border);color:#cfd2d6;cursor:pointer;}
 button.chip:hover{filter:brightness(1.05)}
-/* variante exclue */
 .chip-excl{border-color:#7a2f2f !important;background:#181313 !important}
 
 /* espacements */
 .grid.gap-top{margin-top:16px}
-.card.half{grid-column:span 6}
 
 /* Header lock button */
 .lock-btn{background:var(--panel);border:1px solid var(--border);color:#cfcfcf}
