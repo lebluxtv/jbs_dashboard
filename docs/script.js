@@ -1048,30 +1048,36 @@
           return;
         }
 
-        // Pool count  ✅ lit poolCount (fallback count)
-        if (data.type === 'count') {
-          const nbr = (typeof data.poolCount === 'number') ? data.poolCount
-                    : (typeof data.count === 'number') ? data.count
-                    : 0;
+// Pool count
+if (data.type === 'count') {
+  // Nouveau payload: poolCount + filtersEcho ; on garde compat.
+  const f = (data.filtersEcho && typeof data.filtersEcho === 'object') ? data.filtersEcho : data;
+  const n = (Number.isFinite(data.poolCount) ? data.poolCount
+           : Number.isFinite(data.count)     ? data.count
+           : 0);
 
-          const logSig = JSON.stringify({
-            includeGenreId: data.includeGenreId ?? null,
-            excludeGenreIds: Array.isArray(data.excludeGenreIds)? data.excludeGenreIds.slice().sort():[],
-            yearFrom: data.yearFrom ?? null,
-            yearTo:   data.yearTo   ?? null,
-            minUserRating:   data.minUserRating   ?? null,
-            minUserVotes:    data.minUserVotes    ?? null,
-            minCriticRating: data.minCriticRating ?? null,
-            minCriticVotes:  data.minCriticVotes  ?? null
-          });
-          const now = Date.now();
-          if (LAST_COUNT_LOG_SIG !== logSig || (now - LAST_COUNT_LOG_TS) > DEDUPE_MS){
-            appendLog('#guess-log', `Pool: ${nbr} jeux`);
-            LAST_COUNT_LOG_SIG = logSig; LAST_COUNT_LOG_TS = now;
-          }
-          setGuessMessage(`Jeux correspondants: ${nbr}`);
-          return;
-        }
+  // Dédup pour le log (utilise filtersEcho si présent)
+  const logSig = JSON.stringify({
+    includeGenreId:  f.includeGenreId ?? null,
+    excludeGenreIds: Array.isArray(f.excludeGenreIds) ? f.excludeGenreIds.slice().sort() : [],
+    yearFrom:        f.yearFrom ?? null,
+    yearTo:          f.yearTo   ?? null,
+    minUserRating:   f.minUserRating   ?? null,
+    minUserVotes:    f.minUserVotes    ?? null,
+    minCriticRating: f.minCriticRating ?? null,
+    minCriticVotes:  f.minCriticVotes  ?? null
+  });
+
+  const now = Date.now();
+  if (LAST_COUNT_LOG_SIG !== logSig || (now - LAST_COUNT_LOG_TS) > DEDUPE_MS) {
+    appendLog('#guess-log', `Pool: ${n} jeux`);
+    LAST_COUNT_LOG_SIG = logSig; LAST_COUNT_LOG_TS = now;
+  }
+
+  setGuessMessage(`Jeux correspondants: ${n}`);
+  return;
+}
+
 
         // Start ack / state  ✅ lit endsAtUtcMs (fallback endTs/endsAt)
         if (data.type === 'start') {
