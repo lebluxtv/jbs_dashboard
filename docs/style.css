@@ -73,25 +73,17 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .qv-list.big li{padding:8px 0}
 .qv-list li{padding:6px 0;border-bottom:1px dashed #2a2a2d}
 
-/* FIX: état "cliqué/validé" */
-.qv-list li.acked{
-  color:#777;
-  background:rgba(255,255,255,0.03);
-}
+/* Etat cliqué/validé */
+.qv-list li.acked{color:#777;background:rgba(255,255,255,0.03)}
 
-/* FIX: liens neutres, pas de bleu ni soulignement + zone cliquable pleine largeur */
-.qv-list a{
-  color:inherit;
-  text-decoration:none;
-  display:block;
-}
+/* Liens neutres & zone cliquable */
+.qv-list a{color:inherit;text-decoration:none;display:block}
 
 /* Feedback visuel */
 .qv-list li:hover{background:rgba(255,255,255,0.04)}
 
 /* Curseur main pour les listes d’événements */
-#qv-events-list li,
-#events-subs-list li{cursor:pointer}
+#qv-events-list li,#events-subs-list li{cursor:pointer}
 
 .qv-kv{width:100%;display:grid;gap:10px}
 .qv-kv div{display:flex;align-items:center;justify-content:space-between}
@@ -109,7 +101,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .qv-foot{padding:8px 12px;border-top:1px dashed var(--border);text-align:center;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px}
 
 /* Quick-view scroll */
-#qv-events-list, #qv-tts-list { max-height:300px; overflow:auto }
+#qv-events-list,#qv-tts-list{max-height:300px;overflow:auto}
 
 /* Text utils + footer */
 .muted{color:var(--muted)}
@@ -120,22 +112,17 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 #guess-timer{font-family:var(--mono);font-weight:700;letter-spacing:.5px}
 
 /* ---------- Guess The Game – UI ---------- */
-.form-row{
-  display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;
-}
-.form-group{
-  display:flex;flex-direction:column;gap:6px;min-width:200px;
-  flex:1 1 240px;
-}
+.form-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start}
+.form-group{display:flex;flex-direction:column;gap:6px;min-width:200px;flex:1 1 240px}
 .form-group.grow{flex:2 1 360px}
-.form-group.sm{min-width:120px;max-width:140px;flex:0 0 140px}
+/* champs compacts : un peu plus large pour caser les 4 nouveaux */
+.form-group.sm{min-width:140px;max-width:180px;flex:0 0 180px}
 .form-group label{font-weight:600;line-height:1.2;margin-bottom:2px;color:#d9d9d9}
 
 .inline{display:flex;gap:8px;align-items:center;width:100%}
 
 select,input[type="number"],input[type="text"]{
-  width:100%;min-height:36px;
-  background:var(--panel);border:1px solid var(--border);color:var(--text);
+  width:100%;min-height:36px;background:var(--panel);border:1px solid var(--border);color:var(--text);
   border-radius:10px;padding:8px 10px;outline:none;
 }
 select:focus,input[type="number"]:focus,input[type="text"]:focus{
@@ -146,57 +133,49 @@ select:focus,input[type="number"]:focus,input[type="text"]:focus{
 .btn{
   border:1px solid var(--border);background:var(--panel);color:var(--text);
   padding:8px 12px;border-radius:10px;cursor:pointer;
-  transition:border-color .15s, transform .06s ease;
+  transition:border-color .15s,transform .06s ease;
 }
 .btn:hover{border-color:#3a3a3d}
 .btn:active{transform:translateY(1px)}
-/* état désactivé lisible */
 .btn:disabled{opacity:.55;cursor:not-allowed;filter:saturate(.6)}
 .btn.ok{background:#1a4c32;border-color:#236a45}
 .btn.danger{background:#4a1f1f;border-color:#7a2f2f}
+.btn.danger:hover{border-color:#9b3a3a}
 
 .actions-row{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
 
-/* --- Note de manche (sous les boutons) --- */
-.round-note{
-  font-size:12px;
-  color:var(--muted);
-  font-weight:600;
-  min-height:1em; /* évite les sauts d’UI */
-}
-/* fallback auto: si le noeud est vide, on injecte le texte via CSS selon l’état global */
-body[data-round="running"] .round-note:empty::before{ content:"Manche lancée"; }
-body[data-round="ended"]   .round-note:empty::before{ content:"Manche terminée"; }
+/* Note de manche (sous les boutons) */
+.round-note{font-size:12px;color:var(--muted);font-weight:600;min-height:1em}
+body[data-round="running"] .round-note:empty::before{content:"Manche lancée"}
+body[data-round="ended"]   .round-note:empty::before{content:"Manche terminée"}
 
+/* Chips d’exclusion */
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{
   display:inline-flex;gap:8px;align-items:center;background:#121214;
   border:1px solid var(--border);border-radius:999px;padding:6px 10px
 }
-.chip button{background:transparent;border:none;color:#cfd2d6;cursor:pointer}
-.hint{font-size:12px;color:#9aa0a6}
+/* bouton réel (tes chips sont des <button class="chip">) */
+button.chip{
+  background:#121214;border:1px solid var(--border);color:#cfd2d6;cursor:pointer;
+}
+button.chip:hover{filter:brightness(1.05)}
+/* variante exclue */
+.chip-excl{border-color:#7a2f2f !important;background:#181313 !important}
 
-/* petit espace entre un bloc .card.stretch (ex: Filtres) et la grille suivante */
-.grid.gap-top { margin-top:16px; }
+/* espacements */
+.grid.gap-top{margin-top:16px}
+.card.half{grid-column:span 6}
 
-/* cartes demi-largeur (2 colonnes égales dans la grille 12 colonnes) */
-.card.half { grid-column: span 6; }
-
-/* --- Header lock button --- */
-.lock-btn{ background: var(--panel); border: 1px solid var(--border); color: #cfcfcf; }
-.lock-btn:hover{ border-color:#3a3a3d; color:#fff; transform:translateY(-1px); }
-
-/* --- Chips d’exclusion : bordure rouge discrète --- */
-.chip-excl{ border-color:#7a2f2f !important; background:#181313 !important; }
-
-/* --- Bouton Terminer en rouge --- */
-.btn.danger{ background:#4a1f1f; border-color:#7a2f2f; }
-.btn.danger:hover{ border-color:#9b3a3a; }
+/* Header lock button */
+.lock-btn{background:var(--panel);border:1px solid var(--border);color:#cfcfcf}
+.lock-btn:hover{border-color:#3a3a3d;color:#fff;transform:translateY(-1px)}
 
 /* ---------- Responsive ---------- */
 @media (max-width:1100px){
   .card{grid-column:span 6}
   .qv-card{grid-column:span 6}
+  .form-group.sm{flex:1 1 48%;max-width:none}
 }
 @media (max-width:720px){
   .grid{grid-template-columns:repeat(6,1fr)}
