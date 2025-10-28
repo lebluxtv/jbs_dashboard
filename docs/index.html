@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>JBS - Dashboard</title>
 
-  <!-- Styles -->
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="favicon.ico" sizes="any">
 </head>
@@ -23,7 +22,6 @@
         <span class="dot off" id="ws-dot"></span>
         <span id="ws-status" class="ws-status-text">Déconnecté de Streamer.bot</span>
       </div>
-      <!-- ⚠️ ID conservé : lock-btn (utilisé par script.js) -->
       <button class="icon-btn lock-btn" id="lock-btn" title="Mot de passe Websocket Streamer.bot">🔒</button>
     </div>
   </header>
@@ -49,7 +47,6 @@
     </button>
   </nav>
 
-  <!-- Panels -->
   <main class="tab-panels">
 
     <!-- Overview -->
@@ -163,90 +160,76 @@
       <div class="card stretch">
         <h3>Filtres</h3>
 
-<div class="form-row">
-  <!-- Genre (inclusion) -->
-  <div class="form-group">
-    <label for="guess-genre">Genre (inclusion, optionnel)</label>
-    <select id="guess-genre">
-      <option value="">— Aucun —</option>
-    </select>
-  </div>
+        <div class="form-row" id="filters" data-filters>
+          <!-- Genre (inclusion) -->
+          <div class="form-group">
+            <label for="guess-genre">Genre (inclusion, optionnel)</label>
+            <select id="guess-genre">
+              <option value="">— Aucun —</option>
+            </select>
+          </div>
 
-  <!-- Exclusions -->
-  <div class="form-group grow">
-    <label for="guess-exclude-input">Genres à exclure</label>
-    <div class="inline">
-      <input id="guess-exclude-input" list="guess-genres-datalist" type="text" placeholder="Rechercher un genre..." />
-      <button id="guess-exclude-add" class="btn" type="button">Ajouter</button>
-    </div>
-    <datalist id="guess-genres-datalist"></datalist>
-    <div id="guess-exclude-chips" class="chips">
-      <span class="hint">Tu peux laisser vide, ou exclure plusieurs genres.</span>
-    </div>
-  </div>
+          <!-- Exclusions -->
+          <div class="form-group grow">
+            <label for="guess-exclude-input">Genres à exclure</label>
+            <div class="inline">
+              <input id="guess-exclude-input" list="guess-genres-datalist" type="text" placeholder="Rechercher un genre..." />
+              <button id="guess-exclude-add" class="btn" type="button">Ajouter</button>
+            </div>
+            <datalist id="guess-genres-datalist"></datalist>
+            <div id="guess-exclude-chips" class="chips">
+              <span class="hint">Tu peux laisser vide, ou exclure plusieurs genres.</span>
+            </div>
+          </div>
 
-  <!-- Années -->
-  <div class="form-group sm">
-    <label for="guess-year-from">Année (de)</label>
-    <input id="guess-year-from" type="number" placeholder="min" />
-  </div>
+          <!-- Années -->
+          <div class="form-group sm">
+            <label for="guess-year-from">Année (de)</label>
+            <input id="guess-year-from" type="number" placeholder="min" />
+          </div>
 
-  <div class="form-group sm">
-    <label for="guess-year-to">Année (à)</label>
-    <input id="guess-year-to" type="number" placeholder="max" />
-  </div>
+          <div class="form-group sm">
+            <label for="guess-year-to">Année (à)</label>
+            <input id="guess-year-to" type="number" placeholder="max" />
+          </div>
 
-  <!-- Note agrégée (total_rating) -->
-  <div class="form-group sm">
-    <label for="guess-min-rating">Note min (Total)</label>
-    <select id="guess-min-rating">
-      <option value="">——</option>
-    </select>
-  </div>
+          <!-- Durée -->
+          <div class="form-group sm">
+            <label for="guess-duration-min">Durée (min)</label>
+            <input id="guess-duration-min" type="number" min="1" max="120" value="2" />
+          </div>
 
-  <!-- Votes agrégés -->
-  <div class="form-group sm">
-    <label for="guess-min-votes">Votes min (Total)</label>
-    <input id="guess-min-votes" type="number" min="0" value="20" />
-  </div>
+          <!-- ====== Utilisateurs ====== -->
+          <div class="form-group sm">
+            <label for="guess-min-user-rating">Note min (Utilisateurs)</label>
+            <select id="guess-min-user-rating">
+              <option value="">——</option>
+            </select>
+          </div>
 
-  <!-- Durée -->
-  <div class="form-group sm">
-    <label for="guess-duration-min">Durée (min)</label>
-    <input id="guess-duration-min" type="number" min="1" max="120" value="2" />
-  </div>
+          <div class="form-group sm">
+            <label for="guess-min-user-votes">Votes min (Utilisateurs)</label>
+            <input id="guess-min-user-votes" type="number" min="0" placeholder="ex: 50" />
+          </div>
 
-  <!-- ====== Utilisateurs (rating_count via user_ratings) ====== -->
-  <div class="form-group sm">
-    <label for="guess-min-user-rating">Note min (Utilisateurs)</label>
-    <select id="guess-min-user-rating">
-      <option value="">——</option>
-    </select>
-  </div>
+          <!-- ====== Critiques ====== -->
+          <div class="form-group sm">
+            <label for="guess-min-critic-rating">Note min (Critiques)</label>
+            <select id="guess-min-critic-rating">
+              <option value="">——</option>
+            </select>
+          </div>
 
-  <div class="form-group sm">
-    <label for="guess-min-user-votes">Votes min (Utilisateurs)</label>
-    <input id="guess-min-user-votes" type="number" min="0" placeholder="ex: 50" />
-  </div>
-
-  <!-- ====== Critiques (rating_count via critics) ====== -->
-  <div class="form-group sm">
-    <label for="guess-min-critic-rating">Note min (Critiques)</label>
-    <select id="guess-min-critic-rating">
-      <option value="">——</option>
-    </select>
-  </div>
-
-  <div class="form-group sm">
-    <label for="guess-min-critic-votes">Votes min (Critiques)</label>
-    <input id="guess-min-critic-votes" type="number" min="0" placeholder="ex: 10" />
-  </div>
-</div>
-
+          <div class="form-group sm">
+            <label for="guess-min-critic-votes">Votes min (Critiques)</label>
+            <input id="guess-min-critic-votes" type="number" min="0" placeholder="ex: 10" />
+          </div>
+        </div>
 
         <div class="actions-row">
           <button id="guess-start" class="btn ok" type="button">Lancer</button>
           <button id="guess-end" class="btn danger" type="button">Terminer</button>
+          <small class="round-note" id="gtg-round-note"></small>
         </div>
 
         <p id="guess-msg" class="hint" style="margin-top:8px">—</p>
@@ -257,7 +240,7 @@
           <h3>Statut</h3>
           <div class="qv-kv">
             <div><span>Etat</span><strong id="guess-status-info">En pause</strong></div>
-            <div><span>Timer</span><strong id="guess-timer">—:—</strong></div>
+            <div><span>Timer</span><strong id="gtg-timer">—:—</strong></div>
             <div><span>Dernier jeu trouvé</span><strong id="guess-last-info">—</strong></div>
             <div><span>Gagnant</span><strong id="guess-winner">—</strong></div>
           </div>
@@ -293,11 +276,8 @@
     © 2025 leblux Corp.
   </footer>
 
-  <!-- Lib Streamer.bot client -->
-   <!--<script src="https://cdn.jsdelivr.net/npm/@streamerbot/client@1.12.2/dist/streamerbot-client.js"></script>-->
-  <script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.js"></script>
-  <!-- Script principal -->
+  <!-- Streamer.bot client -->
+  <script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.umd.js"></script>
   <script src="script.js"></script>
-
 </body>
 </html>
