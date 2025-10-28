@@ -1048,8 +1048,12 @@
           return;
         }
 
-        // Pool count
+        // Pool count  ✅ lit poolCount (fallback count)
         if (data.type === 'count') {
+          const nbr = (typeof data.poolCount === 'number') ? data.poolCount
+                    : (typeof data.count === 'number') ? data.count
+                    : 0;
+
           const logSig = JSON.stringify({
             includeGenreId: data.includeGenreId ?? null,
             excludeGenreIds: Array.isArray(data.excludeGenreIds)? data.excludeGenreIds.slice().sort():[],
@@ -1062,25 +1066,35 @@
           });
           const now = Date.now();
           if (LAST_COUNT_LOG_SIG !== logSig || (now - LAST_COUNT_LOG_TS) > DEDUPE_MS){
-            appendLog('#guess-log', `Pool: ${data.count ?? 0} jeux`);
+            appendLog('#guess-log', `Pool: ${nbr} jeux`);
             LAST_COUNT_LOG_SIG = logSig; LAST_COUNT_LOG_TS = now;
           }
-          setGuessMessage(`Jeux correspondants: ${data.count ?? 0}`);
+          setGuessMessage(`Jeux correspondants: ${nbr}`);
           return;
         }
 
-        // Start ack / state
+        // Start ack / state  ✅ lit endsAtUtcMs (fallback endTs/endsAt)
         if (data.type === 'start') {
           if (data.roundId) GTG_ROUND_ID = String(data.roundId);
           setRunning(true);
-          if (Number.isFinite(data.endTs)) startRoundTimer(Number(data.endTs));
+
+          const endMs = Number.isFinite(data.endsAtUtcMs) ? Number(data.endsAtUtcMs)
+                      : Number.isFinite(data.endTs)       ? Number(data.endTs)
+                      : Number.isFinite(data.endsAt)      ? Number(data.endsAt)
+                      : NaN;
+          if (Number.isFinite(endMs)) startRoundTimer(endMs);
+
           appendLog('#guess-log', `Manche démarrée (roundId=${GTG_ROUND_ID||'—'})`);
           return;
         }
 
-        // Tick (timer sync)
+        // Tick (timer sync)  ✅ lit endsAtUtcMs (fallback endTs/endsAt)
         if (data.type === 'tick') {
-          if (Number.isFinite(data.endTs)) startRoundTimer(Number(data.endTs));
+          const endMs = Number.isFinite(data.endsAtUtcMs) ? Number(data.endsAtUtcMs)
+                      : Number.isFinite(data.endTs)       ? Number(data.endTs)
+                      : Number.isFinite(data.endsAt)      ? Number(data.endsAt)
+                      : NaN;
+          if (Number.isFinite(endMs)) startRoundTimer(endMs);
           return;
         }
 
