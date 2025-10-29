@@ -156,83 +156,98 @@
         </div>
       </div>
 
-      <!-- Filtres -->
-      <div class="card stretch">
-        <h3>Filtres</h3>
+      <!-- Filtres + Série -->
+      <div class="grid">
+        <!-- Filtres -->
+        <div class="card stretch">
+          <h3>Filtres</h3>
 
-        <div class="form-row" id="filters" data-filters>
-          <!-- Genre (inclusion) -->
-          <div class="form-group">
-            <label for="guess-genre">Genre (inclusion, optionnel)</label>
-            <select id="guess-genre" aria-label="Genre inclus">
-              <option value="">— Aucun —</option>
-            </select>
-          </div>
-
-          <!-- Exclusions -->
-          <div class="form-group grow">
-            <label for="guess-exclude-input">Genres à exclure</label>
-            <div class="inline">
-              <input id="guess-exclude-input" list="guess-genres-datalist" type="text" placeholder="Rechercher un genre..." aria-label="Rechercher un genre à exclure" />
-              <button id="guess-exclude-add" class="btn" type="button">Ajouter</button>
+          <div class="form-row" id="filters" data-filters>
+            <!-- Genre (inclusion) -->
+            <div class="form-group">
+              <label for="guess-genre">Genre (inclusion, optionnel)</label>
+              <select id="guess-genre" aria-label="Genre inclus">
+                <option value="">— Aucun —</option>
+              </select>
             </div>
-            <datalist id="guess-genres-datalist"></datalist>
-            <div id="guess-exclude-chips" class="chips">
-              <span class="hint">Tu peux laisser vide, ou exclure plusieurs genres.</span>
+
+            <!-- Exclusions -->
+            <div class="form-group grow">
+              <label for="guess-exclude-input">Genres à exclure</label>
+              <div class="inline">
+                <input id="guess-exclude-input" list="guess-genres-datalist" type="text" placeholder="Rechercher un genre..." aria-label="Rechercher un genre à exclure" />
+                <button id="guess-exclude-add" class="btn" type="button">Ajouter</button>
+              </div>
+              <datalist id="guess-genres-datalist"></datalist>
+              <div id="guess-exclude-chips" class="chips">
+                <span class="hint">Tu peux laisser vide, ou exclure plusieurs genres.</span>
+              </div>
             </div>
-          </div>
 
-          <!-- Années -->
-          <div class="form-group sm">
-            <label for="guess-year-from">Année (de)</label>
-            <input id="guess-year-from" type="number" placeholder="min" inputmode="numeric" />
-          </div>
+            <!-- Années -->
+            <div class="form-group sm">
+              <label for="guess-year-from">Année (de)</label>
+              <input id="guess-year-from" type="number" placeholder="min" inputmode="numeric" />
+            </div>
 
-          <div class="form-group sm">
-            <label for="guess-year-to">Année (à)</label>
-            <input id="guess-year-to" type="number" placeholder="max" inputmode="numeric" />
-          </div>
+            <div class="form-group sm">
+              <label for="guess-year-to">Année (à)</label>
+              <input id="guess-year-to" type="number" placeholder="max" inputmode="numeric" />
+            </div>
 
-          <!-- Durée -->
-          <div class="form-group sm">
-            <label for="guess-duration-min">Durée (min)</label>
-            <input id="guess-duration-min" type="number" min="1" max="120" value="2" inputmode="numeric" />
-          </div>
+            <!-- Utilisateurs -->
+            <div class="form-group sm">
+              <label for="guess-min-user-rating">Note min (Utilisateurs)</label>
+              <select id="guess-min-user-rating" aria-label="Note minimale utilisateurs">
+                <option value="">——</option>
+              </select>
+            </div>
 
-          <!-- ====== Utilisateurs ====== -->
-          <div class="form-group sm">
-            <label for="guess-min-user-rating">Note min (Utilisateurs)</label>
-            <select id="guess-min-user-rating" aria-label="Note minimale utilisateurs">
-              <option value="">——</option>
-            </select>
-          </div>
+            <div class="form-group sm">
+              <label for="guess-min-user-votes">Votes min (Utilisateurs)</label>
+              <input id="guess-min-user-votes" type="number" min="0" placeholder="ex: 50" inputmode="numeric" />
+            </div>
 
-          <div class="form-group sm">
-            <label for="guess-min-user-votes">Votes min (Utilisateurs)</label>
-            <input id="guess-min-user-votes" type="number" min="0" placeholder="ex: 50" inputmode="numeric" />
-          </div>
+            <!-- Critiques -->
+            <div class="form-group sm">
+              <label for="guess-min-critic-rating">Note min (Critiques)</label>
+              <select id="guess-min-critic-rating" aria-label="Note minimale critiques">
+                <option value="">——</option>
+              </select>
+            </div>
 
-          <!-- ====== Critiques ====== -->
-          <div class="form-group sm">
-            <label for="guess-min-critic-rating">Note min (Critiques)</label>
-            <select id="guess-min-critic-rating" aria-label="Note minimale critiques">
-              <option value="">——</option>
-            </select>
-          </div>
-
-          <div class="form-group sm">
-            <label for="guess-min-critic-votes">Votes min (Critiques)</label>
-            <input id="guess-min-critic-votes" type="number" min="0" placeholder="ex: 10" inputmode="numeric" />
+            <div class="form-group sm">
+              <label for="guess-min-critic-votes">Votes min (Critiques)</label>
+              <input id="guess-min-critic-votes" type="number" min="0" placeholder="ex: 10" inputmode="numeric" />
+            </div>
           </div>
         </div>
 
-        <div class="actions-row">
-          <button id="guess-start" class="btn ok" type="button">Lancer</button>
-          <button id="guess-end" class="btn danger" type="button">Terminer</button>
-          <small class="round-note" id="gtg-round-note" aria-live="polite"></small>
-        </div>
+        <!-- Série -->
+        <div class="card stretch">
+          <h3>Série</h3>
 
-        <p id="guess-msg" class="hint" style="margin-top:8px">—</p>
+          <div class="form-row">
+            <div class="form-group sm">
+              <label for="guess-duration-min">Durée (min)</label>
+              <input id="guess-duration-min" type="number" min="1" max="120" value="2" inputmode="numeric" />
+            </div>
+
+            <div class="form-group sm">
+              <label for="gtg-target-score">Score cible</label>
+              <input id="gtg-target-score" type="number" min="1" max="999" placeholder="ex: 5" inputmode="numeric" />
+            </div>
+          </div>
+
+          <div class="actions-row">
+            <button id="guess-start" class="btn ok" type="button">Lancer</button>
+            <button id="guess-end" class="btn danger" type="button">Terminer</button>
+            <button id="gtg-series-cancel" class="btn" type="button" title="Annuler la série en cours (confirmation requise)">Annuler la série</button>
+            <small class="round-note" id="gtg-round-note" aria-live="polite"></small>
+          </div>
+
+          <p id="guess-msg" class="hint" style="margin-top:8px">—</p>
+        </div>
       </div>
 
       <div class="grid gap-top">
