@@ -226,6 +226,7 @@
       root.querySelectorAll('input, select, textarea, button').forEach(el => {
         const id = (el.id || '').toLowerCase();
         const cls = (el.className || '').toLowerCase();
+        theText(el);
         const txt = (el.textContent || '').toLowerCase();
         const isStartEnd =
           id.includes('start') || id.includes('end') ||
@@ -236,6 +237,7 @@
     });
     return Array.from(ctrls);
   }
+  function theText(_){} // keep minifier happy
 
   function setFiltersLocked(locked) {
     const ctrls = getFilterControls();
@@ -386,7 +388,7 @@
     try { return JSON.parse(localStorage.getItem(LAST_SETUP_KEY)||'{}') || {}; } catch { return {}; }
   }
 
-  // 🔥 Helpers pour persister l’état courant de l’UI à la volée
+  // 🔥 Helpers UI → setup
   function collectFilters(){
     normalizeYearInputs();
     const includeGenreId = guessGenreSel?.value ? String(guessGenreSel.value) : "";
@@ -433,9 +435,7 @@
       roundMinutes: clean.roundMinutes
     };
   }
-  function saveLastSetupFromUI(){
-    try { saveLastSetup(getCurrentSetupFromUI()); } catch {}
-  }
+  function saveLastSetupFromUI(){ try { saveLastSetup(getCurrentSetupFromUI()); } catch {} }
 
   function applyLastSetupAfterGenres(){
     const s = loadLastSetup() || {};
@@ -455,7 +455,6 @@
     if (isNum(s.yearFrom)) guessYearFromInput.value = String(s.yearFrom);
     if (isNum(s.yearTo))   guessYearToInput.value   = String(s.yearTo);
 
-    // Nouveaux filtres (laisser vide par défaut → pas de filtre)
     if (guessMinUserRatingSel){
       if (isNum(s.minUserRating)) guessMinUserRatingSel.value = String(s.minUserRating);
       else guessMinUserRatingSel.value = '';
@@ -639,7 +638,7 @@
       if (!el) return;
       el.addEventListener('change', ()=>{
         debounceCount();
-        debouncePersist();  // 🔥 persiste à chaque changement
+        debouncePersist();
       });
       if (
         el === guessYearFromInput || el === guessYearToInput ||
@@ -647,7 +646,7 @@
       ){
         el.addEventListener('input', ()=>{
           debounceCount();
-          debouncePersist(); // 🔥 persiste aussi à la frappe
+          debouncePersist();
         });
       }
     });
@@ -657,7 +656,6 @@
       if (id){
         GTG_EXCLUDED.add(String(id));
         renderExcludeChips();
-        // 🔥 PERSISTE IMMÉDIATEMENT l’état des exclusions
         saveLastSetup({ excludeGenreIds: Array.from(GTG_EXCLUDED) });
         requestPoolCount();
       }
@@ -673,13 +671,11 @@
         includeGenreId: clean.includeGenreId,
         excludeGenreIds: clean.excludeGenreIds,
         yearFrom: clean.yearFrom, yearTo: clean.yearTo,
-
         minUserRating:   clean.minUserRating,
         minUserVotes:    clean.minUserVotes,
         minCriticRating: clean.minCriticRating,
         minCriticVotes:  clean.minCriticVotes,
-
-        roundMinutes: clean.roundMinutes
+        roundMinutes:    clean.roundMinutes
       });
 
       const nonce = makeNonce();
@@ -690,12 +686,10 @@
         includeGenreId: clean.includeGenreId,
         excludeGenreIds: clean.excludeGenreIds,
         yearFrom: clean.yearFrom, yearTo: clean.yearTo,
-
         minUserRating:   clean.minUserRating,
         minUserVotes:    (isNum(clean.minUserVotes)    && clean.minUserVotes    > 0) ? Math.trunc(clean.minUserVotes)    : null,
         minCriticRating: clean.minCriticRating,
         minCriticVotes:  (isNum(clean.minCriticVotes)  && clean.minCriticVotes  > 0) ? Math.trunc(clean.minCriticVotes)  : null,
-
         durationSec
       });
 
@@ -731,12 +725,13 @@
   function autoEndIfNeeded(){
     if (GTG_TIMER_SENT) return;
     if (!GTG_ROUND_ID) {
-      appendLog('#guess-log', 'Timer=0 mais aucun roundId — End non envoyé.');
+      appendLog('#guess-log', 'Timer=0 mais aucun round actif — End non envoyé.');
       GTG_TIMER_SENT = true;
       return;
     }
     GTG_TIMER_SENT = true;
-    appendLog('#guess-log', `Timer écoulé → demande "GTG End" (roundId=${GTG_ROUND_ID})`);
+    // 🔇 plus de roundId dans le log
+    appendLog('#guess-log', 'Timer écoulé → demande "GTG End"');
     safeDoAction('GTG End', { roundId: GTG_ROUND_ID, reason: 'timeout' });
   }
 
@@ -812,7 +807,6 @@
         onConnect: ()=>{
           setConnected(true);
           appendLog('#guess-log', `Connecté à Streamer.bot (${host}:${port})`);
-          // Bootstrap des genres/années/steps + récupération des scores existants
           safeDoAction('GTG Bootstrap Genres & Years & Ratings', {});
           safeDoAction('GTG Scores Get', {});
         },
@@ -974,12 +968,21 @@
       includeGenreId: clean.includeGenreId,
       excludeGenreIds: clean.excludeGenreIds,
       yearFrom: clean.yearFrom, yearTo: clean.yearTo,
-
       minUserRating:   clean.minUserRating,
       minUserVotes:    (isNum(clean.minUserVotes)    && clean.minUserVotes    > 0) ? Math.trunc(clean.minUserVotes)    : null,
       minCriticRating: clean.minCriticRating,
       minCriticVotes:  (isNum(clean.minCriticVotes)  && clean.minCriticVotes  > 0) ? Math.trunc(clean.minCriticVotes)  : null
     });
+  }
+
+  // Helpers pour construire le log enrichi
+  const asArray = (v)=> Array.isArray(v) ? v : (v==null ? [] : [v]);
+  const joinList = (arr)=> (Array.isArray(arr) && arr.length) ? arr.join(', ') : '—';
+  function pickNum(...keys){
+    for (const v of keys){
+      if (isNum(v)) return Math.trunc(v);
+    }
+    return null;
   }
 
   function handleSBEvent(event, data){
@@ -989,7 +992,6 @@
       // TTS / Events (abrégé)
       if (event?.source === 'Twitch' && SUB_EVENT_TYPES.has(event.type)){
         logSbSubEventToConsole(event, data);
-        // stockage minimal pour la QV
         if (event.type === 'GiftBomb') {
           const d = data || {};
           const gifter     = extractUserName(d.user || d);
@@ -1071,11 +1073,9 @@
 
           normalizeYearInputs();
 
-          // Remplit listes de notes Users/Critics
           fillRatingStepsAll(Array.isArray(data.ratingSteps) && data.ratingSteps.length ? data.ratingSteps : [0,50,60,70,80,85,90]);
 
           applyLastSetupAfterGenres();
-          // 🔥 ancrage propre de l’état revalidé
           saveLastSetupFromUI();
 
           setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
@@ -1086,13 +1086,11 @@
 
         // Pool count
         if (data.type === 'count') {
-          // Nouveau payload: poolCount + filtersEcho ; on garde compat.
           const f = (data.filtersEcho && typeof data.filtersEcho === 'object') ? data.filtersEcho : data;
           const n = (Number.isFinite(data.poolCount) ? data.poolCount
                    : Number.isFinite(data.count)     ? data.count
                    : 0);
 
-          // Dédup pour le log (utilise filtersEcho si présent)
           const logSig = JSON.stringify({
             includeGenreId:  f.includeGenreId ?? null,
             excludeGenreIds: Array.isArray(f.excludeGenreIds) ? f.excludeGenreIds.slice().sort() : [],
@@ -1114,7 +1112,7 @@
           return;
         }
 
-        // Start ack / state  ✅ lit endsAtUtcMs (fallback endTs/endsAt)
+        // Start ack / state — 🔇 plus de roundId dans le log
         if (data.type === 'start') {
           if (data.roundId) GTG_ROUND_ID = String(data.roundId);
           setRunning(true);
@@ -1125,11 +1123,11 @@
                       : NaN;
           if (Number.isFinite(endMs)) startRoundTimer(endMs);
 
-          appendLog('#guess-log', `Manche démarrée (roundId=${GTG_ROUND_ID||'—'})`);
+          appendLog('#guess-log', 'Manche démarrée');
           return;
         }
 
-        // Tick (timer sync)  ✅ lit endsAtUtcMs (fallback endTs/endsAt)
+        // Tick (timer sync)
         if (data.type === 'tick') {
           const endMs = Number.isFinite(data.endsAtUtcMs) ? Number(data.endsAtUtcMs)
                       : Number.isFinite(data.endTs)       ? Number(data.endTs)
@@ -1139,19 +1137,37 @@
           return;
         }
 
-        // Reveal → fin de manche
+        // Reveal → fin de manche (log enrichi)
         if (data.type === 'reveal') {
-          const name = data.game?.name || '—';
-          const winner = data.winner || '';
+          const g = data.game || {};
+          const name = g.name || '—';
+
+          // Supporte plusieurs conventions de champs
+          const userRating   = pickNum(g.userRating, g.usersRating, g.user_score, g.userScore, g.rating_user);
+          const userVotes    = pickNum(g.userVotes,  g.usersVotes, g.user_votes, g.votes_user, g.total_user_votes);
+          const criticRating = pickNum(g.criticRating, g.criticsRating, g.critic_score, g.criticScore, g.rating_critic);
+          const criticVotes  = pickNum(g.criticVotes,  g.criticsVotes, g.critic_votes, g.votes_critic, g.total_critic_votes);
+
+          const publishers = asArray(g.publishers || g.publisherNames || g.publisher || g.publishersNames);
+          const developers = asArray(g.developers || g.developerNames || g.developer || g.developersNames);
+
+          const parts = [];
+          if (userRating != null)   parts.push(`Users: ${userRating}%${userVotes?` (${userVotes})`:''}`);
+          if (criticRating != null) parts.push(`Critics: ${criticRating}%${criticVotes?` (${criticVotes})`:''}`);
+          if (publishers.length)    parts.push(`Éditeur: ${joinList(publishers)}`);
+          if (developers.length)    parts.push(`Studio: ${joinList(developers)}`);
+
           $('#guess-last-info') && ($('#guess-last-info').textContent = name);
           $('#qv-guess-last')  && ($('#qv-guess-last').textContent  = name);
+          const winner = data.winner || '';
           $('#guess-winner')   && ($('#guess-winner').textContent   = winner || '—');
 
           setRunning(false);
           stopRoundTimer();
           GTG_ROUND_ID = null;
 
-          appendLog('#guess-log', winner ? `Réponse: ${name} (gagnant: ${winner})` : `Réponse: ${name}`);
+          const extra = parts.length ? ` — ${parts.join(' • ')}` : '';
+          appendLog('#guess-log', `Réponse: ${name}${extra}${winner?` (gagnant: ${winner})`:''}`);
           return;
         }
 
