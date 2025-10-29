@@ -60,7 +60,7 @@
       .forEach(el => { if (el) el.textContent = txt; });
   }
   function setTimerText(txt){
-    $$('#guess-timer, #gtg-timer').forEach(el => { if (el) el.textContent = txt; });
+    $$('#guess-timer, #gtg-timer').forEach(el => { el.textContent = txt; });
   }
 
   // Note de manche
@@ -1188,37 +1188,43 @@
           return;
         }
 
-        // Reveal → fin de manche (log enrichi, même en debug OFF)
+        // Reveal → fin de manche (log enrichi, lecture depuis data.details.*)
         if (data.type === 'reveal') {
           const g = data.game || {};
           const name = g.name || '—';
 
-          const year = extractYearFromGame(g);
+          // —— NOUVEAU : on lit d'abord dans data.details.*, fallback sur ancien schéma si besoin
+          const d = (data.details && typeof data.details === 'object') ? data.details : {};
 
-          const userRating   = pickNum(g.userRating, g.usersRating, g.user_score, g.userScore, g.rating_user);
-          const userVotes    = pickNum(g.userVotes,  g.usersVotes, g.user_votes, g.votes_user, g.total_user_votes);
-          const criticRating = pickNum(g.criticRating, g.criticsRating, g.critic_score, g.criticScore, g.rating_critic);
-          const criticVotes  = pickNum(g.criticVotes,  g.criticsVotes, g.critic_votes, g.votes_critic, g.total_critic_votes);
+          const year = isNum(d.year) ? d.year : extractYearFromGame(g);
 
-          const publishers = asArray(g.publishers || g.publisherNames || g.publisher || g.publishersNames);
-          const developers = asArray(g.developers || g.developerNames || g.developer || g.developersNames);
+          const userRating   = pickNum(d.userRating);
+          const userVotes    = pickNum(d.userVotes);
+          const criticRating = pickNum(d.criticRating);
+          const criticVotes  = pickNum(d.criticVotes);
 
+          // IGDB "involved_companies" consolidé côté C# → d.companies
+          const companies = asArray(d.companies);
+
+          // Construction de la ligne d’infos
           const parts = [];
           if (isNum(year))          parts.push(String(year));
           if (userRating != null)   parts.push(`Users: ${userRating}%${userVotes?` (${userVotes})`:''}`);
           if (criticRating != null) parts.push(`Critics: ${criticRating}%${criticVotes?` (${criticVotes})`:''}`);
-          if (publishers.length)    parts.push(`Éditeur: ${joinList(publishers)}`);
-          if (developers.length)    parts.push(`Studio: ${joinList(developers)}`);
+          if (companies.length)     parts.push(`Éditeur/Studio: ${joinList(companies)}`);
 
+          // UI — nom + gagnant
           $('#guess-last-info') && ($('#guess-last-info').textContent = name);
           $('#qv-guess-last')  && ($('#qv-guess-last').textContent  = name);
           const winner = data.winner || '';
           $('#guess-winner')   && ($('#guess-winner').textContent   = winner || '—');
 
+          // État / timer
           setRunning(false);
           stopRoundTimer();
           GTG_ROUND_ID = null;
 
+          // Log final
           const extra = parts.length ? ` — ${parts.join(' • ')}` : '';
           appendLog('#guess-log', `Réponse: ${name}${extra}${winner?` (gagnant: ${winner})`:''}`);
 
