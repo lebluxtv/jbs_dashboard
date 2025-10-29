@@ -712,10 +712,15 @@
       safeDoAction("GTG Scores Reset", {});
     });
 
-    seriesCancelBtn?.addEventListener("click", ()=>{
-      if (!confirm("Annuler la série en cours ?")) return;
-      safeDoAction("GTG Series Cancel", { reason: "manual" });
-    });
+seriesCancelBtn?.addEventListener("click", ()=>{
+  if (!confirm("Annuler la série en cours ?")) return;
+  safeDoAction("GTG End", {
+    roundId: GTG_ROUND_ID || "",
+    reason: "seriesCancel",
+    cancel: true
+  });
+});
+
 
     // ⚠ installDebugToggleButton() sera défini plus bas ; appelé plus tard dans boot()
     renderExcludeChips();
