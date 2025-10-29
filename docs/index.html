@@ -156,9 +156,8 @@
         </div>
       </div>
 
-      <!-- Filtres + Partie -->
+      <!-- Filtres -->
       <div class="grid">
-        <!-- Filtres -->
         <div class="card stretch">
           <h3>Filtres</h3>
 
@@ -222,9 +221,12 @@
             </div>
           </div>
         </div>
+      </div>
 
+      <!-- Partie + Statut côte à côte -->
+      <div class="grid">
         <!-- Partie -->
-        <div class="card stretch">
+        <div class="card span-8">
           <h3>Partie</h3>
 
           <div class="form-row">
@@ -249,10 +251,9 @@
           <small id="gtg-meta-status" class="round-note" aria-live="polite">Partie inactive</small>
           <p id="guess-msg" class="hint" style="margin-top:8px">—</p>
         </div>
-      </div>
 
-      <div class="grid gap-top">
-        <div class="card half">
+        <!-- Statut (déplacé ici, à droite) -->
+        <div class="card span-4">
           <h3>Statut</h3>
           <div class="qv-kv">
             <div><span>Etat</span><strong id="guess-status-info">En pause</strong></div>
@@ -261,7 +262,10 @@
             <div><span>Gagnant</span><strong id="guess-winner">—</strong></div>
           </div>
         </div>
+      </div>
 
+      <!-- Leaderboard + Score global sur la même ligne -->
+      <div class="grid gap-top">
         <div class="card half">
           <h3>Leaderboard</h3>
           <ol id="guess-board" class="qv-ol">
