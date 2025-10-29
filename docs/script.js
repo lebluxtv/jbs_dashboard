@@ -15,6 +15,9 @@
   const isNum = (n)=> typeof n === 'number' && Number.isFinite(n);
   const makeNonce = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
 
+  // Debug verbose (session only, no persistence)
+  let DEBUG_VERBOSE = false;
+
   function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
   function setStoredPwd(v){ try { localStorage.setItem(SB_PWD_KEY, v || ""); } catch {} }
 
@@ -26,6 +29,22 @@
     const p = document.createElement('p');
     p.textContent = `[${ts}] ${text}`;
     el.appendChild(p); el.scrollTop = el.scrollHeight;
+  }
+  function appendLogDebug(text, obj){
+    if (!DEBUG_VERBOSE) return;
+    let line = `DEBUG: ${text}`;
+    if (obj !== undefined) {
+      try {
+        const s = JSON.stringify(obj, replacerNoHuge, 0);
+        // tronquage soft si très long
+        line += " " + (s.length > 1200 ? (s.slice(0,1200) + " …") : s);
+      } catch {}
+    }
+    appendLog('#guess-log', line);
+  }
+  function replacerNoHuge(_k, v){
+    if (typeof v === 'string' && v.length > 500) return v.slice(0,500) + '…';
+    return v;
   }
 
   function setDot(selector, on){
@@ -712,6 +731,9 @@
       safeDoAction('GTG Scores Reset', {});
     });
 
+    // DEBUG VERBOSE TOGGLE — bouton injecté près de Reset Scores
+    installDebugToggleButton();
+
     renderExcludeChips();
   }
 
@@ -927,13 +949,12 @@
     return arr.map(r => extractRecipientName(r));
   }
   function tierLabelFromAny(v){
-    if (v == null) return '';
-    const s = String(v).toLowerCase();
+    const s = (v==null ? '' : String(v)).toLowerCase();
     if (s.includes('prime')) return 'Prime';
     if (s.includes('1000') || s.includes('tier 1') || s.includes('tier1')) return 'Tier 1';
     if (s.includes('2000') || s.includes('tier 2') || s.includes('tier2')) return 'Tier 2';
     if (s.includes('3000') || s.includes('tier 3') || s.includes('tier3')) return 'Tier 3';
-    return String(v);
+    return String(v||'');
   }
   function extractMonths(d){
     const m = Number(d?.cumulativeMonths ?? d?.months ?? d?.streak ?? 0);
@@ -983,6 +1004,28 @@
       if (isNum(v)) return Math.trunc(v);
     }
     return null;
+  }
+  function extractYearFromGame(g){
+    if (!g || typeof g !== 'object') return null;
+    // champs classiques possibles
+    const direct = pickNum(g.year, g.releaseYear, g.first_release_year);
+    if (direct != null) return direct;
+    // timestamps ms/s → année
+    const ts = (isNum(g.first_release_date) ? g.first_release_date
+              : isNum(g.releaseDate) ? g.releaseDate
+              : isNum(g.firstReleaseDate) ? g.firstReleaseDate
+              : null);
+    if (ts != null){
+      const ms = ts > 10_000_000_000 ? ts : ts*1000;
+      const y = new Date(ms).getUTCFullYear();
+      if (isNum(y) && y >= 1970 && y <= 2100) return y;
+    }
+    // fallback null
+    return null;
+  }
+  function extractTargetNameFromPayload(d){
+    if (!d) return null;
+    return d.gameDebug?.name || d.target?.name || d.answerName || d.gameName || null;
   }
 
   function handleSBEvent(event, data){
@@ -1080,6 +1123,7 @@
 
           setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
 
+          appendLogDebug('bootstrap.echo', { ratingSteps: data.ratingSteps, oldestYear: data.oldestYear, newestYear: data.newestYear });
           requestPoolCount();
           return;
         }
@@ -1108,6 +1152,7 @@
             LAST_COUNT_LOG_SIG = logSig; LAST_COUNT_LOG_TS = now;
           }
 
+          appendLogDebug('count.filtersEcho', f);
           setGuessMessage(`Jeux correspondants: ${n}`);
           return;
         }
@@ -1123,7 +1168,12 @@
                       : NaN;
           if (Number.isFinite(endMs)) startRoundTimer(endMs);
 
+          // Debug: nom du jeu cible si exposé par le C#
+          const targetName = extractTargetNameFromPayload(data);
+          if (targetName) appendLogDebug('target', { name: targetName });
+
           appendLog('#guess-log', 'Manche démarrée');
+          appendLogDebug('start.payload', data);
           return;
         }
 
@@ -1134,15 +1184,17 @@
                       : Number.isFinite(data.endsAt)      ? Number(data.endsAt)
                       : NaN;
           if (Number.isFinite(endMs)) startRoundTimer(endMs);
+          appendLogDebug('tick.payload', { endsAtUtcMs: data.endsAtUtcMs ?? data.endTs ?? data.endsAt });
           return;
         }
 
-        // Reveal → fin de manche (log enrichi)
+        // Reveal → fin de manche (log enrichi, même en debug OFF)
         if (data.type === 'reveal') {
           const g = data.game || {};
           const name = g.name || '—';
 
-          // Supporte plusieurs conventions de champs
+          const year = extractYearFromGame(g);
+
           const userRating   = pickNum(g.userRating, g.usersRating, g.user_score, g.userScore, g.rating_user);
           const userVotes    = pickNum(g.userVotes,  g.usersVotes, g.user_votes, g.votes_user, g.total_user_votes);
           const criticRating = pickNum(g.criticRating, g.criticsRating, g.critic_score, g.criticScore, g.rating_critic);
@@ -1152,6 +1204,7 @@
           const developers = asArray(g.developers || g.developerNames || g.developer || g.developersNames);
 
           const parts = [];
+          if (isNum(year))          parts.push(String(year));
           if (userRating != null)   parts.push(`Users: ${userRating}%${userVotes?` (${userVotes})`:''}`);
           if (criticRating != null) parts.push(`Critics: ${criticRating}%${criticVotes?` (${criticVotes})`:''}`);
           if (publishers.length)    parts.push(`Éditeur: ${joinList(publishers)}`);
@@ -1168,6 +1221,8 @@
 
           const extra = parts.length ? ` — ${parts.join(' • ')}` : '';
           appendLog('#guess-log', `Réponse: ${name}${extra}${winner?` (gagnant: ${winner})`:''}`);
+
+          appendLogDebug('reveal.payload', data);
           return;
         }
 
@@ -1175,11 +1230,59 @@
         if (data.type === 'scoreUpdate' || data.type === 'resume' || data.type === 'scoreReset') {
           updateLeaderboard(Array.isArray(data.leaderboard) ? data.leaderboard : []);
           if (data.type === 'scoreReset') appendLog('#guess-log', 'Scores réinitialisés.');
+          appendLogDebug(data.type + '.payload', data);
           return;
         }
       }
     } catch (e){
       appendLog('#guess-log', 'handleSBEvent outer error: ' + (e?.message||e));
+    }
+  }
+
+  /******************************************************************
+   *                      🛠️ DEBUG TOGGLE BUTTON
+   ******************************************************************/
+  function installDebugToggleButton(){
+    // zone proche du bouton Reset Scores
+    const resetBtn = $('#gtg-reset-scores');
+    if (!resetBtn) return;
+
+    // évite dupliquer
+    if ($('#gtg-debug-toggle')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'gtg-debug-toggle';
+    btn.type = 'button';
+    btn.title = 'Debug verbose (affiche la cible et les payloads echo)';
+    btn.textContent = '🐞 Debug';
+    btn.style.marginLeft = '8px';
+    btn.className = 'btn btn--ghost'; // classe neutre si dispo
+    updateDebugBtnVisual(btn);
+
+    btn.addEventListener('click', ()=>{
+      DEBUG_VERBOSE = !DEBUG_VERBOSE;
+      updateDebugBtnVisual(btn);
+      appendLog('#guess-log', `Debug verbose ${DEBUG_VERBOSE ? 'activé' : 'désactivé'}`);
+    });
+
+    // insertion juste après Reset Scores
+    resetBtn.insertAdjacentElement('afterend', btn);
+  }
+
+  function updateDebugBtnVisual(btn){
+    if (!btn) btn = $('#gtg-debug-toggle');
+    if (!btn) return;
+    // Rouge si actif (utilise var(--danger) si disponible)
+    if (DEBUG_VERBOSE){
+      btn.classList.add('active');
+      btn.style.background = 'var(--danger, #d73a1d)';
+      btn.style.color = '#fff';
+      btn.style.border = 'none';
+    } else {
+      btn.classList.remove('active');
+      btn.style.background = '';
+      btn.style.color = '';
+      btn.style.border = '';
     }
   }
 
