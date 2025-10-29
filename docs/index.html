@@ -22,26 +22,26 @@
         <span class="dot off" id="ws-dot"></span>
         <span id="ws-status" class="ws-status-text">Déconnecté de Streamer.bot</span>
       </div>
-      <button class="icon-btn lock-btn" id="lock-btn" title="Mot de passe Websocket Streamer.bot">🔒</button>
+      <button class="icon-btn lock-btn" id="lock-btn" title="Mot de passe Websocket Streamer.bot" type="button">🔒</button>
     </div>
   </header>
 
   <!-- Tabs -->
-  <nav class="tabs">
-    <button class="tab" data-tab="overview">
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" data-tab="overview" role="tab" aria-controls="tab-overview" aria-selected="false">
       <span class="dot off" aria-hidden="true"></span>
       Overview
     </button>
-    <button class="tab" data-tab="events">
+    <button class="tab" data-tab="events" role="tab" aria-controls="tab-events" aria-selected="false">
       <span class="dot dot-events off" aria-hidden="true"></span>
       Events Checker
       <span class="badge badge-events" style="display:none">0</span>
     </button>
-    <button class="tab" data-tab="tts">
+    <button class="tab" data-tab="tts" role="tab" aria-controls="tab-tts" aria-selected="false">
       <span class="dot dot-tts off" aria-hidden="true"></span>
       TTS Reader
     </button>
-    <button class="tab active" data-tab="guess">
+    <button class="tab active" data-tab="guess" role="tab" aria-controls="tab-guess" aria-selected="true">
       <span class="dot dot-guess off" aria-hidden="true"></span>
       Guess The Game
     </button>
@@ -164,7 +164,7 @@
           <!-- Genre (inclusion) -->
           <div class="form-group">
             <label for="guess-genre">Genre (inclusion, optionnel)</label>
-            <select id="guess-genre">
+            <select id="guess-genre" aria-label="Genre inclus">
               <option value="">— Aucun —</option>
             </select>
           </div>
@@ -173,7 +173,7 @@
           <div class="form-group grow">
             <label for="guess-exclude-input">Genres à exclure</label>
             <div class="inline">
-              <input id="guess-exclude-input" list="guess-genres-datalist" type="text" placeholder="Rechercher un genre..." />
+              <input id="guess-exclude-input" list="guess-genres-datalist" type="text" placeholder="Rechercher un genre..." aria-label="Rechercher un genre à exclure" />
               <button id="guess-exclude-add" class="btn" type="button">Ajouter</button>
             </div>
             <datalist id="guess-genres-datalist"></datalist>
@@ -185,51 +185,51 @@
           <!-- Années -->
           <div class="form-group sm">
             <label for="guess-year-from">Année (de)</label>
-            <input id="guess-year-from" type="number" placeholder="min" />
+            <input id="guess-year-from" type="number" placeholder="min" inputmode="numeric" />
           </div>
 
           <div class="form-group sm">
             <label for="guess-year-to">Année (à)</label>
-            <input id="guess-year-to" type="number" placeholder="max" />
+            <input id="guess-year-to" type="number" placeholder="max" inputmode="numeric" />
           </div>
 
           <!-- Durée -->
           <div class="form-group sm">
             <label for="guess-duration-min">Durée (min)</label>
-            <input id="guess-duration-min" type="number" min="1" max="120" value="2" />
+            <input id="guess-duration-min" type="number" min="1" max="120" value="2" inputmode="numeric" />
           </div>
 
           <!-- ====== Utilisateurs ====== -->
           <div class="form-group sm">
             <label for="guess-min-user-rating">Note min (Utilisateurs)</label>
-            <select id="guess-min-user-rating">
+            <select id="guess-min-user-rating" aria-label="Note minimale utilisateurs">
               <option value="">——</option>
             </select>
           </div>
 
           <div class="form-group sm">
             <label for="guess-min-user-votes">Votes min (Utilisateurs)</label>
-            <input id="guess-min-user-votes" type="number" min="0" placeholder="ex: 50" />
+            <input id="guess-min-user-votes" type="number" min="0" placeholder="ex: 50" inputmode="numeric" />
           </div>
 
           <!-- ====== Critiques ====== -->
           <div class="form-group sm">
             <label for="guess-min-critic-rating">Note min (Critiques)</label>
-            <select id="guess-min-critic-rating">
+            <select id="guess-min-critic-rating" aria-label="Note minimale critiques">
               <option value="">——</option>
             </select>
           </div>
 
           <div class="form-group sm">
             <label for="guess-min-critic-votes">Votes min (Critiques)</label>
-            <input id="guess-min-critic-votes" type="number" min="0" placeholder="ex: 10" />
+            <input id="guess-min-critic-votes" type="number" min="0" placeholder="ex: 10" inputmode="numeric" />
           </div>
         </div>
 
         <div class="actions-row">
           <button id="guess-start" class="btn ok" type="button">Lancer</button>
           <button id="guess-end" class="btn danger" type="button">Terminer</button>
-          <small class="round-note" id="gtg-round-note"></small>
+          <small class="round-note" id="gtg-round-note" aria-live="polite"></small>
         </div>
 
         <p id="guess-msg" class="hint" style="margin-top:8px">—</p>
@@ -253,9 +253,22 @@
           </ol>
         </div>
 
+        <!-- Détails (révélation) -->
+        <div class="card stretch">
+          <h3>Jeu révélé</h3>
+          <div class="qv-kv" id="guess-reveal">
+            <div><span>Jeu</span><strong id="guess-reveal-name">—</strong></div>
+            <div><span>Année</span><strong id="guess-reveal-year">—</strong></div>
+            <div><span>Utilisateurs</span><strong id="guess-reveal-users">—</strong></div>
+            <div><span>Critiques</span><strong id="guess-reveal-critics">—</strong></div>
+            <div><span>Studios</span><strong id="guess-reveal-devs">—</strong></div>
+            <div><span>Éditeurs</span><strong id="guess-reveal-pubs">—</strong></div>
+          </div>
+        </div>
+
         <div class="card stretch">
           <h3>Journal</h3>
-          <div id="guess-log" class="log"></div>
+          <div id="guess-log" class="log" aria-live="polite"></div>
         </div>
 
         <div class="card stretch" style="background:transparent;border:none;box-shadow:none;padding-top:0">
@@ -277,8 +290,7 @@
   </footer>
 
   <!-- Streamer.bot client -->
-  
-   <!--<script src="https://cdn.jsdelivr.net/npm/@streamerbot/client@1.12.2/dist/streamerbot-client.js"></script>-->
+  <!-- <script src="https://cdn.jsdelivr.net/npm/@streamerbot/client@1.12.2/dist/streamerbot-client.js"></script> -->
   <script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.js"></script>
   <script src="script.js"></script>
 </body>
