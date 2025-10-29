@@ -156,7 +156,7 @@
         </div>
       </div>
 
-      <!-- Filtres + Série -->
+      <!-- Filtres + Partie -->
       <div class="grid">
         <!-- Filtres -->
         <div class="card stretch">
@@ -234,7 +234,7 @@
             </div>
 
             <div class="form-group sm">
-              <label for="gtg-target-score">Score cible</label>
+              <label for="gtg-target-score">Score cible (fin de partie)</label>
               <input id="gtg-target-score" type="number" min="1" max="999" placeholder="ex: 5" inputmode="numeric" />
             </div>
           </div>
@@ -246,6 +246,7 @@
             <small class="round-note" id="gtg-round-note" aria-live="polite"></small>
           </div>
 
+          <small id="gtg-meta-status" class="round-note" aria-live="polite">Partie inactive</small>
           <p id="guess-msg" class="hint" style="margin-top:8px">—</p>
         </div>
       </div>
@@ -266,6 +267,16 @@
           <ol id="guess-board" class="qv-ol">
             <li class="muted">Aucune donnée</li>
           </ol>
+        </div>
+
+        <!-- Score global (meta-leaderboard) -->
+        <div class="card half">
+          <h3>Score global (Partie en cours)</h3>
+          <div class="qv-kv" id="gtg-meta-score">
+            <div><span>Streamer</span><strong id="gtg-score-streamer">0</strong></div>
+            <div><span>Viewers</span><strong id="gtg-score-viewers">0</strong></div>
+            <div><span>Score cible</span><strong id="gtg-goal-score">—</strong></div>
+          </div>
         </div>
 
         <!-- Détails (révélation) -->
