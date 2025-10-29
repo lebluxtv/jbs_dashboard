@@ -386,6 +386,57 @@
     try { return JSON.parse(localStorage.getItem(LAST_SETUP_KEY)||'{}') || {}; } catch { return {}; }
   }
 
+  // 🔥 Helpers pour persister l’état courant de l’UI à la volée
+  function collectFilters(){
+    normalizeYearInputs();
+    const includeGenreId = guessGenreSel?.value ? String(guessGenreSel.value) : "";
+    const excludeGenreIds = Array.from(GTG_EXCLUDED);
+    const yFrom = parseYear(guessYearFromInput?.value);
+    const yTo   = parseYear(guessYearToInput?.value);
+
+    const minUserRating   = (guessMinUserRatingSel   && guessMinUserRatingSel.value   !== '') ? Number(guessMinUserRatingSel.value)   : null;
+    const minUserVotes    = (guessMinUserVotesInput  && guessMinUserVotesInput.value  !== '') ? Number(guessMinUserVotesInput.value)  : null;
+    const minCriticRating = (guessMinCriticRatingSel && guessMinCriticRatingSel.value !== '') ? Number(guessMinCriticRatingSel.value) : null;
+    const minCriticVotes  = (guessMinCriticVotesInput&& guessMinCriticVotesInput.value!== '') ? Number(guessMinCriticVotesInput.value) : null;
+
+    const mins = guessDurationMinInput ? Number(guessDurationMinInput.value) : 2;
+    const durationMin = Number.isFinite(mins) ? Math.max(1, Math.min(120, Math.trunc(mins))) : 2;
+
+    return {
+      includeGenreId,
+      excludeGenreIds,
+      yearFrom: yFrom ?? null,
+      yearTo: yTo ?? null,
+
+      minUserRating,
+      minUserVotes,
+      minCriticRating,
+      minCriticVotes,
+
+      durationMin
+    };
+  }
+
+  function getCurrentSetupFromUI(){
+    const { clean } = validateFilters(collectFilters());
+    return {
+      includeGenreId: clean.includeGenreId,
+      excludeGenreIds: clean.excludeGenreIds,
+      yearFrom: clean.yearFrom,
+      yearTo: clean.yearTo,
+
+      minUserRating:   clean.minUserRating,
+      minUserVotes:    clean.minUserVotes,
+      minCriticRating: clean.minCriticRating,
+      minCriticVotes:  clean.minCriticVotes,
+
+      roundMinutes: clean.roundMinutes
+    };
+  }
+  function saveLastSetupFromUI(){
+    try { saveLastSetup(getCurrentSetupFromUI()); } catch {}
+  }
+
   function applyLastSetupAfterGenres(){
     const s = loadLastSetup() || {};
     if (s.includeGenreId && guessGenreSel){
@@ -423,36 +474,6 @@
     }
 
     if (isNum(s.roundMinutes) && guessDurationMinInput) guessDurationMinInput.value = String(s.roundMinutes);
-  }
-
-  function collectFilters(){
-    normalizeYearInputs();
-    const includeGenreId = guessGenreSel?.value ? String(guessGenreSel.value) : "";
-    const excludeGenreIds = Array.from(GTG_EXCLUDED);
-    const yFrom = parseYear(guessYearFromInput?.value);
-    const yTo   = parseYear(guessYearToInput?.value);
-
-    const minUserRating   = (guessMinUserRatingSel   && guessMinUserRatingSel.value   !== '') ? Number(guessMinUserRatingSel.value)   : null;
-    const minUserVotes    = (guessMinUserVotesInput  && guessMinUserVotesInput.value  !== '') ? Number(guessMinUserVotesInput.value)  : null;
-    const minCriticRating = (guessMinCriticRatingSel && guessMinCriticRatingSel.value !== '') ? Number(guessMinCriticRatingSel.value) : null;
-    const minCriticVotes  = (guessMinCriticVotesInput&& guessMinCriticVotesInput.value!== '') ? Number(guessMinCriticVotesInput.value) : null;
-
-    const mins = guessDurationMinInput ? Number(guessDurationMinInput.value) : 2;
-    const durationMin = Number.isFinite(mins) ? Math.max(1, Math.min(120, Math.trunc(mins))) : 2;
-
-    return {
-      includeGenreId,
-      excludeGenreIds,
-      yearFrom: yFrom ?? null,
-      yearTo: yTo ?? null,
-
-      minUserRating,
-      minUserVotes,
-      minCriticRating,
-      minCriticVotes,
-
-      durationMin
-    };
   }
 
   function validateFilters(raw){
@@ -605,7 +626,8 @@
    ******************************************************************/
   function setGuessHandlers(){
     const debounce = (fn,ms)=>{ let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
-    const debounceCount = debounce(requestPoolCount, 400);
+    const debounceCount   = debounce(requestPoolCount, 400);
+    const debouncePersist = debounce(saveLastSetupFromUI, 250);
 
     [
       guessGenreSel,
@@ -615,18 +637,30 @@
       guessDurationMinInput
     ].forEach(el=>{
       if (!el) return;
-      el.addEventListener('change', ()=>{ debounceCount(); });
+      el.addEventListener('change', ()=>{
+        debounceCount();
+        debouncePersist();  // 🔥 persiste à chaque changement
+      });
       if (
         el === guessYearFromInput || el === guessYearToInput ||
         el === guessMinUserVotesInput || el === guessMinCriticVotesInput
       ){
-        el.addEventListener('input', ()=>{ debounceCount(); });
+        el.addEventListener('input', ()=>{
+          debounceCount();
+          debouncePersist(); // 🔥 persiste aussi à la frappe
+        });
       }
     });
 
     guessExcludeAddBtn?.addEventListener('click', ()=>{
       const id = idFromGenreInputText(guessExcludeInput?.value || '');
-      if (id){ GTG_EXCLUDED.add(String(id)); renderExcludeChips(); requestPoolCount(); }
+      if (id){
+        GTG_EXCLUDED.add(String(id));
+        renderExcludeChips();
+        // 🔥 PERSISTE IMMÉDIATEMENT l’état des exclusions
+        saveLastSetup({ excludeGenreIds: Array.from(GTG_EXCLUDED) });
+        requestPoolCount();
+      }
       if (guessExcludeInput) guessExcludeInput.value = '';
     });
 
@@ -1041,6 +1075,8 @@
           fillRatingStepsAll(Array.isArray(data.ratingSteps) && data.ratingSteps.length ? data.ratingSteps : [0,50,60,70,80,85,90]);
 
           applyLastSetupAfterGenres();
+          // 🔥 ancrage propre de l’état revalidé
+          saveLastSetupFromUI();
 
           setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
 
@@ -1048,36 +1084,35 @@
           return;
         }
 
-// Pool count
-if (data.type === 'count') {
-  // Nouveau payload: poolCount + filtersEcho ; on garde compat.
-  const f = (data.filtersEcho && typeof data.filtersEcho === 'object') ? data.filtersEcho : data;
-  const n = (Number.isFinite(data.poolCount) ? data.poolCount
-           : Number.isFinite(data.count)     ? data.count
-           : 0);
+        // Pool count
+        if (data.type === 'count') {
+          // Nouveau payload: poolCount + filtersEcho ; on garde compat.
+          const f = (data.filtersEcho && typeof data.filtersEcho === 'object') ? data.filtersEcho : data;
+          const n = (Number.isFinite(data.poolCount) ? data.poolCount
+                   : Number.isFinite(data.count)     ? data.count
+                   : 0);
 
-  // Dédup pour le log (utilise filtersEcho si présent)
-  const logSig = JSON.stringify({
-    includeGenreId:  f.includeGenreId ?? null,
-    excludeGenreIds: Array.isArray(f.excludeGenreIds) ? f.excludeGenreIds.slice().sort() : [],
-    yearFrom:        f.yearFrom ?? null,
-    yearTo:          f.yearTo   ?? null,
-    minUserRating:   f.minUserRating   ?? null,
-    minUserVotes:    f.minUserVotes    ?? null,
-    minCriticRating: f.minCriticRating ?? null,
-    minCriticVotes:  f.minCriticVotes  ?? null
-  });
+          // Dédup pour le log (utilise filtersEcho si présent)
+          const logSig = JSON.stringify({
+            includeGenreId:  f.includeGenreId ?? null,
+            excludeGenreIds: Array.isArray(f.excludeGenreIds) ? f.excludeGenreIds.slice().sort() : [],
+            yearFrom:        f.yearFrom ?? null,
+            yearTo:          f.yearTo   ?? null,
+            minUserRating:   f.minUserRating   ?? null,
+            minUserVotes:    f.minUserVotes    ?? null,
+            minCriticRating: f.minCriticRating ?? null,
+            minCriticVotes:  f.minCriticVotes  ?? null
+          });
 
-  const now = Date.now();
-  if (LAST_COUNT_LOG_SIG !== logSig || (now - LAST_COUNT_LOG_TS) > DEDUPE_MS) {
-    appendLog('#guess-log', `Pool: ${n} jeux`);
-    LAST_COUNT_LOG_SIG = logSig; LAST_COUNT_LOG_TS = now;
-  }
+          const now = Date.now();
+          if (LAST_COUNT_LOG_SIG !== logSig || (now - LAST_COUNT_LOG_TS) > DEDUPE_MS) {
+            appendLog('#guess-log', `Pool: ${n} jeux`);
+            LAST_COUNT_LOG_SIG = logSig; LAST_COUNT_LOG_TS = now;
+          }
 
-  setGuessMessage(`Jeux correspondants: ${n}`);
-  return;
-}
-
+          setGuessMessage(`Jeux correspondants: ${n}`);
+          return;
+        }
 
         // Start ack / state  ✅ lit endsAtUtcMs (fallback endTs/endsAt)
         if (data.type === 'start') {
