@@ -59,7 +59,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .switch input:checked + .slider::before{transform:translateX(16px)}
 .switch .switch-label-text{font-size:12px;color:#cfd2d6}
 
-/* Cards & grid */
+/* ======== Grille générique ======== */
 .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
 .card{grid-column:span 4;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:12px;box-shadow:var(--shadow)}
 .card.stretch{grid-column:span 12}
@@ -67,6 +67,14 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
 .card.span-8{grid-column:span 8}
 .card.span-4{grid-column:span 4}
 .card h3{margin:0 0 8px 0;font-size:15px}
+
+/* Zones GTG */
+.gtg-top{margin-bottom:14px}                    /* espace clair entre Filtres et le reste */
+.gtg-bottom{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.gtg-bottom .part-card{grid-column:span 8}
+.gtg-bottom .status-card{grid-column:span 4}
+.gtg-bottom .leaderboard-card{grid-column:span 6}
+.gtg-bottom .meta-card{grid-column:span 6}
 
 /* Logs, lists, kv */
 .log{height:220px;overflow:auto;border:1px dashed #2a2a2d;padding:10px;border-radius:8px;font-family:var(--mono);font-size:12px;background:#121214}
@@ -158,21 +166,46 @@ button.chip:hover{filter:brightness(1.05)}
 .lock-btn{background:var(--panel);border:1px solid var(--border);color:#cfcfcf}
 .lock-btn:hover{border-color:#3a3a3d;color:#fff;transform:translateY(-1px)}
 
-/* ---------- Responsive ---------- */
+/* ===================== Responsive ===================== */
+
+/* ≤ 1100px : Partie passe pleine largeur; trio sur une seule ligne (3x4 colonnes) */
 @media (max-width:1100px){
   .grid{grid-template-columns:repeat(12,1fr)}
   .card{grid-column:span 6}
-  .card.span-8{grid-column:span 12}
-  .card.span-4{grid-column:span 6}
   .qv-card{grid-column:span 6}
+
+  .gtg-bottom{grid-template-columns:repeat(12,1fr)}
+  .gtg-bottom .part-card{grid-column:span 12}
+  .gtg-bottom .status-card,
+  .gtg-bottom .leaderboard-card,
+  .gtg-bottom .meta-card{grid-column:span 4}
+
   .form-group.sm{flex:1 1 48%;max-width:none}
 }
+
+/* ≤ 900px : champs plus compacts pour éviter la dilatation */
+@media (max-width:900px){
+  .form-group{min-width:150px;flex:1 1 200px}
+  .form-group.sm{min-width:120px;max-width:160px;flex:1 1 160px}
+}
+
+/* ≤ 720px : garder le trio sur le même plan (3 x 2 colonnes), sans trous */
 @media (max-width:720px){
   .grid{grid-template-columns:repeat(6,1fr)}
-  .card,.card.stretch,.card.span-8,.card.span-4{grid-column:span 6}
   .overview-grid{grid-template-columns:repeat(6,1fr)}
   .qv-card{grid-column:span 6}
   .tabs{flex-wrap:wrap}
+
+  .gtg-bottom{grid-template-columns:repeat(6,1fr)}
+  .gtg-bottom .part-card{grid-column:span 6} /* pleine ligne */
+  /* trio sur la même ligne : 3 x 2 colonnes = 6 */
+  .gtg-bottom .status-card,
+  .gtg-bottom .leaderboard-card,
+  .gtg-bottom .meta-card{grid-column:span 2}
+
+  /* cartes “stretch” suivent la largeur */
+  .card.stretch{grid-column:span 6}
+
   .form-group{flex:1 1 100%;min-width:0}
   .form-group.sm{flex:1 1 48%;max-width:none}
 }
