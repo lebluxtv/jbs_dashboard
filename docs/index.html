@@ -156,8 +156,8 @@
         </div>
       </div>
 
-      <!-- Filtres -->
-      <div class="grid">
+      <!-- Ligne du haut : Filtres -->
+      <div class="grid gtg-top">
         <div class="card stretch">
           <h3>Filtres</h3>
 
@@ -223,10 +223,10 @@
         </div>
       </div>
 
-      <!-- Partie + Statut côte à côte -->
-      <div class="grid">
+      <!-- Ligne du bas : Partie + Statut + Leaderboard + Score global (même grille) -->
+      <div class="grid gtg-bottom gap-top">
         <!-- Partie -->
-        <div class="card span-8">
+        <div class="card span-8 part-card">
           <h3>Partie</h3>
 
           <div class="form-row">
@@ -252,8 +252,8 @@
           <p id="guess-msg" class="hint" style="margin-top:8px">—</p>
         </div>
 
-        <!-- Statut (déplacé ici, à droite) -->
-        <div class="card span-4">
+        <!-- Statut -->
+        <div class="card span-4 status-card">
           <h3>Statut</h3>
           <div class="qv-kv">
             <div><span>Etat</span><strong id="guess-status-info">En pause</strong></div>
@@ -262,19 +262,17 @@
             <div><span>Gagnant</span><strong id="guess-winner">—</strong></div>
           </div>
         </div>
-      </div>
 
-      <!-- Leaderboard + Score global sur la même ligne -->
-      <div class="grid gap-top">
-        <div class="card half">
+        <!-- Leaderboard -->
+        <div class="card half leaderboard-card">
           <h3>Leaderboard</h3>
           <ol id="guess-board" class="qv-ol">
             <li class="muted">Aucune donnée</li>
           </ol>
         </div>
 
-        <!-- Score global (meta-leaderboard) -->
-        <div class="card half">
+        <!-- Score global -->
+        <div class="card half meta-card">
           <h3>Score global (Partie en cours)</h3>
           <div class="qv-kv" id="gtg-meta-score">
             <div><span>Streamer</span><strong id="gtg-score-streamer">0</strong></div>
