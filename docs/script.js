@@ -16,7 +16,6 @@
   const isNum = (n)=> typeof n === 'number' && Number.isFinite(n);
   const makeNonce = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
 
-  // Debug verbose (session only, no persistence)
   let DEBUG_VERBOSE = false;
 
   function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
@@ -580,6 +579,7 @@
    *                   🤝 Streamer.bot Actions
    ******************************************************************/
   let sbClient = null;
+  window.sbClient = null;
   const ACTION_ID_CACHE = new Map();
 
   async function resolveActionIdByName(name){
@@ -594,7 +594,7 @@
 
   function sendRawDoActionById(actionId, argsObj){
     try {
-      const sock = sbClient?.socket;
+      const sock = sbClient?.socket || sbClient?.ws;
       if (!sock || sock.readyState !== 1){
         appendLog("#guess-log", "Erreur: WebSocket non prêt pour DoAction brut.");
         return false;
@@ -617,7 +617,7 @@
       try {
         await sbClient.doAction(actionId, wire);
         return;
-      } catch (e) {
+      } catch {
         appendLog("#guess-log", "doAction client a échoué, fallback DoAction brut…");
       }
       const ok = sendRawDoActionById(actionId, wire);
@@ -677,7 +677,6 @@
       const nonce = makeNonce();
       const durationSec = (clean.roundMinutes || 2) * 60;
 
-      // Anti double-click immédiat
       if (guessStartBtn) {
         guessStartBtn.disabled = true;
         setTimeout(()=>{ if (!GTG_RUNNING) guessStartBtn.disabled = false; }, 1500);
@@ -793,7 +792,7 @@
   }
 
   function reconnectSB(){
-    try { if (window.sbClient && sbClient && typeof sbClient.disconnect === "function") sbClient.disconnect(); } catch {}
+    try { window.sbClient?.disconnect?.(); } catch {}
     connectSB();
   }
 
@@ -811,9 +810,33 @@
       sbClient = new StreamerbotClient({
         host, port, endpoint:"/", password,
         subscribe:"*", immediate:true, autoReconnect:true, retries:-1, log:false,
-        onConnect: ()=>{
+        onConnect: async ()=>{
           setConnected(true);
           appendLog("#guess-log", `Connecté à Streamer.bot (${host}:${port})`);
+
+          try {
+            if (typeof sbClient.subscribe === "function") {
+              await sbClient.subscribe({
+                Broadcast: { Custom: true },
+                General:   { Custom: true },
+                Twitch:    { Subs:   true }
+              });
+            } else {
+              const sock = sbClient?.socket || sbClient?.ws;
+              sock?.send(JSON.stringify({
+                request: "Subscribe",
+                id: "subAll",
+                events: {
+                  Broadcast: { Custom:true },
+                  General:   { Custom:true },
+                  Twitch:    { Subs:true }
+                }
+              }));
+            }
+          } catch {
+            appendLog("#guess-log", "Subscribe explicite a échoué (wildcard seulement).");
+          }
+
           safeDoAction("GTG Bootstrap Genres & Years & Ratings", {});
           safeDoAction("GTG Scores Get", {});
         },
@@ -826,13 +849,27 @@
         }
       });
 
-      sbClient.on("*", ({ event, data })=>{
-        try { handleSBEvent(event, data); }
-        catch (e) { appendLog("#guess-log", "handleSBEvent error: " + (e?.message || e)); }
-      });
+      if (typeof sbClient.on === "function") {
+        sbClient.on("*", ({ event, data })=>{
+          try { handleSBEvent(event, data); }
+          catch (e) { appendLog("#guess-log", "handleSBEvent error: " + (e?.message || e)); }
+        });
+        sbClient.on("Broadcast.Custom", (payload)=>{
+          try { handleSBEvent({ source:"Broadcast", type:"Custom" }, payload); }
+          catch (e) { appendLog("#guess-log", "Broadcast.Custom error: " + (e?.message || e)); }
+        });
+        sbClient.on("General.Custom", (payload)=>{
+          try { handleSBEvent({ source:"General", type:"Custom" }, payload); }
+          catch (e) { appendLog("#guess-log", "General.Custom error: " + (e?.message || e)); }
+        });
+        sbClient.on("Twitch", ({ event, data })=>{
+          try { handleSBEvent(event, data); }
+          catch (e) { appendLog("#guess-log", "Twitch event error: " + (e?.message || e)); }
+        });
+      }
 
       try {
-        const sock = sbClient?.socket;
+        const sock = sbClient?.socket || sbClient?.ws;
         if (sock && !sock._debugBound){
           sock._debugBound = true;
           sock.addEventListener("close", (ev)=>{
@@ -843,12 +880,12 @@
         }
       } catch {}
 
+      window.sbClient = sbClient;
+
     } catch (e) {
       appendLog("#guess-log", "Connexion impossible: " + (e?.message || e));
     }
   }
-
-  // —— La suite (Partie 2) ——
 
   /******************************************************************
    *                     📈 Ratings & Leaderboard
@@ -1011,12 +1048,10 @@
 
   function handleSBEvent(event, data){
     try {
-      // Stream status
       if (event && event.type === "StreamUpdate"){
         setLiveIndicator(!!data?.live);
       }
 
-      // Twitch subs to Events panel
       if (event?.source === "Twitch" && SUB_EVENT_TYPES.has(event.type)){
         logSbSubEventToConsole(event, data);
 
@@ -1059,10 +1094,8 @@
         return;
       }
 
-      // GTG widget payloads
       if (data && data.widget === "gtg") {
 
-        // === État de partie (global) ===
         if (data.type === "partieUpdate"){
           setPartieIdUI(data.partieId || "");
           if (Number.isFinite(data.goalScore)) setGoalScoreUI(data.goalScore);
@@ -1085,7 +1118,6 @@
           return;
         }
 
-        // === Bootstrap (genres, années, steps) ===
         if (data.type === "bootstrap"){
           if (data.error){ setGuessMessage("Erreur: " + data.error); return; }
 
@@ -1117,7 +1149,6 @@
           return;
         }
 
-        // === Count echo ===
         if (data.type === "count"){
           const f = (data.filtersEcho && typeof data.filtersEcho === "object") ? data.filtersEcho : data;
           const n = (Number.isFinite(data.poolCount) ? data.poolCount : Number.isFinite(data.count) ? data.count : 0);
@@ -1143,7 +1174,6 @@
           return;
         }
 
-        // === Démarrage de manche ===
         if (data.type === "start"){
           if (data.roundId) GTG_ROUND_ID = String(data.roundId);
           setRunning(true);
@@ -1161,7 +1191,6 @@
           return;
         }
 
-        // === Tick (sync timer) ===
         if (data.type === "tick"){
           const endMs = Number.isFinite(data.endsAtUtcMs) ? Number(data.endsAtUtcMs)
                       : Number.isFinite(data.endTs)      ? Number(data.endTs)
@@ -1171,7 +1200,6 @@
           return;
         }
 
-        // === Reveal (infos users/critics + studios/éditeurs) ===
         if (data.type === "reveal"){
           const g = data.game || {};
           const name = g.name || "—";
@@ -1214,11 +1242,9 @@
           return;
         }
 
-        // === Leaderboard / reprise / reset ===
         if (data.type === "scoreUpdate" || data.type === "resume" || data.type === "scoreReset"){
           updateLeaderboard(Array.isArray(data.leaderboard) ? data.leaderboard : []);
 
-          // >>> PATCH: Reprise d'état (roundId + timer) depuis runningState <<<
           const rs = data.runningState && typeof data.runningState === "object" ? data.runningState : null;
           if (rs && rs.running === true) {
             if (rs.roundId) GTG_ROUND_ID = String(rs.roundId);
