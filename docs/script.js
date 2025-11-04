@@ -1,4 +1,4 @@
-<script>
+
 (function () {
   "use strict";
 
@@ -1358,4 +1358,4 @@
   window.addEventListener("DOMContentLoaded", boot);
 
 })();
-</script>
+
