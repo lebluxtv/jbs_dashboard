@@ -1,3 +1,4 @@
+<script>
 (function () {
   "use strict";
 
@@ -712,17 +713,15 @@
       safeDoAction("GTG Scores Reset", {});
     });
 
-seriesCancelBtn?.addEventListener("click", ()=>{
-  if (!confirm("Annuler la série en cours ?")) return;
-  safeDoAction("GTG End", {
-    roundId: GTG_ROUND_ID || "",
-    reason: "seriesCancel",
-    cancel: true
-  });
-});
+    seriesCancelBtn?.addEventListener("click", ()=>{
+      if (!confirm("Annuler la série en cours ?")) return;
+      safeDoAction("GTG End", {
+        roundId: GTG_ROUND_ID || "",
+        reason: "seriesCancel",
+        cancel: true
+      });
+    });
 
-
-    // ⚠ installDebugToggleButton() sera défini plus bas ; appelé plus tard dans boot()
     renderExcludeChips();
   }
 
@@ -735,12 +734,12 @@ seriesCancelBtn?.addEventListener("click", ()=>{
 
   function autoEndIfNeeded(){
     if (GTG_TIMER_SENT) return;
+    GTG_TIMER_SENT = true;
     if (!GTG_ROUND_ID){
-      appendLog("#guess-log", "Timer=0 mais aucun round actif — End non envoyé.");
-      GTG_TIMER_SENT = true;
+      appendLog("#guess-log", "Timer=0, roundId inconnu → End sans roundId (fallback serveur).");
+      safeDoAction("GTG End", { reason: "timeout" });
       return;
     }
-    GTG_TIMER_SENT = true;
     appendLog("#guess-log", "Timer écoulé → demande \"GTG End\"");
     safeDoAction("GTG End", { roundId: GTG_ROUND_ID, reason: "timeout" });
   }
@@ -849,10 +848,7 @@ seriesCancelBtn?.addEventListener("click", ()=>{
     }
   }
 
-  // —— La suite (Partie 2) contient :
-  // fillRatingStepsAll, updateLeaderboard (tri/clamp), constantes SUB_EVENT_TYPES,
-  // extract helpers, requestPoolCount, handleSBEvent (partieUpdate/partieEnd/bootstrap/count/start/tick/reveal/scoreUpdate),
-  // installDebugToggleButton, updateDebugBtnVisual, bindOverviewQuickNav, boot()+DOMContentLoaded.
+  // —— La suite (Partie 2) ——
 
   /******************************************************************
    *                     📈 Ratings & Leaderboard
@@ -882,9 +878,8 @@ seriesCancelBtn?.addEventListener("click", ()=>{
   }
 
   function updateLeaderboard(list){
-    // tri desc sur score/points
     const sorted = Array.isArray(list) ? list.slice().sort((a,b)=>(b.score??b.points??0)-(a.score??a.points??0)) : [];
-    const top = sorted.slice(0,50); // clamp UI
+    const top = sorted.slice(0,50);
 
     const el = $("#guess-board");
     const qv = $("#qv-guess-board");
@@ -1069,7 +1064,6 @@ seriesCancelBtn?.addEventListener("click", ()=>{
 
         // === État de partie (global) ===
         if (data.type === "partieUpdate"){
-          // attendu: { type:"partieUpdate", partieId, goalScore, state }
           setPartieIdUI(data.partieId || "");
           if (Number.isFinite(data.goalScore)) setGoalScoreUI(data.goalScore);
           if (data.state === "Running"){
@@ -1177,7 +1171,7 @@ seriesCancelBtn?.addEventListener("click", ()=>{
           return;
         }
 
-        // === Reveal (affichage infos users/critics + studios/éditeurs) ===
+        // === Reveal (infos users/critics + studios/éditeurs) ===
         if (data.type === "reveal"){
           const g = data.game || {};
           const name = g.name || "—";
@@ -1223,6 +1217,15 @@ seriesCancelBtn?.addEventListener("click", ()=>{
         // === Leaderboard / reprise / reset ===
         if (data.type === "scoreUpdate" || data.type === "resume" || data.type === "scoreReset"){
           updateLeaderboard(Array.isArray(data.leaderboard) ? data.leaderboard : []);
+
+          // >>> PATCH: Reprise d'état (roundId + timer) depuis runningState <<<
+          const rs = data.runningState && typeof data.runningState === "object" ? data.runningState : null;
+          if (rs && rs.running === true) {
+            if (rs.roundId) GTG_ROUND_ID = String(rs.roundId);
+            setRunning(true);
+            if (Number.isFinite(rs.endsAtUtcMs)) startRoundTimer(Number(rs.endsAtUtcMs));
+          }
+
           if (data.type === "scoreReset") appendLog("#guess-log", "Scores réinitialisés.");
           appendLogDebug(data.type + ".payload", data);
           return;
@@ -1300,3 +1303,4 @@ seriesCancelBtn?.addEventListener("click", ()=>{
   window.addEventListener("DOMContentLoaded", boot);
 
 })();
+</script>
