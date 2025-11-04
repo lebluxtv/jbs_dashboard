@@ -1,4 +1,3 @@
-
 (function () {
   "use strict";
 
@@ -80,12 +79,37 @@
     document.body.dataset.round = running ? "running" : "ended";
   }
 
-  // ——— Nouveaux helpers partie / objectif ———
+  /* ====== Nouveaux états & helpers pour Score global / Annulation ====== */
+  let GTG_TOTALS = { streamer: 0, viewers: 0 };
+  let GTG_GOAL   = null;
+
+  function renderGlobalScore(totals, goal){
+    const s = $("#qv-score-streamer") || $("#score-streamer") || $("#score-streamer-val");
+    const v = $("#qv-score-viewers")  || $("#score-viewers")  || $("#score-viewers-val");
+    const g = $("#qv-goal-score")     || $("#goal-score-badge") || $("#score-goal-val");
+    if (s) s.textContent = String(Number.isFinite(totals?.streamer) ? totals.streamer : 0);
+    if (v) v.textContent = String(Number.isFinite(totals?.viewers)  ? totals.viewers  : 0);
+    if (g) g.textContent = Number.isFinite(goal) ? String(goal) : "—";
+  }
+
+  function refreshCancelAbility(){
+    const btn = $("#gtg-series-cancel");
+    if (!btn) return;
+    const canCancel = GTG_RUNNING
+      && Number.isFinite(GTG_GOAL)
+      && (GTG_TOTALS.streamer < GTG_GOAL && GTG_TOTALS.viewers < GTG_GOAL);
+    btn.disabled = !canCancel;
+  }
+
+  // ——— Helpers partie / objectif ———
   function setGoalScoreUI(goal){
     const t = $("#gtg-target-score");
     if (t && Number.isFinite(goal)) t.value = String(goal);
     const badges = $$(".goal-score, #qv-goal-score, #goal-score-badge");
     badges.forEach(b => b.textContent = Number.isFinite(goal) ? String(goal) : "—");
+    GTG_GOAL = Number.isFinite(goal) ? goal : null;
+    renderGlobalScore(GTG_TOTALS, GTG_GOAL);
+    refreshCancelAbility();
   }
   function setPartieIdUI(pid){
     const els = $$("#partie-id, #qv-partie-id");
@@ -102,17 +126,15 @@
   function bindLockButton(){
     const btn = $("#lock-btn"); if (!btn || btn._bound) return;
     btn._bound = true;
-    // Clic gauche → prompt
     btn.addEventListener("click", (ev)=>{
       ev.preventDefault();
       const current = getStoredPwd();
       const val = window.prompt("Mot de passe Streamer.bot (laisser vide pour effacer) :", current);
-      if (val === null) return; // cancel
+      if (val === null) return;
       setStoredPwd(val || "");
       setLockVisual();
       reconnectSB();
     });
-    // Clic droit → effacer direct (pratique quand le prompt est bloqué par le navigateur)
     btn.addEventListener("contextmenu", (ev)=>{
       ev.preventDefault();
       setStoredPwd("");
@@ -288,6 +310,7 @@
     setDot(".dot-guess", GTG_RUNNING);
     setStatusText(GTG_RUNNING ? "En cours" : "En pause");
     setRoundNote(GTG_RUNNING);
+    refreshCancelAbility();
   }
 
   function installFilterChangeGuard(){
@@ -655,6 +678,16 @@
         }
       });
 
+    // maj goal en live pour l’UI/annulation
+    if (guessTargetScoreInput){
+      guessTargetScoreInput.addEventListener("input", ()=>{
+        const g = Number(guessTargetScoreInput.value);
+        GTG_GOAL = Number.isFinite(g) ? g : null;
+        renderGlobalScore(GTG_TOTALS, GTG_GOAL);
+        refreshCancelAbility();
+      });
+    }
+
     guessExcludeAddBtn?.addEventListener("click", ()=>{
       const id = idFromGenreInputText(guessExcludeInput?.value || "");
       if (id){
@@ -686,7 +719,6 @@
       const nonce = makeNonce();
       const durationSec = (clean.roundMinutes || 2) * 60;
 
-      // Anti double-click immédiat
       if (guessStartBtn) {
         guessStartBtn.disabled = true;
         setTimeout(()=>{ if (!GTG_RUNNING) guessStartBtn.disabled = false; }, 1500);
@@ -722,8 +754,18 @@
       safeDoAction("GTG Scores Reset", {});
     });
 
+    // Annulation protégée + interdite si objectif atteint
     seriesCancelBtn?.addEventListener("click", ()=>{
-      if (!confirm("Annuler la série en cours ?")) return;
+      const canCancel = GTG_RUNNING
+        && Number.isFinite(GTG_GOAL)
+        && (GTG_TOTALS.streamer < GTG_GOAL && GTG_TOTALS.viewers < GTG_GOAL);
+
+      if (!canCancel){
+        appendLog("#guess-log", "Annulation refusée : score cible déjà atteint ou partie inactive.");
+        return;
+      }
+      if (!confirm("Confirmer l’annulation de la partie ?")) return;
+
       safeDoAction("GTG End", {
         roundId: GTG_ROUND_ID || "",
         reason: "seriesCancel",
@@ -794,7 +836,7 @@
     let pwd = getStoredPwd();
     if (!pwd){
       const val = window.prompt("Mot de passe Streamer.bot :", "");
-      if (val === null) return ""; // cancel
+      if (val === null) return "";
       pwd = (val || "").trim();
       setStoredPwd(pwd);
     }
@@ -820,9 +862,8 @@
       const host = getQS("host") || "127.0.0.1";
       const port = Number(getQS("port") || 8080);
       const password = ensureSbPassword();
-      if (!password && getStoredPwd()){ setStoredPwd(""); } // nettoie si prompt annulé
+      if (!password && getStoredPwd()){ setStoredPwd(""); }
 
-      // coupe proprement l’ancien client
       try { window.sbClient?.disconnect?.(); } catch {}
 
       sbClient = new StreamerbotCtor({
@@ -836,7 +877,6 @@
           window.sbClient = sbClient;
           setConnected(true);
           appendLog("#guess-log", `Connecté à Streamer.bot (${host}:${port})`);
-          // Abonnements explicites en plus du wildcard (certaines versions en ont besoin)
           try{
             sbClient.subscribe?.({
               events: {
@@ -846,7 +886,6 @@
               }
             });
           } catch {}
-          // Bootstrap
           safeDoAction("GTG Bootstrap Genres & Years & Ratings", {});
           safeDoAction("GTG Scores Get", {});
         },
@@ -859,7 +898,6 @@
         }
       });
 
-      // Wildcard (si supporté)
       try {
         sbClient.on?.("*", ({ event, data })=>{
           try { handleSBEvent(event, data); }
@@ -867,7 +905,6 @@
         });
       } catch {}
 
-      // Abonnements explicites (compat legacy)
       try { sbClient.on?.("General.Custom", ({event, data})=>handleSBEvent(event, data)); } catch {}
       try { sbClient.on?.("Broadcast.Custom", ({event, data})=>handleSBEvent(event, data)); } catch {}
       try { sbClient.on?.("Twitch", ({event, data})=>handleSBEvent(event, data)); } catch {}
@@ -1008,7 +1045,7 @@
 
     const sig = JSON.stringify(clean);
     const now = Date.now();
-    if (LAST_COUNT_SEND_SIG === sig && (now - LAST_COUNT_SEND_TS) < DEDUPE_MS) return;
+    if (LAST_COUNT_SEND_SIG === sig && (now - LAST_COUNT_SEND_TS) < 1500) return;
     LAST_COUNT_SEND_SIG = sig;
     LAST_COUNT_SEND_TS  = now;
 
@@ -1052,12 +1089,10 @@
 
   function handleSBEvent(event, data){
     try {
-      // Stream status
       if (event && event.type === "StreamUpdate"){
         setLiveIndicator(!!data?.live);
       }
 
-      // Twitch subs to Events panel
       if (event?.source === "Twitch" && SUB_EVENT_TYPES.has(event.type)){
         logSbSubEventToConsole(event, data);
 
@@ -1100,10 +1135,8 @@
         return;
       }
 
-      // GTG widget payloads
       if (data && data.widget === "gtg") {
 
-        // === État de partie (global) ===
         if (data.type === "partieUpdate"){
           setPartieIdUI(data.partieId || "");
           if (Number.isFinite(data.goalScore)) setGoalScoreUI(data.goalScore);
@@ -1126,7 +1159,6 @@
           return;
         }
 
-        // === Bootstrap (genres, années, steps) ===
         if (data.type === "bootstrap"){
           if (data.error){ setGuessMessage("Erreur: " + data.error); return; }
 
@@ -1158,7 +1190,6 @@
           return;
         }
 
-        // === Count echo ===
         if (data.type === "count"){
           const f = (data.filtersEcho && typeof data.filtersEcho === "object") ? data.filtersEcho : data;
           const n = (Number.isFinite(data.poolCount) ? data.poolCount : Number.isFinite(data.count) ? data.count : 0);
@@ -1174,7 +1205,7 @@
             minCriticVotes:  f.minCriticVotes  ?? null
           });
           const now = Date.now();
-          if (LAST_COUNT_LOG_SIG !== logSig || (now - LAST_COUNT_LOG_TS) > DEDUPE_MS){
+          if (LAST_COUNT_LOG_SIG !== logSig || (now - LAST_COUNT_LOG_TS) > 1500){
             appendLog("#guess-log", `Pool: ${n} jeux`);
             LAST_COUNT_LOG_SIG = logSig;
             LAST_COUNT_LOG_TS  = now;
@@ -1184,7 +1215,6 @@
           return;
         }
 
-        // === Démarrage de manche ===
         if (data.type === "start"){
           if (data.roundId) GTG_ROUND_ID = String(data.roundId);
           setRunning(true);
@@ -1199,10 +1229,10 @@
 
           appendLog("#guess-log", "Manche démarrée");
           appendLogDebug("start.payload", data);
+          refreshCancelAbility();
           return;
         }
 
-        // === Tick (sync timer) ===
         if (data.type === "tick"){
           const endMs = Number.isFinite(data.endsAtUtcMs) ? Number(data.endsAtUtcMs)
                       : Number.isFinite(data.endTs)      ? Number(data.endTs)
@@ -1212,7 +1242,6 @@
           return;
         }
 
-        // === Reveal (infos users/critics + studios/éditeurs) ===
         if (data.type === "reveal"){
           const g = data.game || {};
           const name = g.name || "—";
@@ -1252,20 +1281,28 @@
           const extra = parts.length ? ` — ${parts.join(" • ")}` : "";
           appendLog("#guess-log", `Réponse: ${name}${extra}${winner?` (gagnant: ${winner})`:""}`);
           appendLogDebug("reveal.payload", data);
+          refreshCancelAbility();
           return;
         }
 
-        // === Leaderboard / reprise / reset ===
         if (data.type === "scoreUpdate" || data.type === "resume" || data.type === "scoreReset"){
           updateLeaderboard(Array.isArray(data.leaderboard) ? data.leaderboard : []);
 
-          // Reprise d'état (roundId + timer) depuis runningState si dispo
           const rs = data.runningState && typeof data.runningState === "object" ? data.runningState : null;
           if (rs && rs.running === true) {
             if (rs.roundId) GTG_ROUND_ID = String(rs.roundId);
             setRunning(true);
             if (Number.isFinite(rs.endsAtUtcMs)) startRoundTimer(Number(rs.endsAtUtcMs));
           }
+
+          const t = (data.totals && typeof data.totals === "object")
+            ? { streamer: Number(data.totals.streamer)||0, viewers: Number(data.totals.viewers)||0 }
+            : { streamer: Number(data.streamer)||0,       viewers: Number(data.viewers)||0 };
+
+          GTG_TOTALS = t;
+          if (Number.isFinite(data.goalScore)) GTG_GOAL = Number(data.goalScore);
+          renderGlobalScore(GTG_TOTALS, GTG_GOAL);
+          refreshCancelAbility();
 
           if (data.type === "scoreReset") appendLog("#guess-log", "Scores réinitialisés.");
           appendLogDebug(data.type + ".payload", data);
@@ -1299,7 +1336,6 @@
       appendLog("#guess-log", `Debug verbose ${DEBUG_VERBOSE?"activé":"désactivé"}`);
     });
 
-    // Point d’ancrage prioritaire : à droite de #gtg-reset-scores
     const anchor =
       $("#gtg-reset-scores") ||
       $("#guess-end") ||
@@ -1353,9 +1389,10 @@
     installFilterChangeGuard();
     installDebugToggleButton();
     connectSB();
+    renderGlobalScore(GTG_TOTALS, GTG_GOAL);
+    refreshCancelAbility();
   }
 
   window.addEventListener("DOMContentLoaded", boot);
 
 })();
-
