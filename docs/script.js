@@ -16,6 +16,7 @@
   const isNum = (n)=> typeof n === 'number' && Number.isFinite(n);
   const makeNonce = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
 
+  // Debug verbose (session only, no persistence)
   let DEBUG_VERBOSE = false;
 
   function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
@@ -95,17 +96,26 @@
     const btn = $("#lock-btn"); if (!btn) return;
     const hasPwd = !!getStoredPwd();
     btn.classList.toggle("locked", hasPwd);
+    btn.title = hasPwd ? "Mot de passe défini (clic pour modifier, clic droit pour effacer)" : "Définir le mot de passe Streamer.bot";
   }
 
   function bindLockButton(){
     const btn = $("#lock-btn"); if (!btn || btn._bound) return;
     btn._bound = true;
+    // Clic gauche → prompt
     btn.addEventListener("click", (ev)=>{
       ev.preventDefault();
       const current = getStoredPwd();
       const val = window.prompt("Mot de passe Streamer.bot (laisser vide pour effacer) :", current);
-      if (val === null) return;
+      if (val === null) return; // cancel
       setStoredPwd(val || "");
+      setLockVisual();
+      reconnectSB();
+    });
+    // Clic droit → effacer direct (pratique quand le prompt est bloqué par le navigateur)
+    btn.addEventListener("contextmenu", (ev)=>{
+      ev.preventDefault();
+      setStoredPwd("");
       setLockVisual();
       reconnectSB();
     });
@@ -579,7 +589,6 @@
    *                   🤝 Streamer.bot Actions
    ******************************************************************/
   let sbClient = null;
-  window.sbClient = null;
   const ACTION_ID_CACHE = new Map();
 
   async function resolveActionIdByName(name){
@@ -595,7 +604,7 @@
   function sendRawDoActionById(actionId, argsObj){
     try {
       const sock = sbClient?.socket || sbClient?.ws;
-      if (!sock || sock.readyState !== 1){
+      if (!sock || (sock.readyState !== 1 && sock.readyState !== sock.OPEN)){
         appendLog("#guess-log", "Erreur: WebSocket non prêt pour DoAction brut.");
         return false;
       }
@@ -617,7 +626,7 @@
       try {
         await sbClient.doAction(actionId, wire);
         return;
-      } catch {
+      } catch (e) {
         appendLog("#guess-log", "doAction client a échoué, fallback DoAction brut…");
       }
       const ok = sendRawDoActionById(actionId, wire);
@@ -677,6 +686,7 @@
       const nonce = makeNonce();
       const durationSec = (clean.roundMinutes || 2) * 60;
 
+      // Anti double-click immédiat
       if (guessStartBtn) {
         guessStartBtn.disabled = true;
         setTimeout(()=>{ if (!GTG_RUNNING) guessStartBtn.disabled = false; }, 1500);
@@ -784,8 +794,8 @@
     let pwd = getStoredPwd();
     if (!pwd){
       const val = window.prompt("Mot de passe Streamer.bot :", "");
-      if (val === null) return "";
-      pwd = val.trim();
+      if (val === null) return ""; // cancel
+      pwd = (val || "").trim();
       setStoredPwd(pwd);
     }
     return pwd;
@@ -798,7 +808,11 @@
 
   function connectSB(){
     try {
-      if (typeof StreamerbotClient !== "function"){
+      const StreamerbotCtor =
+        (typeof window.StreamerbotClient === "function" && window.StreamerbotClient) ||
+        (typeof window.StreamerbotClient?.default === "function" && window.StreamerbotClient.default);
+
+      if (typeof StreamerbotCtor !== "function"){
         appendLog("#guess-log", "Erreur: StreamerbotClient n’est pas chargé (script manquant ?).");
         return;
       }
@@ -806,37 +820,33 @@
       const host = getQS("host") || "127.0.0.1";
       const port = Number(getQS("port") || 8080);
       const password = ensureSbPassword();
+      if (!password && getStoredPwd()){ setStoredPwd(""); } // nettoie si prompt annulé
 
-      sbClient = new StreamerbotClient({
+      // coupe proprement l’ancien client
+      try { window.sbClient?.disconnect?.(); } catch {}
+
+      sbClient = new StreamerbotCtor({
         host, port, endpoint:"/", password,
-        subscribe:"*", immediate:true, autoReconnect:true, retries:-1, log:false,
-        onConnect: async ()=>{
+        subscribe:"*",
+        immediate:true,
+        autoReconnect:true,
+        retries:-1,
+        log:false,
+        onConnect: ()=>{
+          window.sbClient = sbClient;
           setConnected(true);
           appendLog("#guess-log", `Connecté à Streamer.bot (${host}:${port})`);
-
-          try {
-            if (typeof sbClient.subscribe === "function") {
-              await sbClient.subscribe({
-                Broadcast: { Custom: true },
-                General:   { Custom: true },
-                Twitch:    { Subs:   true }
-              });
-            } else {
-              const sock = sbClient?.socket || sbClient?.ws;
-              sock?.send(JSON.stringify({
-                request: "Subscribe",
-                id: "subAll",
-                events: {
-                  Broadcast: { Custom:true },
-                  General:   { Custom:true },
-                  Twitch:    { Subs:true }
-                }
-              }));
-            }
-          } catch {
-            appendLog("#guess-log", "Subscribe explicite a échoué (wildcard seulement).");
-          }
-
+          // Abonnements explicites en plus du wildcard (certaines versions en ont besoin)
+          try{
+            sbClient.subscribe?.({
+              events: {
+                General: ["Custom"],
+                Broadcast: ["Custom"],
+                Twitch: ["Subs","Bits","Cheer","GiftBomb","GiftSub","ReSub","Sub"]
+              }
+            });
+          } catch {}
+          // Bootstrap
           safeDoAction("GTG Bootstrap Genres & Years & Ratings", {});
           safeDoAction("GTG Scores Get", {});
         },
@@ -849,30 +859,24 @@
         }
       });
 
-      if (typeof sbClient.on === "function") {
-        sbClient.on("*", ({ event, data })=>{
+      // Wildcard (si supporté)
+      try {
+        sbClient.on?.("*", ({ event, data })=>{
           try { handleSBEvent(event, data); }
           catch (e) { appendLog("#guess-log", "handleSBEvent error: " + (e?.message || e)); }
         });
-        sbClient.on("Broadcast.Custom", (payload)=>{
-          try { handleSBEvent({ source:"Broadcast", type:"Custom" }, payload); }
-          catch (e) { appendLog("#guess-log", "Broadcast.Custom error: " + (e?.message || e)); }
-        });
-        sbClient.on("General.Custom", (payload)=>{
-          try { handleSBEvent({ source:"General", type:"Custom" }, payload); }
-          catch (e) { appendLog("#guess-log", "General.Custom error: " + (e?.message || e)); }
-        });
-        sbClient.on("Twitch", ({ event, data })=>{
-          try { handleSBEvent(event, data); }
-          catch (e) { appendLog("#guess-log", "Twitch event error: " + (e?.message || e)); }
-        });
-      }
+      } catch {}
+
+      // Abonnements explicites (compat legacy)
+      try { sbClient.on?.("General.Custom", ({event, data})=>handleSBEvent(event, data)); } catch {}
+      try { sbClient.on?.("Broadcast.Custom", ({event, data})=>handleSBEvent(event, data)); } catch {}
+      try { sbClient.on?.("Twitch", ({event, data})=>handleSBEvent(event, data)); } catch {}
 
       try {
         const sock = sbClient?.socket || sbClient?.ws;
         if (sock && !sock._debugBound){
           sock._debugBound = true;
-          sock.addEventListener("close", (ev)=>{
+          sock.addEventListener?.("close", (ev)=>{
             appendLog("#guess-log", `WS close code=${ev.code} reason="${ev.reason}" wasClean=${ev.wasClean}`);
             const t = $("#ws-status");
             if (t) t.title = `WS closed code=${ev.code} reason=${ev.reason}`;
@@ -1048,10 +1052,12 @@
 
   function handleSBEvent(event, data){
     try {
+      // Stream status
       if (event && event.type === "StreamUpdate"){
         setLiveIndicator(!!data?.live);
       }
 
+      // Twitch subs to Events panel
       if (event?.source === "Twitch" && SUB_EVENT_TYPES.has(event.type)){
         logSbSubEventToConsole(event, data);
 
@@ -1094,8 +1100,10 @@
         return;
       }
 
+      // GTG widget payloads
       if (data && data.widget === "gtg") {
 
+        // === État de partie (global) ===
         if (data.type === "partieUpdate"){
           setPartieIdUI(data.partieId || "");
           if (Number.isFinite(data.goalScore)) setGoalScoreUI(data.goalScore);
@@ -1118,6 +1126,7 @@
           return;
         }
 
+        // === Bootstrap (genres, années, steps) ===
         if (data.type === "bootstrap"){
           if (data.error){ setGuessMessage("Erreur: " + data.error); return; }
 
@@ -1149,6 +1158,7 @@
           return;
         }
 
+        // === Count echo ===
         if (data.type === "count"){
           const f = (data.filtersEcho && typeof data.filtersEcho === "object") ? data.filtersEcho : data;
           const n = (Number.isFinite(data.poolCount) ? data.poolCount : Number.isFinite(data.count) ? data.count : 0);
@@ -1174,6 +1184,7 @@
           return;
         }
 
+        // === Démarrage de manche ===
         if (data.type === "start"){
           if (data.roundId) GTG_ROUND_ID = String(data.roundId);
           setRunning(true);
@@ -1191,6 +1202,7 @@
           return;
         }
 
+        // === Tick (sync timer) ===
         if (data.type === "tick"){
           const endMs = Number.isFinite(data.endsAtUtcMs) ? Number(data.endsAtUtcMs)
                       : Number.isFinite(data.endTs)      ? Number(data.endTs)
@@ -1200,6 +1212,7 @@
           return;
         }
 
+        // === Reveal (infos users/critics + studios/éditeurs) ===
         if (data.type === "reveal"){
           const g = data.game || {};
           const name = g.name || "—";
@@ -1242,9 +1255,11 @@
           return;
         }
 
+        // === Leaderboard / reprise / reset ===
         if (data.type === "scoreUpdate" || data.type === "resume" || data.type === "scoreReset"){
           updateLeaderboard(Array.isArray(data.leaderboard) ? data.leaderboard : []);
 
+          // Reprise d'état (roundId + timer) depuis runningState si dispo
           const rs = data.runningState && typeof data.runningState === "object" ? data.runningState : null;
           if (rs && rs.running === true) {
             if (rs.roundId) GTG_ROUND_ID = String(rs.roundId);
@@ -1267,8 +1282,6 @@
    *                           🐞 Debug toggle
    ******************************************************************/
   function installDebugToggleButton(){
-    const resetBtn = $("#gtg-reset-scores");
-    if (!resetBtn) return;
     if ($("#gtg-debug-toggle")) return;
 
     const btn = document.createElement("button");
@@ -1276,8 +1289,8 @@
     btn.type = "button";
     btn.title = "Debug verbose (affiche la cible et les payloads echo)";
     btn.textContent = "🐞 Debug";
-    btn.style.marginLeft = "8px";
     btn.className = "btn btn--ghost";
+    btn.style.marginLeft = "8px";
 
     updateDebugBtnVisual(btn);
     btn.addEventListener("click", ()=>{
@@ -1286,7 +1299,23 @@
       appendLog("#guess-log", `Debug verbose ${DEBUG_VERBOSE?"activé":"désactivé"}`);
     });
 
-    resetBtn.insertAdjacentElement("afterend", btn);
+    // Point d’ancrage prioritaire : à droite de #gtg-reset-scores
+    const anchor =
+      $("#gtg-reset-scores") ||
+      $("#guess-end") ||
+      $(".app-header .actions") ||
+      $(".toolbar") ||
+      $("header") || document.body;
+
+    if (anchor && anchor.insertAdjacentElement){
+      if (anchor.id === "gtg-reset-scores" || anchor.id === "guess-end"){
+        anchor.insertAdjacentElement("afterend", btn);
+      } else {
+        anchor.appendChild(btn);
+      }
+    } else {
+      document.body.appendChild(btn);
+    }
   }
 
   function updateDebugBtnVisual(btn){
