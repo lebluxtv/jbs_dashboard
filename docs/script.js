@@ -79,7 +79,7 @@
     document.body.dataset.round = running ? "running" : "ended";
   }
 
-  /* ====== Nouveaux états & helpers pour Score global / Annulation ====== */
+  /* ====== Nouveaux états & helpers pour Score global / Annulation / Gagnant ====== */
   let GTG_TOTALS = { streamer: 0, viewers: 0 };
   let GTG_GOAL   = null;
 
@@ -90,6 +90,11 @@
     if (s) s.textContent = String(Number.isFinite(totals?.streamer) ? totals.streamer : 0);
     if (v) v.textContent = String(Number.isFinite(totals?.viewers)  ? totals.viewers  : 0);
     if (g) g.textContent = Number.isFinite(goal) ? String(goal) : "—";
+  }
+
+  function setWinnerLabel(label){
+    const w = $("#guess-winner");
+    if (w) w.textContent = label && String(label).trim() ? String(label) : "—";
   }
 
   function refreshCancelAbility(){
@@ -718,12 +723,14 @@
 
       const nonce = makeNonce();
       const durationSec = (clean.roundMinutes || 2) * 60;
+      const durationMs  = durationSec * 1000;
 
       if (guessStartBtn) {
         guessStartBtn.disabled = true;
         setTimeout(()=>{ if (!GTG_RUNNING) guessStartBtn.disabled = false; }, 1500);
       }
 
+      // 👉 durée envoyée en secondes ET en millisecondes
       safeDoAction("GTG Start", {
         nonce,
         includeGenreId: clean.includeGenreId,
@@ -735,9 +742,11 @@
         minCriticRating: clean.minCriticRating,
         minCriticVotes:  (isNum(clean.minCriticVotes)  && clean.minCriticVotes  > 0) ? Math.trunc(clean.minCriticVotes)  : null,
         durationSec,
+        durationMs, // <— demandé
         targetScore: (isNum(clean.targetScore) ? Math.trunc(clean.targetScore) : null)
       });
 
+      appendLogDebug("GTG Start args", { durationSec, durationMs });
       setRunning(true);
     });
 
@@ -1103,7 +1112,7 @@
           const giftCount  = Number.isFinite(Number(d.total)) ? Number(d.total) : (Array.isArray(d.recipients) ? d.recipients.length : 0);
           const tierLabel  = tierLabelFromAny(d.sub_tier ?? d.tier ?? d.plan ?? d.subPlan);
 
-          eventsStore.push({ id: Date.now(), type:"GiftBomb", user: gifter, tierLabel, months:0, ack:false, recipients, giftCount });
+        eventsStore.push({ id: Date.now(), type:"GiftBomb", user: gifter, tierLabel, months:0, ack:false, recipients, giftCount });
           saveEvents(eventsStore);
           renderStoredEventsIntoUI();
           appendLog("#events-log", `GiftBomb — ${gifter} (${tierLabel}${giftCount?`, ${giftCount} gifts`:""}) → ${recipients.join(", ")||"—"}`);
@@ -1136,6 +1145,14 @@
       }
 
       if (data && data.widget === "gtg") {
+
+        // ——— gagnant instantané du round ———
+        if (data.type === "roundWinner"){
+          const label = data.user || data.displayName || data.userName || data.name || "—";
+          setWinnerLabel(label);
+          appendLog("#guess-log", `Gagnant du round: ${label}${data.isStreamer ? " (Streamer)" : ""}`);
+          return;
+        }
 
         if (data.type === "partieUpdate"){
           setPartieIdUI(data.partieId || "");
@@ -1260,11 +1277,12 @@
           if (criticRating != null)parts.push(`Critics: ${criticRating}%${criticVotes?` (${criticVotes})`:""}`);
           if (companies.length)    parts.push(`Éditeur/Studio: ${joinList(companies)}`);
 
-          const winner = data.winner || "";
+          const lw = data.lastWinner && typeof data.lastWinner === "object" ? data.lastWinner : null;
+          const winner = lw ? (lw.user || lw.name || lw.label) : (data.winner || "");
 
           $("#guess-last-info")   && ($("#guess-last-info").textContent   = name);
           $("#qv-guess-last")     && ($("#qv-guess-last").textContent     = name);
-          $("#guess-winner")      && ($("#guess-winner").textContent      = winner || "—");
+          setWinnerLabel(winner);
           $("#guess-reveal-name") && ($("#guess-reveal-name").textContent = name);
           $("#guess-reveal-year") && ($("#guess-reveal-year").textContent = isNum(year) ? String(year) : "—");
           $("#guess-reveal-users")   && ($("#guess-reveal-users").textContent   =
@@ -1303,6 +1321,10 @@
           if (Number.isFinite(data.goalScore)) GTG_GOAL = Number(data.goalScore);
           renderGlobalScore(GTG_TOTALS, GTG_GOAL);
           refreshCancelAbility();
+
+          // gagnant le plus récent si fourni
+          const lw = data.lastWinner && typeof data.lastWinner === "object" ? data.lastWinner : null;
+          if (lw) setWinnerLabel(lw.user || lw.name || lw.label || "—");
 
           if (data.type === "scoreReset") appendLog("#guess-log", "Scores réinitialisés.");
           appendLogDebug(data.type + ".payload", data);
