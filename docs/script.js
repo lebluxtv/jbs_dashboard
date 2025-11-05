@@ -730,7 +730,7 @@
         setTimeout(()=>{ if (!GTG_RUNNING) guessStartBtn.disabled = false; }, 1500);
       }
 
-      // 👉 durée envoyée en secondes ET en millisecondes
+      // → Pas d'état optimiste ici : on attend le payload "start" pour setRunning(true)
       safeDoAction("GTG Start", {
         nonce,
         includeGenreId: clean.includeGenreId,
@@ -742,12 +742,11 @@
         minCriticRating: clean.minCriticRating,
         minCriticVotes:  (isNum(clean.minCriticVotes)  && clean.minCriticVotes  > 0) ? Math.trunc(clean.minCriticVotes)  : null,
         durationSec,
-        durationMs, // <— demandé
+        durationMs,
         targetScore: (isNum(clean.targetScore) ? Math.trunc(clean.targetScore) : null)
       });
 
       appendLogDebug("GTG Start args", { durationSec, durationMs });
-      setRunning(true);
     });
 
     guessEndBtn?.addEventListener("click", ()=>{
@@ -895,6 +894,7 @@
               }
             });
           } catch {}
+          // Re-sync complet à chaque connexion
           safeDoAction("GTG Bootstrap Genres & Years & Ratings", {});
           safeDoAction("GTG Scores Get", {});
         },
@@ -1112,7 +1112,7 @@
           const giftCount  = Number.isFinite(Number(d.total)) ? Number(d.total) : (Array.isArray(d.recipients) ? d.recipients.length : 0);
           const tierLabel  = tierLabelFromAny(d.sub_tier ?? d.tier ?? d.plan ?? d.subPlan);
 
-        eventsStore.push({ id: Date.now(), type:"GiftBomb", user: gifter, tierLabel, months:0, ack:false, recipients, giftCount });
+          eventsStore.push({ id: Date.now(), type:"GiftBomb", user: gifter, tierLabel, months:0, ack:false, recipients, giftCount });
           saveEvents(eventsStore);
           renderStoredEventsIntoUI();
           appendLog("#events-log", `GiftBomb — ${gifter} (${tierLabel}${giftCount?`, ${giftCount} gifts`:""}) → ${recipients.join(", ")||"—"}`);
