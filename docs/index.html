@@ -239,6 +239,12 @@
               <label for="gtg-target-score">Score cible (fin de partie)</label>
               <input id="gtg-target-score" type="number" min="1" max="999" placeholder="ex: 5" inputmode="numeric" />
             </div>
+
+            <!-- NEW: Manches max par jeu (si non trouvé) -->
+            <div class="form-group sm">
+              <label for="gtg-pergame-goal">Manches max / jeu (si non trouvé)</label>
+              <input id="gtg-pergame-goal" type="number" min="1" max="5" value="1" inputmode="numeric" />
+            </div>
           </div>
 
           <div class="actions-row">
@@ -246,6 +252,8 @@
             <button id="guess-end" class="btn danger" type="button">Terminer</button>
             <button id="gtg-series-cancel" class="btn" type="button" title="Annuler la partie en cours (confirmation requise)">Annuler la partie</button>
             <small class="round-note" id="gtg-round-note" aria-live="polite"></small>
+            <!-- NEW: Sous-manche (affichage) -->
+            <small class="round-note" id="gtg-pergame-note" aria-live="polite" title="Sous-manche en cours">Sous-manche : — / —</small>
           </div>
 
           <small id="gtg-meta-status" class="round-note" aria-live="polite">Partie inactive</small>
@@ -260,6 +268,8 @@
             <div><span>Timer</span><strong id="gtg-timer">—:—</strong></div>
             <div><span>Dernier jeu trouvé</span><strong id="guess-last-info">—</strong></div>
             <div><span>Gagnant</span><strong id="guess-winner">—</strong></div>
+            <!-- NEW: Sous-manche dans le statut -->
+            <div><span>Sous-manche</span><strong id="gtg-pergame-status">—</strong></div>
           </div>
         </div>
 
