@@ -84,9 +84,9 @@
   let GTG_GOAL   = null;
 
   function renderGlobalScore(totals, goal){
-    const s = $("#qv-score-streamer") || $("#score-streamer") || $("#score-streamer-val");
-    const v = $("#qv-score-viewers")  || $("#score-viewers")  || $("#score-viewers-val");
-    const g = $("#qv-goal-score")     || $("#goal-score-badge") || $("#score-goal-val");
+    const s = $("#qv-score-streamer") || $("#score-streamer") || $("#score-streamer-val") || $("#gtg-score-streamer");
+    const v = $("#qv-score-viewers")  || $("#score-viewers")  || $("#score-viewers-val") || $("#gtg-score-viewers");
+    const g = $("#qv-goal-score")     || $("#goal-score-badge") || $("#score-goal-val") || $("#gtg-goal-score");
     if (s) s.textContent = String(Number.isFinite(totals?.streamer) ? totals.streamer : 0);
     if (v) v.textContent = String(Number.isFinite(totals?.viewers)  ? totals.viewers  : 0);
     if (g) g.textContent = Number.isFinite(goal) ? String(goal) : "—";
@@ -110,7 +110,7 @@
   function setGoalScoreUI(goal){
     const t = $("#gtg-target-score");
     if (t && Number.isFinite(goal)) t.value = String(goal);
-    const badges = $$(".goal-score, #qv-goal-score, #goal-score-badge");
+    const badges = $$(".goal-score, #qv-goal-score, #goal-score-badge, #gtg-goal-score");
     badges.forEach(b => b.textContent = Number.isFinite(goal) ? String(goal) : "—");
     GTG_GOAL = Number.isFinite(goal) ? goal : null;
     renderGlobalScore(GTG_TOTALS, GTG_GOAL);
@@ -119,6 +119,17 @@
   function setPartieIdUI(pid){
     const els = $$("#partie-id, #qv-partie-id");
     els.forEach(e => e.textContent = pid || "—");
+  }
+
+  // ——— Sous-manche / Manches par jeu ———
+  function renderPerGame(index, goal){
+    const note = $("#gtg-pergame-note");
+    const st   = $("#gtg-pergame-status");
+    const idx  = Number.isFinite(index) ? Math.max(1, Math.min(5, Math.trunc(index))) : null;
+    const cap  = Number.isFinite(goal)  ? Math.max(1, Math.min(5, Math.trunc(goal)))  : null;
+    const text = (idx && cap) ? `${idx} / ${cap}` : "—";
+    if (note) note.textContent = `Sous-manche : ${text}`;
+    if (st)   st.textContent   = text;
   }
 
   function setLockVisual(){
@@ -350,6 +361,7 @@
   const guessMinCriticVotesInput= $("#guess-min-critic-votes");
   const guessDurationMinInput   = $("#guess-duration-min");
   const guessTargetScoreInput   = $("#gtg-target-score");
+  const perGameGoalInput        = $("#gtg-pergame-goal"); // NEW
   const guessStartBtn           = $("#guess-start");
   const guessEndBtn             = $("#guess-end");
   const seriesCancelBtn         = $("#gtg-series-cancel");
@@ -452,6 +464,8 @@
     const durationMin     = Number.isFinite(mins) ? Math.max(1, Math.min(120, Math.trunc(mins))) : 2;
     const tgt             = guessTargetScoreInput ? Number(guessTargetScoreInput.value) : null;
     const targetScore     = Number.isFinite(tgt) ? Math.max(1, Math.min(999, Math.trunc(tgt))) : null;
+    const perGameGoalRaw  = perGameGoalInput ? Number(perGameGoalInput.value) : 1;
+    const perGameRoundCountGoal = Number.isFinite(perGameGoalRaw) ? Math.max(1, Math.min(5, Math.trunc(perGameGoalRaw))) : 1;
 
     return {
       includeGenreId,
@@ -463,23 +477,25 @@
       minCriticRating,
       minCriticVotes,
       durationMin,
-      targetScore
+      targetScore,
+      perGameRoundCountGoal
     };
   }
 
   function getCurrentSetupFromUI(){
     const { clean } = validateFilters(collectFilters());
     return {
-      includeGenreId:  clean.includeGenreId,
-      excludeGenreIds: clean.excludeGenreIds,
-      yearFrom:        clean.yearFrom,
-      yearTo:          clean.yearTo,
-      minUserRating:   clean.minUserRating,
-      minUserVotes:    clean.minUserVotes,
-      minCriticRating: clean.minCriticRating,
-      minCriticVotes:  clean.minCriticVotes,
-      roundMinutes:    clean.roundMinutes,
-      targetScore:     clean.targetScore
+      includeGenreId:           clean.includeGenreId,
+      excludeGenreIds:          clean.excludeGenreIds,
+      yearFrom:                 clean.yearFrom,
+      yearTo:                   clean.yearTo,
+      minUserRating:            clean.minUserRating,
+      minUserVotes:             clean.minUserVotes,
+      minCriticRating:          clean.minCriticRating,
+      minCriticVotes:           clean.minCriticVotes,
+      roundMinutes:             clean.roundMinutes,
+      targetScore:              clean.targetScore,
+      perGameRoundCountGoal:    clean.perGameRoundCountGoal
     };
   }
 
@@ -523,6 +539,7 @@
     }
     if (isNum(s.roundMinutes) && guessDurationMinInput) guessDurationMinInput.value = String(s.roundMinutes);
     if (isNum(s.targetScore)  && guessTargetScoreInput) guessTargetScoreInput.value  = String(s.targetScore);
+    if (isNum(s.perGameRoundCountGoal) && perGameGoalInput) perGameGoalInput.value = String(Math.max(1, Math.min(5, Math.trunc(s.perGameRoundCountGoal))));
   }
 
   function validateFilters(raw){
@@ -579,6 +596,11 @@
     if (targetScore != null && !isNum(targetScore)){ errs.push("Score cible invalide."); targetScore = null; }
     if (isNum(targetScore)) targetScore = Math.max(1, Math.min(999, Math.trunc(targetScore)));
 
+    // NEW: perGameRoundCountGoal (1..5)
+    let perGameRoundCountGoal = Number(raw.perGameRoundCountGoal);
+    if (!isNum(perGameRoundCountGoal)) perGameRoundCountGoal = 1;
+    perGameRoundCountGoal = Math.max(1, Math.min(5, Math.trunc(perGameRoundCountGoal)));
+
     return {
       ok: errs.length === 0,
       errs,
@@ -592,7 +614,8 @@
         minCriticRating: (minCriticRating == null ? null : minCriticRating),
         minCriticVotes:  (minCriticVotes  == null ? null : minCriticVotes),
         roundMinutes,
-        targetScore
+        targetScore,
+        perGameRoundCountGoal
       }
     };
   }
@@ -674,11 +697,11 @@
     const debounceCount   = debounce(requestPoolCount, 400);
     const debouncePersist = debounce(saveLastSetupFromUI, 250);
 
-    [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinUserRatingSel, guessMinUserVotesInput, guessMinCriticRatingSel, guessMinCriticVotesInput, guessDurationMinInput, guessTargetScoreInput]
+    [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinUserRatingSel, guessMinUserVotesInput, guessMinCriticRatingSel, guessMinCriticVotesInput, guessDurationMinInput, guessTargetScoreInput, perGameGoalInput]
       .forEach(el=>{
         if (!el) return;
         el.addEventListener("change", ()=>{ debounceCount(); debouncePersist(); });
-        if (el === guessYearFromInput || el === guessYearToInput || el === guessMinUserVotesInput || el === guessMinCriticVotesInput || el === guessDurationMinInput || el === guessTargetScoreInput){
+        if (el === guessYearFromInput || el === guessYearToInput || el === guessMinUserVotesInput || el === guessMinCriticVotesInput || el === guessDurationMinInput || el === guessTargetScoreInput || el === perGameGoalInput){
           el.addEventListener("input", ()=>{ debounceCount(); debouncePersist(); });
         }
       });
@@ -718,7 +741,8 @@
         minCriticRating: clean.minCriticRating,
         minCriticVotes:  clean.minCriticVotes,
         roundMinutes:    clean.roundMinutes,
-        targetScore:     clean.targetScore
+        targetScore:     clean.targetScore,
+        perGameRoundCountGoal: clean.perGameRoundCountGoal
       });
 
       const nonce = makeNonce();
@@ -730,7 +754,7 @@
         setTimeout(()=>{ if (!GTG_RUNNING) guessStartBtn.disabled = false; }, 1500);
       }
 
-      // → Pas d'état optimiste ici : on attend le payload "start" pour setRunning(true)
+      // → On envoie maintenant perGameRoundCountGoal (1..5)
       safeDoAction("GTG Start", {
         nonce,
         includeGenreId: clean.includeGenreId,
@@ -743,10 +767,11 @@
         minCriticVotes:  (isNum(clean.minCriticVotes)  && clean.minCriticVotes  > 0) ? Math.trunc(clean.minCriticVotes)  : null,
         durationSec,
         durationMs,
-        targetScore: (isNum(clean.targetScore) ? Math.trunc(clean.targetScore) : null)
+        targetScore: (isNum(clean.targetScore) ? Math.trunc(clean.targetScore) : null),
+        perGameRoundCountGoal: clean.perGameRoundCountGoal
       });
 
-      appendLogDebug("GTG Start args", { durationSec, durationMs });
+      appendLogDebug("GTG Start args", { durationSec, durationMs, perGameRoundCountGoal: clean.perGameRoundCountGoal });
     });
 
     guessEndBtn?.addEventListener("click", ()=>{
@@ -1096,6 +1121,13 @@
     return d.gameDebug?.name || d.target?.name || d.answerName || d.gameName || null;
   }
 
+  function getPerGamePairFromAny(data){
+    if (!data || typeof data !== "object") return { idx:null, goal:null };
+    const idx  = pickNum(data.perGameRoundIndex,  data.perGameIndex,  data.subRoundIndex);
+    const goal = pickNum(data.perGameRoundCountGoal, data.perGameGoal, data.subRoundMax);
+    return { idx, goal };
+    }
+
   function handleSBEvent(event, data){
     try {
       if (event && event.type === "StreamUpdate"){
@@ -1157,6 +1189,10 @@
         if (data.type === "partieUpdate"){
           setPartieIdUI(data.partieId || "");
           if (Number.isFinite(data.goalScore)) setGoalScoreUI(data.goalScore);
+          // per-game pair if provided
+          const pg = getPerGamePairFromAny(data);
+          renderPerGame(pg.idx, pg.goal);
+
           if (data.state === "Running"){
             setRunning(true);
           } else if (data.state === "Ended" || data.state === "Idle"){
@@ -1164,7 +1200,7 @@
             stopRoundTimer();
             GTG_ROUND_ID = null;
           }
-          appendLogDebug("partieUpdate", { partieId: data.partieId, goalScore: data.goalScore, state: data.state });
+          appendLogDebug("partieUpdate", { partieId: data.partieId, goalScore: data.goalScore, state: data.state, perGame: pg });
           return;
         }
 
@@ -1173,6 +1209,8 @@
           setRunning(false);
           stopRoundTimer();
           GTG_ROUND_ID = null;
+          // reset per-game UI on end
+          renderPerGame(null, null);
           return;
         }
 
@@ -1201,8 +1239,12 @@
           applyLastSetupAfterGenres();
           saveLastSetupFromUI();
 
+          // per-game initial (if server echoes something)
+          const pg = getPerGamePairFromAny(data);
+          renderPerGame(pg.idx, pg.goal);
+
           setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
-          appendLogDebug("bootstrap.echo", { ratingSteps: data.ratingSteps, oldestYear: data.oldestYear, newestYear: data.newestYear });
+          appendLogDebug("bootstrap.echo", { ratingSteps: data.ratingSteps, oldestYear: data.oldestYear, newestYear: data.newestYear, perGame: pg });
           requestPoolCount();
           return;
         }
@@ -1243,6 +1285,10 @@
 
           const targetName = extractTargetNameFromPayload(data);
           if (targetName) appendLogDebug("target", { name: targetName });
+
+          // per-game info on start
+          const pg = getPerGamePairFromAny(data);
+          renderPerGame(pg.idx, pg.goal);
 
           appendLog("#guess-log", "Manche démarrée");
           appendLogDebug("start.payload", data);
@@ -1292,6 +1338,10 @@
           $("#guess-reveal-devs") && ($("#guess-reveal-devs").textContent = (companies && companies.length ? joinList(companies) : "—"));
           $("#guess-reveal-pubs") && ($("#guess-reveal-pubs").textContent = (companies && companies.length ? joinList(companies) : "—"));
 
+          // per-game pair on reveal (useful at cap reached or solved)
+          const pg = getPerGamePairFromAny(data);
+          renderPerGame(pg.idx, pg.goal);
+
           setRunning(false);
           stopRoundTimer();
           GTG_ROUND_ID = null;
@@ -1321,6 +1371,10 @@
           if (Number.isFinite(data.goalScore)) GTG_GOAL = Number(data.goalScore);
           renderGlobalScore(GTG_TOTALS, GTG_GOAL);
           refreshCancelAbility();
+
+          // NEW: per-game info reflected on score updates too
+          const pg = getPerGamePairFromAny(data);
+          renderPerGame(pg.idx, pg.goal);
 
           // gagnant le plus récent si fourni
           const lw = data.lastWinner && typeof data.lastWinner === "object" ? data.lastWinner : null;
@@ -1413,6 +1467,7 @@
     connectSB();
     renderGlobalScore(GTG_TOTALS, GTG_GOAL);
     refreshCancelAbility();
+    renderPerGame(null, null);
   }
 
   window.addEventListener("DOMContentLoaded", boot);
