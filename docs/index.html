@@ -158,9 +158,19 @@
 
       <!-- Ligne du haut : Filtres -->
       <div class="grid gtg-top">
-        <div class="card stretch">
-          <h3>Filtres</h3>
+        <div class="card stretch" id="filters-card">
+          <!-- HEADER CLIQUABLE (toggle expand/collapse) -->
+          <div class="filters-header" id="filters-head" role="button" tabindex="0" aria-expanded="true" aria-controls="filters" title="Afficher/Masquer les filtres">
+            <h3>Filtres</h3>
+            <div class="filters-head-right">
+              <!-- Badge du pool (mis à jour par JS) -->
+              <span id="filters-pool-badge" class="badge pool-badge">—</span>
+              <!-- Chevron visuel -->
+              <span class="chevron" aria-hidden="true">▾</span>
+            </div>
+          </div>
 
+          <!-- CONTENU DES FILTRES -->
           <div class="form-row" id="filters" data-filters>
             <!-- Genre (inclusion) -->
             <div class="form-group">
@@ -234,8 +244,8 @@
             </div>
           <div class="form-row">
             <div class="form-group sm">
-              <label for="guess-duration-min">Durée d'une manche (minutes)</label>
-              <input id="guess-duration-min" type="number" min="1" max="120" value="2" inputmode="numeric" />
+              <label for="guess-duration-min">Durée d'une manche (secondes)</label>
+              <input id="guess-duration-min" type="number" min="60" max="7200" placeholder="ex: 120" inputmode="numeric" />
             </div>
             <!-- NEW: Manches max par jeu (si non trouvé) -->
             <div class="form-group sm">
