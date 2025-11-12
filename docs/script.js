@@ -1067,7 +1067,7 @@
       }
       for (const item of top){
         const name  = item.name || item.user || "—";
-        the const score = item.score ?? item.points ?? 0;
+        const score = item.score ?? item.points ?? 0;   // <-- corrigé
         const li = document.createElement("li");
         li.textContent = `${name} — ${score}`;
         into.appendChild(li);
