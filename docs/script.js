@@ -1,4 +1,4 @@
-(function () { 
+(function () {
   "use strict";
 
   /******************************************************************
@@ -359,7 +359,7 @@
   const guessMinUserVotesInput  = $("#guess-min-user-votes");
   const guessMinCriticRatingSel = $("#guess-min-critic-rating");
   const guessMinCriticVotesInput= $("#guess-min-critic-votes");
-  const guessDurationMinInput   = $("#guess-duration-min"); // id conservé
+  const guessDurationMinInput   = $("#guess-duration-min"); // ⇐ DOM id conservé
   const guessTargetScoreInput   = $("#gtg-target-score");
   const perGameGoalInput        = $("#gtg-pergame-goal"); // NEW
   const guessStartBtn           = $("#guess-start");
@@ -367,25 +367,33 @@
   const seriesCancelBtn         = $("#gtg-series-cancel");
   const guessMsgEl              = $("#guess-msg");
 
-  // —— seconds-mode pour la durée ——
+  // —— Nouveau : seconds-mode pour la durée ——
   const DURATION_MIN_SEC = 60;     // 1 min
   const DURATION_MAX_SEC = 7200;   // 120 min
 
   function coerceDurationSeconds(raw){
     let n = Number(raw);
-    if (!Number.isFinite(n) || n <= 0) n = 120;        // défaut 120s
+    if (!Number.isFinite(n) || n <= 0) n = 120; // défaut 120s
+    // Migration: si valeur faible (≤120), on considère que c'était des minutes (ancien UI)
+    if (n <= 120) n = n * 60;
     n = Math.max(DURATION_MIN_SEC, Math.min(DURATION_MAX_SEC, Math.trunc(n)));
     return n;
   }
 
   function enableSecondsModeForDurationInput(){
     if (!guessDurationMinInput) return;
+    // Mettre le label à "secondes"
     const lbl = document.querySelector('label[for="guess-duration-min"]');
     if (lbl) lbl.textContent = "Durée d'une manche (secondes)";
+    // Bornes, placeholder
     guessDurationMinInput.min = String(DURATION_MIN_SEC);
     guessDurationMinInput.max = String(DURATION_MAX_SEC);
     if (!guessDurationMinInput.placeholder) guessDurationMinInput.placeholder = "ex: 120";
-    // ⚠️ pas de conversion automatique ici (évite de multiplier 90s→5400s)
+    // Migration valeur existante (si minutes)
+    const v = Number(guessDurationMinInput.value);
+    if (Number.isFinite(v) && v > 0 && v <= 120){
+      guessDurationMinInput.value = String(v * 60);
+    }
   }
 
   const guessMsg = (t)=>{ if (guessMsgEl) guessMsgEl.textContent = t || ""; };
@@ -500,7 +508,7 @@
       minUserVotes,
       minCriticRating,
       minCriticVotes,
-      durationSec,              // seconds
+      durationSec,              // ← seconds
       targetScore,
       perGameRoundCountGoal
     };
@@ -517,7 +525,7 @@
       minUserVotes:             clean.minUserVotes,
       minCriticRating:          clean.minCriticRating,
       minCriticVotes:           clean.minCriticVotes,
-      roundSeconds:             clean.roundSeconds,           // persist
+      roundSeconds:             clean.roundSeconds,           // ⬅️ nouveau
       targetScore:              clean.targetScore,
       perGameRoundCountGoal:    clean.perGameRoundCountGoal
     };
@@ -621,7 +629,7 @@
     let minUserVotes   = cleanVotes(raw.minUserVotes,   "Votes min (users)");
     let minCriticVotes = cleanVotes(raw.minCriticVotes, "Votes min (critics)");
 
-    // —— seconds (compat minutes si raw.durationMin présent) ——
+    // —— seconds (avec compat minutes si raw.durationMin présent) ——
     let roundSeconds = Number(raw.durationSec ?? raw.durationMin ?? 120);
     roundSeconds = coerceDurationSeconds(roundSeconds);
 
@@ -646,7 +654,7 @@
         minUserVotes:    (minUserVotes    == null ? null : minUserVotes),
         minCriticRating: (minCriticRating == null ? null : minCriticRating),
         minCriticVotes:  (minCriticVotes  == null ? null : minCriticVotes),
-        roundSeconds,                     // seconds
+        roundSeconds,                     // ⬅️ seconds
         targetScore,
         perGameRoundCountGoal
       }
@@ -773,7 +781,7 @@
         minUserVotes:    clean.minUserVotes,
         minCriticRating: clean.minCriticRating,
         minCriticVotes:  clean.minCriticVotes,
-        roundSeconds:    clean.roundSeconds,        // persist seconds
+        roundSeconds:    clean.roundSeconds,        // ← stocker en secondes
         targetScore:     clean.targetScore,
         perGameRoundCountGoal: clean.perGameRoundCountGoal
       });
@@ -797,7 +805,7 @@
         minUserVotes:    (isNum(clean.minUserVotes)    && clean.minUserVotes    > 0) ? Math.trunc(clean.minUserVotes)    : null,
         minCriticRating: clean.minCriticRating,
         minCriticVotes:  (isNum(clean.minCriticVotes)  && clean.minCriticVotes  > 0) ? Math.trunc(clean.minCriticVotes)  : null,
-        durationSec,                                   // seconds
+        durationSec,                                   // ← secondes direct
         durationMs,
         targetScore: (isNum(clean.targetScore) ? Math.trunc(clean.targetScore) : null),
         perGameRoundCountGoal: clean.perGameRoundCountGoal
@@ -1067,7 +1075,7 @@
       }
       for (const item of top){
         const name  = item.name || item.user || "—";
-        the const score = item.score ?? item.points ?? 0;
+        const score = item.score ?? item.points ?? 0;
         const li = document.createElement("li");
         li.textContent = `${name} — ${score}`;
         into.appendChild(li);
@@ -1306,10 +1314,10 @@
           guessMsg(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
           appendLogDebug("bootstrap.echo", { ratingSteps: data.ratingSteps, oldestYear: data.oldestYear, newestYear: data.newestYear, perGame: pg });
 
-          // Demande de pool immédiate
+          // Demande de pool immédiate (avec seconds)
           requestPoolCount();
 
-          // Harmoniser l'UI “secondes”
+          // Harmoniser l'UI sur “secondes”
           enableSecondsModeForDurationInput();
           return;
         }
@@ -1531,7 +1539,7 @@
     renderGlobalScore(GTG_TOTALS, GTG_GOAL);
     refreshCancelAbility();
     renderPerGame(null, null);
-    enableSecondsModeForDurationInput();   // UI “secondes”
+    enableSecondsModeForDurationInput();   // ← bascule UI sur “secondes”
     updatePoolBadge(null);
   }
 
