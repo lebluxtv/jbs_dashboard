@@ -359,7 +359,7 @@
   const guessMinUserVotesInput  = $("#guess-min-user-votes");
   const guessMinCriticRatingSel = $("#guess-min-critic-rating");
   const guessMinCriticVotesInput= $("#guess-min-critic-votes");
-  const guessDurationMinInput   = $("#guess-duration-min");
+  const guessDurationMinInput   = $("#guess-duration-min"); // ⇐ DOM id conservé
   const guessTargetScoreInput   = $("#gtg-target-score");
   const perGameGoalInput        = $("#gtg-pergame-goal"); // NEW
   const guessStartBtn           = $("#guess-start");
@@ -367,7 +367,36 @@
   const seriesCancelBtn         = $("#gtg-series-cancel");
   const guessMsgEl              = $("#guess-msg");
 
-  function setGuessMessage(t){ if (guessMsgEl) guessMsgEl.textContent = t || ""; }
+  // —— Nouveau : seconds-mode pour la durée ——
+  const DURATION_MIN_SEC = 60;     // 1 min
+  const DURATION_MAX_SEC = 7200;   // 120 min
+
+  function coerceDurationSeconds(raw){
+    let n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) n = 120; // défaut 120s
+    // Migration: si valeur faible (≤120), on considère que c'était des minutes (ancien UI)
+    if (n <= 120) n = n * 60;
+    n = Math.max(DURATION_MIN_SEC, Math.min(DURATION_MAX_SEC, Math.trunc(n)));
+    return n;
+  }
+
+  function enableSecondsModeForDurationInput(){
+    if (!guessDurationMinInput) return;
+    // Mettre le label à "secondes"
+    const lbl = document.querySelector('label[for="guess-duration-min"]');
+    if (lbl) lbl.textContent = "Durée d'une manche (secondes)";
+    // Bornes, placeholder
+    guessDurationMinInput.min = String(DURATION_MIN_SEC);
+    guessDurationMinInput.max = String(DURATION_MAX_SEC);
+    if (!guessDurationMinInput.placeholder) guessDurationMinInput.placeholder = "ex: 120";
+    // Migration valeur existante (si minutes)
+    const v = Number(guessDurationMinInput.value);
+    if (Number.isFinite(v) && v > 0 && v <= 120){
+      guessDurationMinInput.value = String(v * 60);
+    }
+  }
+
+  const guessMsg = (t)=>{ if (guessMsgEl) guessMsgEl.textContent = t || ""; };
 
   const GTG_EXCLUDED = new Set();
 
@@ -460,8 +489,11 @@
     const minUserVotes    = (guessMinUserVotesInput && guessMinUserVotesInput.value !== "") ? Number(guessMinUserVotesInput.value) : null;
     const minCriticRating = (guessMinCriticRatingSel && guessMinCriticRatingSel.value !== "") ? Number(guessMinCriticRatingSel.value) : null;
     const minCriticVotes  = (guessMinCriticVotesInput && guessMinCriticVotesInput.value !== "") ? Number(guessMinCriticVotesInput.value) : null;
-    const mins            = guessDurationMinInput ? Number(guessDurationMinInput.value) : 2;
-    const durationMin     = Number.isFinite(mins) ? Math.max(1, Math.min(120, Math.trunc(mins))) : 2;
+
+    // —— maintenant en secondes ——
+    const secRaw = guessDurationMinInput ? Number(guessDurationMinInput.value) : 120;
+    const durationSec = coerceDurationSeconds(secRaw);
+
     const tgt             = guessTargetScoreInput ? Number(guessTargetScoreInput.value) : null;
     const targetScore     = Number.isFinite(tgt) ? Math.max(1, Math.min(999, Math.trunc(tgt))) : null;
     const perGameGoalRaw  = perGameGoalInput ? Number(perGameGoalInput.value) : 1;
@@ -476,7 +508,7 @@
       minUserVotes,
       minCriticRating,
       minCriticVotes,
-      durationMin,
+      durationSec,              // ← seconds
       targetScore,
       perGameRoundCountGoal
     };
@@ -493,7 +525,7 @@
       minUserVotes:             clean.minUserVotes,
       minCriticRating:          clean.minCriticRating,
       minCriticVotes:           clean.minCriticVotes,
-      roundMinutes:             clean.roundMinutes,
+      roundSeconds:             clean.roundSeconds,           // ⬅️ nouveau
       targetScore:              clean.targetScore,
       perGameRoundCountGoal:    clean.perGameRoundCountGoal
     };
@@ -537,7 +569,16 @@
       if (isNum(s.minCriticVotes)) guessMinCriticVotesInput.value = String(Math.max(0, Math.trunc(s.minCriticVotes)));
       else guessMinCriticVotesInput.value = "";
     }
-    if (isNum(s.roundMinutes) && guessDurationMinInput) guessDurationMinInput.value = String(s.roundMinutes);
+
+    // —— priorité au nouveau champ roundSeconds, fallback roundMinutes (legacy) ——
+    if (guessDurationMinInput){
+      if (isNum(s.roundSeconds)) {
+        guessDurationMinInput.value = String(coerceDurationSeconds(s.roundSeconds));
+      } else if (isNum(s.roundMinutes)) {
+        guessDurationMinInput.value = String(coerceDurationSeconds(s.roundMinutes * 60));
+      }
+    }
+
     if (isNum(s.targetScore)  && guessTargetScoreInput) guessTargetScoreInput.value  = String(s.targetScore);
     if (isNum(s.perGameRoundCountGoal) && perGameGoalInput) perGameGoalInput.value = String(Math.max(1, Math.min(5, Math.trunc(s.perGameRoundCountGoal))));
   }
@@ -588,9 +629,9 @@
     let minUserVotes   = cleanVotes(raw.minUserVotes,   "Votes min (users)");
     let minCriticVotes = cleanVotes(raw.minCriticVotes, "Votes min (critics)");
 
-    let roundMinutes = Number(raw.durationMin);
-    if (!isNum(roundMinutes)) roundMinutes = 2;
-    roundMinutes = Math.max(1, Math.min(120, Math.trunc(roundMinutes)));
+    // —— seconds (avec compat minutes si raw.durationMin présent) ——
+    let roundSeconds = Number(raw.durationSec ?? raw.durationMin ?? 120);
+    roundSeconds = coerceDurationSeconds(roundSeconds);
 
     let targetScore = raw.targetScore;
     if (targetScore != null && !isNum(targetScore)){ errs.push("Score cible invalide."); targetScore = null; }
@@ -613,7 +654,7 @@
         minUserVotes:    (minUserVotes    == null ? null : minUserVotes),
         minCriticRating: (minCriticRating == null ? null : minCriticRating),
         minCriticVotes:  (minCriticVotes  == null ? null : minCriticVotes),
-        roundMinutes,
+        roundSeconds,                     // ⬅️ seconds
         targetScore,
         perGameRoundCountGoal
       }
@@ -729,7 +770,7 @@
 
     guessStartBtn?.addEventListener("click", ()=>{
       const { ok, errs, clean } = validateFilters(collectFilters());
-      if (!ok){ setGuessMessage("Filtres invalides: " + errs.join(" ; ")); return; }
+      if (!ok){ guessMsg("Filtres invalides: " + errs.join(" ; ")); return; }
 
       saveLastSetup({
         includeGenreId:  clean.includeGenreId,
@@ -740,13 +781,13 @@
         minUserVotes:    clean.minUserVotes,
         minCriticRating: clean.minCriticRating,
         minCriticVotes:  clean.minCriticVotes,
-        roundMinutes:    clean.roundMinutes,
+        roundSeconds:    clean.roundSeconds,        // ← stocker en secondes
         targetScore:     clean.targetScore,
         perGameRoundCountGoal: clean.perGameRoundCountGoal
       });
 
       const nonce = makeNonce();
-      const durationSec = (clean.roundMinutes || 2) * 60;
+      const durationSec = clean.roundSeconds || 120;
       const durationMs  = durationSec * 1000;
 
       if (guessStartBtn) {
@@ -754,7 +795,6 @@
         setTimeout(()=>{ if (!GTG_RUNNING) guessStartBtn.disabled = false; }, 1500);
       }
 
-      // → On envoie maintenant perGameRoundCountGoal (1..5)
       safeDoAction("GTG Start", {
         nonce,
         includeGenreId: clean.includeGenreId,
@@ -765,7 +805,7 @@
         minUserVotes:    (isNum(clean.minUserVotes)    && clean.minUserVotes    > 0) ? Math.trunc(clean.minUserVotes)    : null,
         minCriticRating: clean.minCriticRating,
         minCriticVotes:  (isNum(clean.minCriticVotes)  && clean.minCriticVotes  > 0) ? Math.trunc(clean.minCriticVotes)  : null,
-        durationSec,
+        durationSec,                                   // ← secondes direct
         durationMs,
         targetScore: (isNum(clean.targetScore) ? Math.trunc(clean.targetScore) : null),
         perGameRoundCountGoal: clean.perGameRoundCountGoal
@@ -807,6 +847,38 @@
     });
 
     renderExcludeChips();
+  }
+
+  /******************************************************************
+   *                    🔻 Filtres: collapse / expand
+   ******************************************************************/
+  const filtersCard  = $("#filters-card");
+  const filtersHead  = $("#filters-head");
+  const poolBadgeEl  = $("#filters-pool-badge");
+  let   isFiltersCollapsed = false;
+
+  function setFiltersCollapsed(collapsed){
+    isFiltersCollapsed = !!collapsed;
+    if (filtersCard) filtersCard.classList.toggle("collapsed", isFiltersCollapsed);
+    if (filtersHead) filtersHead.setAttribute("aria-expanded", isFiltersCollapsed ? "false" : "true");
+  }
+  function toggleFiltersCollapsed(){ setFiltersCollapsed(!isFiltersCollapsed); }
+  function bindFiltersCollapse(){
+    if (!filtersHead) return;
+    setFiltersCollapsed(false);
+    if (filtersHead._bound) return;
+    filtersHead._bound = true;
+    filtersHead.addEventListener("click", (e)=>{
+      if (e.target.closest("button, a, input, select, label")) return;
+      toggleFiltersCollapsed();
+    });
+    filtersHead.addEventListener("keydown", (e)=>{
+      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); toggleFiltersCollapsed(); }
+    });
+  }
+  function updatePoolBadge(count){
+    if (!poolBadgeEl) return;
+    poolBadgeEl.textContent = (Number.isFinite(count) && count >= 0) ? String(count) : "—";
   }
 
   /******************************************************************
@@ -969,7 +1041,6 @@
   let LAST_COUNT_SEND_TS  = 0;
   let LAST_COUNT_LOG_SIG  = null;
   let LAST_COUNT_LOG_TS   = 0;
-  const DEDUPE_MS = 1500;
 
   function fillRatingStepsAll(steps){
     const list = Array.isArray(steps) && steps.length ? steps : [0,50,60,70,80,85,90];
@@ -1075,7 +1146,7 @@
   function requestPoolCount(){
     const raw = collectFilters();
     const { ok, errs, clean } = validateFilters(raw);
-    if (!ok){ setGuessMessage("Filtres invalides: " + errs.join(" ; ")); return; }
+    if (!ok){ guessMsg("Filtres invalides: " + errs.join(" ; ")); return; }
 
     const sig = JSON.stringify(clean);
     const now = Date.now();
@@ -1126,7 +1197,7 @@
     const idx  = pickNum(data.perGameRoundIndex,  data.perGameIndex,  data.subRoundIndex);
     const goal = pickNum(data.perGameRoundCountGoal, data.perGameGoal, data.subRoundMax);
     return { idx, goal };
-    }
+  }
 
   function handleSBEvent(event, data){
     try {
@@ -1189,7 +1260,6 @@
         if (data.type === "partieUpdate"){
           setPartieIdUI(data.partieId || "");
           if (Number.isFinite(data.goalScore)) setGoalScoreUI(data.goalScore);
-          // per-game pair if provided
           const pg = getPerGamePairFromAny(data);
           renderPerGame(pg.idx, pg.goal);
 
@@ -1209,13 +1279,12 @@
           setRunning(false);
           stopRoundTimer();
           GTG_ROUND_ID = null;
-          // reset per-game UI on end
           renderPerGame(null, null);
           return;
         }
 
         if (data.type === "bootstrap"){
-          if (data.error){ setGuessMessage("Erreur: " + data.error); return; }
+          if (data.error){ guessMsg("Erreur: " + data.error); return; }
 
           const genres = Array.isArray(data.genres) ? data.genres : [];
           fillGenresUI(genres);
@@ -1239,13 +1308,17 @@
           applyLastSetupAfterGenres();
           saveLastSetupFromUI();
 
-          // per-game initial (if server echoes something)
           const pg = getPerGamePairFromAny(data);
           renderPerGame(pg.idx, pg.goal);
 
-          setGuessMessage(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
+          guessMsg(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
           appendLogDebug("bootstrap.echo", { ratingSteps: data.ratingSteps, oldestYear: data.oldestYear, newestYear: data.newestYear, perGame: pg });
+
+          // Demande de pool immédiate (avec seconds)
           requestPoolCount();
+
+          // Harmoniser l'UI sur “secondes”
+          enableSecondsModeForDurationInput();
           return;
         }
 
@@ -1270,7 +1343,8 @@
             LAST_COUNT_LOG_TS  = now;
           }
           appendLogDebug("count.filtersEcho", f);
-          setGuessMessage(`Jeux correspondants: ${n}`);
+          guessMsg(`Jeux correspondants: ${n}`);
+          updatePoolBadge(n);
           return;
         }
 
@@ -1286,7 +1360,6 @@
           const targetName = extractTargetNameFromPayload(data);
           if (targetName) appendLogDebug("target", { name: targetName });
 
-          // per-game info on start
           const pg = getPerGamePairFromAny(data);
           renderPerGame(pg.idx, pg.goal);
 
@@ -1338,7 +1411,6 @@
           $("#guess-reveal-devs") && ($("#guess-reveal-devs").textContent = (companies && companies.length ? joinList(companies) : "—"));
           $("#guess-reveal-pubs") && ($("#guess-reveal-pubs").textContent = (companies && companies.length ? joinList(companies) : "—"));
 
-          // per-game pair on reveal (useful at cap reached or solved)
           const pg = getPerGamePairFromAny(data);
           renderPerGame(pg.idx, pg.goal);
 
@@ -1372,11 +1444,9 @@
           renderGlobalScore(GTG_TOTALS, GTG_GOAL);
           refreshCancelAbility();
 
-          // NEW: per-game info reflected on score updates too
           const pg = getPerGamePairFromAny(data);
           renderPerGame(pg.idx, pg.goal);
 
-          // gagnant le plus récent si fourni
           const lw = data.lastWinner && typeof data.lastWinner === "object" ? data.lastWinner : null;
           if (lw) setWinnerLabel(lw.user || lw.name || lw.label || "—");
 
@@ -1463,11 +1533,14 @@
     bindOverviewQuickNav();
     setGuessHandlers();
     installFilterChangeGuard();
+    bindFiltersCollapse();
     installDebugToggleButton();
     connectSB();
     renderGlobalScore(GTG_TOTALS, GTG_GOAL);
     refreshCancelAbility();
     renderPerGame(null, null);
+    enableSecondsModeForDurationInput();   // ← bascule UI sur “secondes”
+    updatePoolBadge(null);
   }
 
   window.addEventListener("DOMContentLoaded", boot);
