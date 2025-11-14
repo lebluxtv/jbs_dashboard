@@ -26,7 +26,7 @@
     const el = $(sel); if (!el) return;
     const ts = new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
     const p = document.createElement('p');
-    p.textContent = `[${ts}] ${text}`;
+    p.textContent = "[${ts}] ".replace("${ts}", ts) + text;
     el.appendChild(p);
     el.scrollTop = el.scrollHeight;
   }
@@ -797,7 +797,7 @@
         minUserVotes:    (isNum(clean.minUserVotes)    && clean.minUserVotes    > 0) ? Math.trunc(clean.minUserVotes)    : null,
         minCriticRating: clean.minCriticRating,
         minCriticVotes:  (isNum(clean.minCriticVotes)  && clean.minCriticVotes  > 0) ? Math.trunc(clean.minCriticVotes)  : null,
-        durationSec,                                   // seconds
+        durationSec,                                   // seconds -> C# reçoit la durée
         durationMs,
         targetScore: (isNum(clean.targetScore) ? Math.trunc(clean.targetScore) : null),
         perGameRoundCountGoal: clean.perGameRoundCountGoal
@@ -1067,7 +1067,7 @@
       }
       for (const item of top){
         const name  = item.name || item.user || "—";
-        const score = item.score ?? item.points ?? 0;   // <-- corrigé
+        const score = item.score ?? item.points ?? 0;
         const li = document.createElement("li");
         li.textContent = `${name} — ${score}`;
         into.appendChild(li);
