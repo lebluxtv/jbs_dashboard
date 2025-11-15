@@ -238,18 +238,19 @@
         <!-- Partie -->
         <div class="card span-8 part-card">
           <h3>Partie</h3>
-            <div class="form-group sm">
-              <label for="gtg-target-score">Score cible (fin de partie)</label>
-              <input id="gtg-target-score" type="number" min="1" max="999" placeholder="ex: 5" inputmode="numeric" />
-            </div>
+          <div class="form-group sm">
+            <label for="gtg-target-score">Score cible (fin de partie)</label>
+            <input id="gtg-target-score" type="number" min="1" max="999" placeholder="ex: 5" inputmode="numeric" />
+          </div>
           <div class="form-row">
             <div class="form-group sm">
               <label for="guess-duration-min">Durée d'une manche (secondes)</label>
-              <input id="guess-duration-min" type="number" min="30" max="7200" placeholder="ex: 30" inputmode="numeric" />
+              <!-- min / max alignés avec coerceDurationSeconds (60–7200) -->
+              <input id="guess-duration-min" type="number" min="60" max="7200" placeholder="ex: 120" inputmode="numeric" />
             </div>
             <!-- NEW: Manches max par jeu (si non trouvé) -->
             <div class="form-group sm">
-              <label for="gtg-pergame-goal">nb de manches par jeux</label>
+              <label for="gtg-pergame-goal">Nb de manches par jeu</label>
               <input id="gtg-pergame-goal" type="number" min="1" max="5" value="1" inputmode="numeric" />
             </div>
           </div>
@@ -259,7 +260,7 @@
             <button id="guess-end" class="btn danger" type="button">Terminer</button>
             <button id="gtg-series-cancel" class="btn" type="button" title="Annuler la partie en cours (confirmation requise)">Annuler la partie</button>
             <small class="round-note" id="gtg-round-note" aria-live="polite"></small>
-            <!-- NEW: Sous-manche (affichage) -->
+            <!-- Sous-manche (affichage) -->
             <small class="round-note" id="gtg-pergame-note" aria-live="polite" title="Sous-manche en cours">Sous-manche : — / —</small>
           </div>
 
@@ -271,11 +272,11 @@
         <div class="card span-4 status-card">
           <h3>Statut</h3>
           <div class="qv-kv">
-            <div><span>Etat</span><strong id="guess-status-info">En pause</strong></div>
+            <div><span>État</span><strong id="guess-status-info">En pause</strong></div>
             <div><span>Timer</span><strong id="gtg-timer">—:—</strong></div>
             <div><span>Dernier jeu trouvé</span><strong id="guess-last-info">—</strong></div>
             <div><span>Gagnant</span><strong id="guess-winner">—</strong></div>
-            <!-- NEW: Sous-manche dans le statut -->
+            <!-- Sous-manche dans le statut -->
             <div><span>Sous-manche</span><strong id="gtg-pergame-status">—</strong></div>
           </div>
         </div>
