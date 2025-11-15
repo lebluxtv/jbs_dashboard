@@ -86,10 +86,11 @@
   function renderGlobalScore(totals, goal){
     const s = $("#qv-score-streamer") || $("#score-streamer") || $("#score-streamer-val") || $("#gtg-score-streamer");
     const v = $("#qv-score-viewers")  || $("#score-viewers")  || $("#score-viewers-val") || $("#gtg-score-viewers");
-    const g = $("#qv-goal-score")     || $("#goal-score-badge") || $("#score-goal-val") || $("#gtg-goal-score");
+    const g = $("#qv-goal-score")     || $("#goal-score-badge") || "#score-goal-val" || $("#gtg-goal-score");
+    const gEl = typeof g === "string" ? $(g) : g;
     if (s) s.textContent = String(Number.isFinite(totals?.streamer) ? totals.streamer : 0);
     if (v) v.textContent = String(Number.isFinite(totals?.viewers)  ? totals.viewers  : 0);
-    if (g) g.textContent = Number.isFinite(goal) ? String(goal) : "—";
+    if (gEl) gEl.textContent = Number.isFinite(goal) ? String(goal) : "—";
   }
 
   function setWinnerLabel(label){
@@ -118,7 +119,7 @@
   }
   function setPartieIdUI(pid){
     const els = $$("#partie-id, #qv-partie-id");
-    els.forEach(e => e.textContent = pid || "—");
+    els.forEach(e => e.textContent = pid || "—";
   }
 
   // ——— Sous-manche / Manches par jeu ———
@@ -314,6 +315,11 @@
   }
 
   function setRunning(running){
+    // DEBUG: trace tous les changements d'état (origine visible dans la stack)
+    try {
+      console.log("[DEBUG setRunning]", running, new Error().stack.split("\n")[1] || "");
+    } catch {}
+
     GTG_RUNNING = !!running;
     setFiltersLocked(GTG_RUNNING);
     const startBtn = $("#guess-start");
@@ -377,7 +383,6 @@
     n = Math.max(DURATION_MIN_SEC, Math.min(DURATION_MAX_SEC, Math.trunc(n)));
     return n;
   }
-
 
   function enableSecondsModeForDurationInput(){
     if (!guessDurationMinInput) return;
@@ -1590,6 +1595,15 @@
     renderPerGame(null, null);
     enableSecondsModeForDurationInput();   // UI “secondes”
     updatePoolBadge(null);
+
+    // ===== Watchdog : si on croit être en cours mais qu'aucun timer n'est actif, on débloque localement =====
+    setInterval(()=>{
+      if (GTG_RUNNING && GTG_TIMER_ID == null) {
+        appendLog("#guess-log", "Watchdog: aucune manche détectée (pas de timer) → reset état local.");
+        setRunning(false);
+        GTG_ROUND_ID = null;
+      }
+    }, 5000);
   }
 
   window.addEventListener("DOMContentLoaded", boot);
