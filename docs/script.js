@@ -368,7 +368,7 @@
   const guessMsgEl              = $("#guess-msg");
 
   // —— seconds-mode pour la durée ——
-  const DURATION_MIN_SEC = 60;     // 1 min
+  const DURATION_MIN_SEC = 10;     // 10 secondes mini
   const DURATION_MAX_SEC = 7200;   // 120 min
 
   function coerceDurationSeconds(raw){
@@ -377,6 +377,7 @@
     n = Math.max(DURATION_MIN_SEC, Math.min(DURATION_MAX_SEC, Math.trunc(n)));
     return n;
   }
+
 
   function enableSecondsModeForDurationInput(){
     if (!guessDurationMinInput) return;
