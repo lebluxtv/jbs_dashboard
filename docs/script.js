@@ -119,7 +119,7 @@
   }
   function setPartieIdUI(pid){
     const els = $$("#partie-id, #qv-partie-id");
-    els.forEach(e => e.textContent = pid || "—";
+    els.forEach(e => { e.textContent = pid || "—"; });
   }
 
   // ——— Sous-manche / Manches par jeu ———
@@ -940,6 +940,7 @@
    ******************************************************************/
   function setConnected(on){ setWsIndicator(!!on); }
 
+  // Gardé mais plus utilisé pour la connexion auto (la gestion se fait via lock-btn + ?pwd=)
   function ensureSbPassword(){
     const qsPwd = getQS("pwd");
     if (qsPwd != null){ setStoredPwd(qsPwd); return qsPwd; }
@@ -958,6 +959,7 @@
     connectSB();
   }
 
+  // ====== VERSION CORRIGÉE : pas de password forcé, envoyé seulement s'il existe vraiment ======
   function connectSB(){
     try {
       const StreamerbotCtor =
@@ -971,23 +973,32 @@
 
       const host = getQS("host") || "127.0.0.1";
       const port = Number(getQS("port") || 8080);
-      const password = ensureSbPassword();
-      if (!password && getStoredPwd()){ setStoredPwd(""); }
 
+      // Gestion du mot de passe : querystring > storage, mais aucun prompt ici
+      const qsPwd = getQS("pwd");
+      if (qsPwd != null) {
+        setStoredPwd(qsPwd);
+      }
+      const storedPwd = (getStoredPwd() || "").trim();
+      const password = (qsPwd != null ? (qsPwd || "") : storedPwd);
+
+      // Nettoyage ancienne connexion
       try { window.sbClient?.disconnect?.(); } catch {}
 
-      sbClient = new StreamerbotCtor({
-        host, port, endpoint:"/", password,
-        subscribe:"*",
-        immediate:true,
-        autoReconnect:true,
-        retries:-1,
-        log:false,
-        onConnect: ()=>{
+      const clientOpts = {
+        host,
+        port,
+        endpoint: "/",
+        subscribe: "*",
+        immediate: true,
+        autoReconnect: true,
+        retries: -1,
+        log: false,
+        onConnect: () => {
           window.sbClient = sbClient;
           setConnected(true);
           appendLog("#guess-log", `Connecté à Streamer.bot (${host}:${port})`);
-          try{
+          try {
             sbClient.subscribe?.({
               events: {
                 General: ["Custom"],
@@ -996,21 +1007,28 @@
               }
             });
           } catch {}
+
           // Re-sync complet à chaque connexion
           safeDoAction("GTG Bootstrap Genres & Years & Ratings", {});
           safeDoAction("GTG Scores Get", {});
         },
-        onDisconnect: ()=>{
+        onDisconnect: () => {
           setConnected(false);
           appendLog("#guess-log", "Déconnecté de Streamer.bot.");
         },
-        onError: (e)=>{
+        onError: (e) => {
           appendLog("#guess-log", "Erreur Streamer.bot: " + (e?.message || e));
         }
-      });
+      };
+
+      if (password && password.trim() !== "") {
+        clientOpts.password = password.trim();
+      }
+
+      sbClient = new StreamerbotCtor(clientOpts);
 
       try {
-        sbClient.on?.("*", ({ event, data })=>{
+        sbClient.on?.("*", ({ event, data }) => {
           try { handleSBEvent(event, data); }
           catch (e) { appendLog("#guess-log", "handleSBEvent error: " + (e?.message || e)); }
         });
