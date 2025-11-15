@@ -884,7 +884,7 @@
     if (GTG_TIMER_SENT) return;
     GTG_TIMER_SENT = true;
     if (!GTG_ROUND_ID){
-      appendLog("#guess-log", "Timer=0, roundId inconnu → End sans roundId (fallback serveur).");
+      appendLog("#guess-log", "Timer=0, roundId inconnu → End sans roundId (pas de manche active).");
       safeDoAction("GTG End", { reason: "timeout" });
       return;
     }
@@ -1184,10 +1184,30 @@
     return d.gameDebug?.name || d.target?.name || d.answerName || d.gameName || null;
   }
 
+  // ===== perGame : support v4/v5 (racine, runningState.perGame, champs legacy) =====
   function getPerGamePairFromAny(data){
     if (!data || typeof data !== "object") return { idx:null, goal:null };
-    const idx  = pickNum(data.perGameRoundIndex,  data.perGameIndex,  data.subRoundIndex);
-    const goal = pickNum(data.perGameRoundCountGoal, data.perGameGoal, data.subRoundMax);
+    let src = data;
+    try {
+      if (src.perGame && typeof src.perGame === "object") {
+        src = src.perGame;
+      } else if (src.runningState && typeof src.runningState === "object" &&
+                 src.runningState.perGame && typeof src.runningState.perGame === "object") {
+        src = src.runningState.perGame;
+      }
+    } catch {}
+    const idx = pickNum(
+      src.roundIndex,
+      src.perGameRoundIndex,
+      src.perGameIndex,
+      src.subRoundIndex
+    );
+    const goal = pickNum(
+      src.roundGoal,
+      src.perGameRoundCountGoal,
+      src.perGameGoal,
+      src.subRoundMax
+    );
     return { idx, goal };
   }
 
@@ -1296,7 +1316,19 @@
           if (guessYearToInput   && (yt0 == null || yt0 < OL || yt0 > NW || yt0 < Number(guessYearFromInput.value))) guessYearToInput.value = String(NW);
 
           normalizeYearInputs();
-          fillRatingStepsAll(Array.isArray(data.ratingSteps) && data.ratingSteps.length ? data.ratingSteps : [0,50,60,70,80,85,90]);
+
+          // Nouveau schéma ratings: { userRatingSteps, userVotesSteps, criticRatingSteps, criticVotesSteps }
+          const ratingsCfg = (data.ratings && typeof data.ratings === "object") ? data.ratings : null;
+          let ratingSteps = null;
+          if (ratingsCfg) {
+            if (Array.isArray(ratingsCfg.userRatingSteps) && ratingsCfg.userRatingSteps.length) {
+              ratingSteps = ratingsCfg.userRatingSteps;
+            } else if (Array.isArray(ratingsCfg.criticRatingSteps) && ratingsCfg.criticRatingSteps.length) {
+              ratingSteps = ratingsCfg.criticRatingSteps;
+            }
+          }
+          fillRatingStepsAll(ratingSteps || [0,50,60,70,80,85,90]);
+
           applyLastSetupAfterGenres();
           saveLastSetupFromUI();
 
@@ -1304,7 +1336,12 @@
           renderPerGame(pg.idx, pg.goal);
 
           guessMsg(`Genres chargés (${genres.length}). Période ${OL} — ${NW}`);
-          appendLogDebug("bootstrap.echo", { ratingSteps: data.ratingSteps, oldestYear: data.oldestYear, newestYear: data.newestYear, perGame: pg });
+          appendLogDebug("bootstrap.echo", {
+            ratings: data.ratings,
+            oldestYear: data.oldestYear,
+            newestYear: data.newestYear,
+            perGame: pg
+          });
 
           // Demande de pool immédiate
           requestPoolCount();
@@ -1421,10 +1458,16 @@
           updateLeaderboard(Array.isArray(data.leaderboard) ? data.leaderboard : []);
 
           const rs = data.runningState && typeof data.runningState === "object" ? data.runningState : null;
-          if (rs && rs.running === true) {
-            if (rs.roundId) GTG_ROUND_ID = String(rs.roundId);
-            setRunning(true);
-            if (Number.isFinite(rs.endsAtUtcMs)) startRoundTimer(Number(rs.endsAtUtcMs));
+          if (rs) {
+            if (rs.running === true) {
+              if (rs.roundId) GTG_ROUND_ID = String(rs.roundId);
+              setRunning(true);
+              if (Number.isFinite(rs.endsAtUtcMs)) startRoundTimer(Number(rs.endsAtUtcMs));
+            } else if (rs.running === false) {
+              setRunning(false);
+              stopRoundTimer();
+              GTG_ROUND_ID = null;
+            }
           }
 
           const t = (data.totals && typeof data.totals === "object")
@@ -1432,11 +1475,17 @@
             : { streamer: Number(data.streamer)||0,       viewers: Number(data.viewers)||0 };
 
           GTG_TOTALS = t;
-          if (Number.isFinite(data.goalScore)) GTG_GOAL = Number(data.goalScore);
+
+          if (Number.isFinite(data.goalScore)) {
+            GTG_GOAL = Number(data.goalScore);
+          } else if (data.partie && Number.isFinite(data.partie.goalScore)) {
+            GTG_GOAL = Number(data.partie.goalScore);
+          }
+
           renderGlobalScore(GTG_TOTALS, GTG_GOAL);
           refreshCancelAbility();
 
-          const pg = getPerGamePairFromAny(data);
+          const pg = getPerGamePairFromAny(rs || data);
           renderPerGame(pg.idx, pg.goal);
 
           const lw = data.lastWinner && typeof data.lastWinner === "object" ? data.lastWinner : null;
