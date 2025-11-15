@@ -667,7 +667,7 @@
     if (String(a.minUserVotes    || "") !== String(b.minUserVotes    || "")) return false;
     if (String(a.minCriticRating || "") !== String(b.minCriticRating || "")) return false;
     if (String(a.minCriticVotes  || "") !== String(b.minCriticVotes  || "")) return false;
-    return true;
+    return false;
   }
 
   /******************************************************************
@@ -881,16 +881,23 @@
   let GTG_TIMER_END  = 0;
   let GTG_TIMER_SENT = false;
 
+  // ====== FIX : filet de sécurité si la manche se termine sans retour d'events ======
   function autoEndIfNeeded(){
     if (GTG_TIMER_SENT) return;
     GTG_TIMER_SENT = true;
-    if (!GTG_ROUND_ID){
-      appendLog("#guess-log", "Timer=0, roundId inconnu → End sans roundId (pas de manche active).");
+
+    // On force la fin de manche côté UI pour éviter le Start bloqué.
+    const prevRoundId = GTG_ROUND_ID || null;
+    setRunning(false);
+    GTG_ROUND_ID = null;
+
+    if (!prevRoundId){
+      appendLog("#guess-log", "Timer=0, roundId inconnu → End sans roundId (pas de manche active côté UI).");
       safeDoAction("GTG End", { reason: "timeout" });
       return;
     }
-    appendLog("#guess-log", "Timer écoulé → demande \"GTG End\"");
-    safeDoAction("GTG End", { roundId: GTG_ROUND_ID, reason: "timeout" });
+    appendLog("#guess-log", `Timer écoulé → demande "GTG End" pour roundId=${prevRoundId}`);
+    safeDoAction("GTG End", { roundId: prevRoundId, reason: "timeout" });
   }
 
   function startRoundTimer(endMs){
