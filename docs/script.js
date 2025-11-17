@@ -498,10 +498,11 @@
     const perGameGoalRaw  = perGameGoalInput ? Number(perGameGoalInput.value) : 1;
     const perGameRoundCountGoal = Number.isFinite(perGameGoalRaw) ? Math.max(1, Math.min(5, Math.trunc(perGameGoalRaw))) : 1;
 
-    // —— zoomLevel: purement logique, pour GTG Start, pas de zoom UI ——
-    const zoomRaw = zoomLevelInput ? Number(zoomLevelInput.value) : null;
-    let zoomLevel = Number.isFinite(zoomRaw) && zoomRaw > 0 ? zoomRaw : 1;
-    if (zoomLevel > 4) zoomLevel = 4; // sécurité
+    // —— zoomLevel: purement logique, pour GTG Start
+    // —— zoomLevel: NOM DE FILTRE OBS (ex: "Zoom_x10") ——
+    const zoomLevel = zoomLevelInput
+      ? (zoomLevelInput.value || "").trim() || null
+      : null;
 
     return {
       includeGenreId,
@@ -589,7 +590,8 @@
     if (isNum(s.perGameRoundCountGoal) && perGameGoalInput) perGameGoalInput.value = String(Math.max(1, Math.min(5, Math.trunc(s.perGameRoundCountGoal))));
 
     // —— zoomLevel persisté —— 
-    if (isNum(s.zoomLevel) && zoomLevelInput){
+    // —— zoomLevel persisté (nom de filtre OBS) —— 
+    if (s.zoomLevel != null && zoomLevelInput){
       zoomLevelInput.value = String(s.zoomLevel);
     }
   }
@@ -653,10 +655,11 @@
     if (!isNum(perGameRoundCountGoal)) perGameRoundCountGoal = 1;
     perGameRoundCountGoal = Math.max(1, Math.min(5, Math.trunc(perGameRoundCountGoal)));
 
-    // NEW: zoomLevel (purement logique, 0.1..4)
-    let zoomLevel = Number(raw.zoomLevel);
-    if (!isNum(zoomLevel) || zoomLevel <= 0) zoomLevel = 1;
-    if (zoomLevel > 4) zoomLevel = 4;
+    // NEW: zoomLevel = nom de filtre OBS (ou null)
+    let zoomLevel = raw.zoomLevel;
+    if (zoomLevel != null && typeof zoomLevel === "string") {
+      zoomLevel = zoomLevel.trim();
+      if (!zoomLevel) zoomLevel = null;
 
     return {
       ok: errs.length === 0,
