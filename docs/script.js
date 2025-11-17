@@ -11,6 +11,7 @@
   const LAST_SETUP_KEY = "gtg.lastSetup.v1";
   const SB_PWD_KEY     = "sb_ws_password_v1";
   const MAX_EVENTS     = 100;
+  const ZOOM_KEY       = "jbs.zoom.v1";
 
   const isNum = (n)=> typeof n === 'number' && Number.isFinite(n);
   const makeNonce = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
@@ -269,6 +270,56 @@
   }
   $$(".tab").forEach(btn => btn.addEventListener("click", () => showTab(btn.dataset.tab)));
   (function initTab(){ let initial="overview"; try { initial = localStorage.getItem("jbs.activeTab") || "overview"; } catch {} showTab(initial); })();
+
+  /******************************************************************
+   *                         🔍 Zoom control
+   ******************************************************************/
+  function getStoredZoom(){
+    try {
+      const v = localStorage.getItem(ZOOM_KEY);
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) return n;
+      return 1;
+    } catch {
+      return 1;
+    }
+  }
+
+  function setStoredZoom(v){
+    try { localStorage.setItem(ZOOM_KEY, String(v)); } catch {}
+  }
+
+  function applyZoom(z){
+    const n = Number(z);
+    if (!Number.isFinite(n) || n <= 0) return;
+    // On applique une échelle globale sur le body
+    const body = document.body;
+    if (!body) return;
+    body.style.transformOrigin = "top left";
+    body.style.transform = `scale(${n})`;
+    // Optionnel: variable CSS si tu veux t'en servir dans le style
+    document.documentElement.style.setProperty("--app-zoom", String(n));
+  }
+
+  function initZoomControl(){
+    const sel = $("#zoom-level");
+    if (!sel) return;
+
+    // Valeur initiale depuis storage ou fallback sur la valeur sélectionnée
+    let initial = getStoredZoom();
+    const hasOption = Array.from(sel.options).some(o => Number(o.value) === Number(initial));
+    if (!hasOption) {
+      initial = Number(sel.value) || 1;
+    }
+    sel.value = String(initial);
+    applyZoom(initial);
+
+    sel.addEventListener("change", () => {
+      const val = Number(sel.value) || 1;
+      applyZoom(val);
+      setStoredZoom(val);
+    });
+  }
 
   /******************************************************************
    *                         🔌 WS INDICATORS
@@ -1622,6 +1673,7 @@
 
   function boot(){
     bindLockButton();
+    initZoomControl();              // 🔍 init zoom
     bindOverviewQuickNav();
     setGuessHandlers();
     installFilterChangeGuard();
