@@ -11,7 +11,6 @@
   const LAST_SETUP_KEY = "gtg.lastSetup.v1";
   const SB_PWD_KEY     = "sb_ws_password_v1";
   const MAX_EVENTS     = 100;
-  const ZOOM_KEY       = "jbs.zoom.v1";
 
   const isNum = (n)=> typeof n === 'number' && Number.isFinite(n);
   const makeNonce = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
@@ -272,56 +271,6 @@
   (function initTab(){ let initial="overview"; try { initial = localStorage.getItem("jbs.activeTab") || "overview"; } catch {} showTab(initial); })();
 
   /******************************************************************
-   *                         🔍 Zoom control
-   ******************************************************************/
-  function getStoredZoom(){
-    try {
-      const v = localStorage.getItem(ZOOM_KEY);
-      const n = Number(v);
-      if (Number.isFinite(n) && n > 0) return n;
-      return 1;
-    } catch {
-      return 1;
-    }
-  }
-
-  function setStoredZoom(v){
-    try { localStorage.setItem(ZOOM_KEY, String(v)); } catch {}
-  }
-
-  function applyZoom(z){
-    const n = Number(z);
-    if (!Number.isFinite(n) || n <= 0) return;
-    // On applique une échelle globale sur le body
-    const body = document.body;
-    if (!body) return;
-    body.style.transformOrigin = "top left";
-    body.style.transform = `scale(${n})`;
-    // Optionnel: variable CSS si tu veux t'en servir dans le style
-    document.documentElement.style.setProperty("--app-zoom", String(n));
-  }
-
-  function initZoomControl(){
-    const sel = $("#zoom-level");
-    if (!sel) return;
-
-    // Valeur initiale depuis storage ou fallback sur la valeur sélectionnée
-    let initial = getStoredZoom();
-    const hasOption = Array.from(sel.options).some(o => Number(o.value) === Number(initial));
-    if (!hasOption) {
-      initial = Number(sel.value) || 1;
-    }
-    sel.value = String(initial);
-    applyZoom(initial);
-
-    sel.addEventListener("change", () => {
-      const val = Number(sel.value) || 1;
-      applyZoom(val);
-      setStoredZoom(val);
-    });
-  }
-
-  /******************************************************************
    *                         🔌 WS INDICATORS
    ******************************************************************/
   function setWsIndicator(state){
@@ -419,6 +368,7 @@
   const guessDurationMinInput   = $("#guess-duration-min"); // id conservé
   const guessTargetScoreInput   = $("#gtg-target-score");
   const perGameGoalInput        = $("#gtg-pergame-goal"); // NEW
+  const zoomLevelInput          = $("#gtg-zoom-level");   // NEW: niveau de zoom logique "Partie"
   const guessStartBtn           = $("#guess-start");
   const guessEndBtn             = $("#guess-end");
   const seriesCancelBtn         = $("#gtg-series-cancel");
@@ -548,6 +498,11 @@
     const perGameGoalRaw  = perGameGoalInput ? Number(perGameGoalInput.value) : 1;
     const perGameRoundCountGoal = Number.isFinite(perGameGoalRaw) ? Math.max(1, Math.min(5, Math.trunc(perGameGoalRaw))) : 1;
 
+    // —— zoomLevel: purement logique, pour GTG Start, pas de zoom UI ——
+    const zoomRaw = zoomLevelInput ? Number(zoomLevelInput.value) : null;
+    let zoomLevel = Number.isFinite(zoomRaw) && zoomRaw > 0 ? zoomRaw : 1;
+    if (zoomLevel > 4) zoomLevel = 4; // sécurité
+
     return {
       includeGenreId,
       excludeGenreIds,
@@ -559,7 +514,8 @@
       minCriticVotes,
       durationSec,              // seconds
       targetScore,
-      perGameRoundCountGoal
+      perGameRoundCountGoal,
+      zoomLevel                 // NEW: envoyé dans GTG Start
     };
   }
 
@@ -576,7 +532,8 @@
       minCriticVotes:           clean.minCriticVotes,
       roundSeconds:             clean.roundSeconds,           // persist
       targetScore:              clean.targetScore,
-      perGameRoundCountGoal:    clean.perGameRoundCountGoal
+      perGameRoundCountGoal:    clean.perGameRoundCountGoal,
+      zoomLevel:                clean.zoomLevel               // persist aussi
     };
   }
 
@@ -630,6 +587,11 @@
 
     if (isNum(s.targetScore)  && guessTargetScoreInput) guessTargetScoreInput.value  = String(s.targetScore);
     if (isNum(s.perGameRoundCountGoal) && perGameGoalInput) perGameGoalInput.value = String(Math.max(1, Math.min(5, Math.trunc(s.perGameRoundCountGoal))));
+
+    // —— zoomLevel persisté —— 
+    if (isNum(s.zoomLevel) && zoomLevelInput){
+      zoomLevelInput.value = String(s.zoomLevel);
+    }
   }
 
   function validateFilters(raw){
@@ -691,6 +653,11 @@
     if (!isNum(perGameRoundCountGoal)) perGameRoundCountGoal = 1;
     perGameRoundCountGoal = Math.max(1, Math.min(5, Math.trunc(perGameRoundCountGoal)));
 
+    // NEW: zoomLevel (purement logique, 0.1..4)
+    let zoomLevel = Number(raw.zoomLevel);
+    if (!isNum(zoomLevel) || zoomLevel <= 0) zoomLevel = 1;
+    if (zoomLevel > 4) zoomLevel = 4;
+
     return {
       ok: errs.length === 0,
       errs,
@@ -705,7 +672,8 @@
         minCriticVotes:  (minCriticVotes  == null ? null : minCriticVotes),
         roundSeconds,                     // seconds
         targetScore,
-        perGameRoundCountGoal
+        perGameRoundCountGoal,
+        zoomLevel                         // renvoyé vers GTG Start
       }
     };
   }
@@ -787,11 +755,11 @@
     const debounceCount   = debounce(requestPoolCount, 400);
     const debouncePersist = debounce(saveLastSetupFromUI, 250);
 
-    [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinUserRatingSel, guessMinUserVotesInput, guessMinCriticRatingSel, guessMinCriticVotesInput, guessDurationMinInput, guessTargetScoreInput, perGameGoalInput]
+    [guessGenreSel, guessYearFromInput, guessYearToInput, guessMinUserRatingSel, guessMinUserVotesInput, guessMinCriticRatingSel, guessMinCriticVotesInput, guessDurationMinInput, guessTargetScoreInput, perGameGoalInput, zoomLevelInput]
       .forEach(el=>{
         if (!el) return;
         el.addEventListener("change", ()=>{ debounceCount(); debouncePersist(); });
-        if (el === guessYearFromInput || el === guessYearToInput || el === guessMinUserVotesInput || el === guessMinCriticVotesInput || el === guessDurationMinInput || el === guessTargetScoreInput || el === perGameGoalInput){
+        if (el === guessYearFromInput || el === guessYearToInput || el === guessMinUserVotesInput || el === guessMinCriticVotesInput || el === guessDurationMinInput || el === guessTargetScoreInput || el === perGameGoalInput || el === zoomLevelInput){
           el.addEventListener("input", ()=>{ debounceCount(); debouncePersist(); });
         }
       });
@@ -832,7 +800,8 @@
         minCriticVotes:  clean.minCriticVotes,
         roundSeconds:    clean.roundSeconds,        // persist seconds
         targetScore:     clean.targetScore,
-        perGameRoundCountGoal: clean.perGameRoundCountGoal
+        perGameRoundCountGoal: clean.perGameRoundCountGoal,
+        zoomLevel:       clean.zoomLevel            // persist zoom
       });
 
       const nonce = makeNonce();
@@ -857,10 +826,11 @@
         durationSec,                                   // seconds -> C# reçoit la durée
         durationMs,
         targetScore: (isNum(clean.targetScore) ? Math.trunc(clean.targetScore) : null),
-        perGameRoundCountGoal: clean.perGameRoundCountGoal
+        perGameRoundCountGoal: clean.perGameRoundCountGoal,
+        zoomLevel: clean.zoomLevel                     // 🔴 envoyé à GTG Start
       });
 
-      appendLogDebug("GTG Start args", { durationSec, durationMs, perGameRoundCountGoal: clean.perGameRoundCountGoal });
+      appendLogDebug("GTG Start args", { durationSec, durationMs, perGameRoundCountGoal: clean.perGameRoundCountGoal, zoomLevel: clean.zoomLevel });
     });
 
     guessEndBtn?.addEventListener("click", ()=>{
@@ -1237,6 +1207,7 @@
       minUserVotes:    (isNum(clean.minUserVotes)    && clean.minUserVotes    > 0) ? Math.trunc(clean.minUserVotes)    : null,
       minCriticRating: clean.minCriticRating,
       minCriticVotes:  (isNum(clean.minCriticVotes)  && clean.minCriticVotes  > 0) ? Math.trunc(clean.minCriticVotes)  : null
+      // zoomLevel volontairement ignoré ici, il n'impacte pas le pool
     });
   }
 
@@ -1673,7 +1644,6 @@
 
   function boot(){
     bindLockButton();
-    initZoomControl();              // 🔍 init zoom
     bindOverviewQuickNav();
     setGuessHandlers();
     installFilterChangeGuard();
