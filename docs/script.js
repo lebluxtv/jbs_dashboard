@@ -1534,26 +1534,42 @@
   }
 
   /******************************************************************
-   *                           🐞 Debug toggle
+   *                           🐞 Debug toggle + Boot Sequence
    ******************************************************************/
   function installDebugToggleButton(){
-    if ($("#gtg-debug-toggle")) return;
+    // Évite les doublons si le boot ou le debug existent déjà
+    if ($("#gtg-debug-toggle") || $("#gtg-boot-sequence")) return;
 
-    const btn = document.createElement("button");
-    btn.id = "gtg-debug-toggle";
-    btn.type = "button";
-    btn.title = "Debug verbose (affiche la cible et les payloads echo)";
-    btn.textContent = "🐞 Debug";
-    btn.className = "btn btn--ghost";
-    btn.style.marginLeft = "8px";
+    // Bouton Debug
+    const debugBtn = document.createElement("button");
+    debugBtn.id = "gtg-debug-toggle";
+    debugBtn.type = "button";
+    debugBtn.title = "Debug verbose (affiche la cible et les payloads echo)";
+    debugBtn.textContent = "🐞 Debug";
+    debugBtn.className = "btn btn--ghost";
+    debugBtn.style.marginLeft = "8px";
 
-    updateDebugBtnVisual(btn);
-    btn.addEventListener("click", ()=>{
+    updateDebugBtnVisual(debugBtn);
+    debugBtn.addEventListener("click", ()=>{
       DEBUG_VERBOSE = !DEBUG_VERBOSE;
-      updateDebugBtnVisual(btn);
+      updateDebugBtnVisual(debugBtn);
       appendLog("#guess-log", `Debug verbose ${DEBUG_VERBOSE?"activé":"désactivé"}`);
     });
 
+    // Bouton Boot Sequence
+    const bootBtn = document.createElement("button");
+    bootBtn.id = "gtg-boot-sequence";
+    bootBtn.type = "button";
+    bootBtn.title = "Lancer la séquence de boot GTG (GTG Boot From Terminal)";
+    bootBtn.textContent = "Boot Sequence";
+    bootBtn.className = "btn btn--ghost";
+    bootBtn.style.marginLeft = "8px";
+
+    bootBtn.addEventListener("click", ()=>{
+      safeDoAction("GTG Boot From Terminal", { stepNumber: 1 });
+    });
+
+    // Point d’ancrage commun
     const anchor =
       $("#gtg-reset-scores") ||
       $("#guess-end") ||
@@ -1563,12 +1579,16 @@
 
     if (anchor && anchor.insertAdjacentElement){
       if (anchor.id === "gtg-reset-scores" || anchor.id === "guess-end"){
-        anchor.insertAdjacentElement("afterend", btn);
+        // ordre: anchor -> Boot -> Debug
+        anchor.insertAdjacentElement("afterend", bootBtn);
+        bootBtn.insertAdjacentElement("afterend", debugBtn);
       } else {
-        anchor.appendChild(btn);
+        anchor.appendChild(bootBtn);
+        anchor.appendChild(debugBtn);
       }
     } else {
-      document.body.appendChild(btn);
+      document.body.appendChild(bootBtn);
+      document.body.appendChild(debugBtn);
     }
   }
 
