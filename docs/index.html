@@ -23,20 +23,7 @@
         <span id="ws-status" class="ws-status-text">Déconnecté de Streamer.bot</span>
       </div>
 
-      <!-- Zoom level control -->
-      <div class="zoom-control">
-        <label for="zoom-level" class="zoom-label">Zoom</label>
-        <select id="zoom-level" class="zoom-select">
-          <option value="0.75">75%</option>
-          <option value="0.8">80%</option>
-          <option value="0.9">90%</option>
-          <option value="1" selected>100%</option>
-          <option value="1.1">110%</option>
-          <option value="1.25">125%</option>
-          <option value="1.5">150%</option>
-        </select>
-      </div>
-
+      <!-- Plus de zoom visuel ici, uniquement le lock -->
       <button class="icon-btn lock-btn" id="lock-btn" title="Mot de passe Websocket Streamer.bot" type="button">🔒</button>
     </div>
   </header>
@@ -253,10 +240,12 @@
         <!-- Partie -->
         <div class="card span-8 part-card">
           <h3>Partie</h3>
+
           <div class="form-group sm">
             <label for="gtg-target-score">Score cible (fin de partie)</label>
             <input id="gtg-target-score" type="number" min="1" max="999" placeholder="ex: 5" inputmode="numeric" />
           </div>
+
           <div class="form-row">
             <div class="form-group sm">
               <label for="guess-duration-min">Durée d'une manche (secondes)</label>
@@ -267,6 +256,22 @@
             <div class="form-group sm">
               <label for="gtg-pergame-goal">Nb de manches par jeu</label>
               <input id="gtg-pergame-goal" type="number" min="1" max="5" value="1" inputmode="numeric" />
+            </div>
+          </div>
+
+          <!-- NEW: Zoom logique pour GTG Start (OBS) -->
+          <div class="form-row">
+            <div class="form-group sm">
+              <label for="gtg-zoom-level">Zoom (overlay OBS)</label>
+              <select id="gtg-zoom-level">
+                <option value="">Aucun (par défaut)</option>
+                <option value="Zoom_x2">Zoom_x2</option>
+                <option value="Zoom_x2.5">Zoom_x2.5</option>
+                <option value="Zoom_x3.3">Zoom_x3.3</option>
+                <option value="Zoom_x5">Zoom_x5</option>
+                <option value="Zoom_x10">Zoom_x10</option>
+                <option value="Zoom_x20">Zoom_x20</option>
+              </select>
             </div>
           </div>
 
