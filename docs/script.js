@@ -84,12 +84,12 @@
   let GTG_GOAL   = null;
 
   function renderGlobalScore(totals, goal){
-    const s = $("#qv-score-streamer") || $("#score-streamer") || $("#score-streamer-val") || $("#gtg-score-streamer");
-    const v = $("#qv-score-viewers")  || $("#score-viewers")  || $("#score-viewers-val") || $("#gtg-score-viewers");
-    const g = $("#qv-goal-score")     || $("#goal-score-badge") || "#score-goal-val" || $("#gtg-goal-score");
-    const gEl = typeof g === "string" ? $(g) : g;
-    if (s) s.textContent = String(Number.isFinite(totals?.streamer) ? totals.streamer : 0);
-    if (v) v.textContent = String(Number.isFinite(totals?.viewers)  ? totals.viewers  : 0);
+    const s   = $("#qv-score-streamer") || $("#score-streamer") || $("#score-streamer-val") || $("#gtg-score-streamer");
+    const v   = $("#qv-score-viewers")  || $("#score-viewers")  || $("#score-viewers-val") || $("#gtg-score-viewers");
+    const gEl = $("#qv-goal-score")     || $("#goal-score-badge") || $("#score-goal-val") || $("#gtg-goal-score");
+
+    if (s)   s.textContent   = String(Number.isFinite(totals?.streamer) ? totals.streamer : 0);
+    if (v)   v.textContent   = String(Number.isFinite(totals?.viewers)  ? totals.viewers  : 0);
     if (gEl) gEl.textContent = Number.isFinite(goal) ? String(goal) : "—";
   }
 
@@ -498,11 +498,12 @@
     const perGameGoalRaw  = perGameGoalInput ? Number(perGameGoalInput.value) : 1;
     const perGameRoundCountGoal = Number.isFinite(perGameGoalRaw) ? Math.max(1, Math.min(5, Math.trunc(perGameGoalRaw))) : 1;
 
-    // —— zoomLevel: purement logique, pour GTG Start
     // —— zoomLevel: NOM DE FILTRE OBS (ex: "Zoom_x10") ——
-    const zoomLevel = zoomLevelInput
-      ? (zoomLevelInput.value || "").trim() || null
-      : null;
+    let zoomLevel = null;
+    if (zoomLevelInput) {
+      const rawZoom = (zoomLevelInput.value || "").trim();
+      zoomLevel = rawZoom || null;   // on laisse null ici, le défaut sera géré dans validateFilters
+    }
 
     return {
       includeGenreId,
@@ -519,6 +520,7 @@
       zoomLevel                 // NEW: envoyé dans GTG Start
     };
   }
+
 
   function getCurrentSetupFromUI(){
     const { clean } = validateFilters(collectFilters());
@@ -589,7 +591,6 @@
     if (isNum(s.targetScore)  && guessTargetScoreInput) guessTargetScoreInput.value  = String(s.targetScore);
     if (isNum(s.perGameRoundCountGoal) && perGameGoalInput) perGameGoalInput.value = String(Math.max(1, Math.min(5, Math.trunc(s.perGameRoundCountGoal))));
 
-    // —— zoomLevel persisté —— 
     // —— zoomLevel persisté (nom de filtre OBS) —— 
     if (s.zoomLevel != null && zoomLevelInput){
       zoomLevelInput.value = String(s.zoomLevel);
@@ -660,6 +661,7 @@
     if (zoomLevel != null && typeof zoomLevel === "string") {
       zoomLevel = zoomLevel.trim();
       if (!zoomLevel) zoomLevel = null;
+    }
 
     return {
       ok: errs.length === 0,
@@ -684,17 +686,24 @@
   function sameFilters(a,b){
     if (!a || !b) return false;
     if (String(a.includeGenreId || "") !== String(b.includeGenreId || "")) return false;
+
     const ax = (a.excludeGenreIds || []).map(String).sort();
     const bx = (b.excludeGenreIds || []).map(String).sort();
     if (ax.length !== bx.length) return false;
     for (let i=0;i<ax.length;i++) if (ax[i] !== bx[i]) return false;
+
     if (String(a.yearFrom || "") !== String(b.yearFrom || "")) return false;
     if (String(a.yearTo   || "") !== String(b.yearTo   || "")) return false;
     if (String(a.minUserRating   || "") !== String(b.minUserRating   || "")) return false;
     if (String(a.minUserVotes    || "") !== String(b.minUserVotes    || "")) return false;
     if (String(a.minCriticRating || "") !== String(b.minCriticRating || "")) return false;
     if (String(a.minCriticVotes  || "") !== String(b.minCriticVotes  || "")) return false;
-    return false;
+    if (String(a.roundSeconds || "") !== String(b.roundSeconds || "")) return false;
+    if (String(a.targetScore || "") !== String(b.targetScore || "")) return false;
+    if (String(a.perGameRoundCountGoal || "") !== String(b.perGameRoundCountGoal || "")) return false;
+    if (String(a.zoomLevel || "") !== String(b.zoomLevel || "")) return false;
+
+    return true;
   }
 
   /******************************************************************
