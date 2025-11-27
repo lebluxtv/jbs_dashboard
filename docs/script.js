@@ -374,7 +374,7 @@
   const seriesCancelBtn         = $("#gtg-series-cancel");
   const guessMsgEl              = $("#guess-msg");
 
-  // —— seconds-mode pour la durée ——
+  // —— seconds-mode pour la durée ——  
   const DURATION_MIN_SEC = 10;     // 10 secondes mini
   const DURATION_MAX_SEC = 7200;   // 120 min
 
@@ -489,7 +489,7 @@
     const minCriticRating = (guessMinCriticRatingSel && guessMinCriticRatingSel.value !== "") ? Number(guessMinCriticRatingSel.value) : null;
     const minCriticVotes  = (guessMinCriticVotesInput && guessMinCriticVotesInput.value !== "") ? Number(guessMinCriticVotesInput.value) : null;
 
-    // —— maintenant en secondes ——
+    // —— maintenant en secondes ——  
     const secRaw = guessDurationMinInput ? Number(guessDurationMinInput.value) : 120;
     const durationSec = coerceDurationSeconds(secRaw);
 
@@ -498,7 +498,7 @@
     const perGameGoalRaw  = perGameGoalInput ? Number(perGameGoalInput.value) : 1;
     const perGameRoundCountGoal = Number.isFinite(perGameGoalRaw) ? Math.max(1, Math.min(5, Math.trunc(perGameGoalRaw))) : 1;
 
-    // —— zoomLevel: NOM DE FILTRE OBS (ex: "Zoom_x10") ——
+    // —— zoomLevel: NOM DE FILTRE OBS (ex: "Zoom_x10") ——  
     let zoomLevel = null;
     if (zoomLevelInput) {
       const rawZoom = (zoomLevelInput.value || "").trim();
@@ -579,7 +579,7 @@
       else guessMinCriticVotesInput.value = "";
     }
 
-    // —— priorité au nouveau champ roundSeconds, fallback roundMinutes (legacy) ——
+    // —— priorité au nouveau champ roundSeconds, fallback roundMinutes (legacy) ——  
     if (guessDurationMinInput){
       if (isNum(s.roundSeconds)) {
         guessDurationMinInput.value = String(coerceDurationSeconds(s.roundSeconds));
@@ -591,7 +591,7 @@
     if (isNum(s.targetScore)  && guessTargetScoreInput) guessTargetScoreInput.value  = String(s.targetScore);
     if (isNum(s.perGameRoundCountGoal) && perGameGoalInput) perGameGoalInput.value = String(Math.max(1, Math.min(5, Math.trunc(s.perGameRoundCountGoal))));
 
-    // —— zoomLevel persisté (nom de filtre OBS) —— 
+    // —— zoomLevel persisté (nom de filtre OBS) ——   
     if (s.zoomLevel != null && zoomLevelInput){
       zoomLevelInput.value = String(s.zoomLevel);
     }
@@ -643,7 +643,7 @@
     let minUserVotes   = cleanVotes(raw.minUserVotes,   "Votes min (users)");
     let minCriticVotes = cleanVotes(raw.minCriticVotes, "Votes min (critics)");
 
-    // —— seconds (compat minutes si raw.durationMin présent) ——
+    // —— seconds (compat minutes si raw.durationMin présent) ——  
     let roundSeconds = Number(raw.durationSec ?? raw.durationMin ?? 120);
     roundSeconds = coerceDurationSeconds(roundSeconds);
 
@@ -1352,11 +1352,93 @@
         }
 
         if (data.type === "partieEnd"){
-          appendLog("#guess-log", "Partie terminée.");
+          // ===== Winner / statut partie =====
+          const rawWinner = (data.winner ?? "").toString().toLowerCase();
+          let winnerLabel = "—";
+          let logWinner   = "";
+
+          if (rawWinner) {
+            switch (rawWinner) {
+              case "streamer":
+                winnerLabel = "Streamer";
+                logWinner   = "Streamer";
+                break;
+              case "viewers":
+              case "chat":
+                winnerLabel = "Viewers";
+                logWinner   = "Viewers";
+                break;
+              case "draw":
+              case "tie":
+                winnerLabel = "Égalité";
+                logWinner   = "égalité";
+                break;
+              case "cancelled":
+              case "canceled":
+                winnerLabel = "Annulé";
+                logWinner   = "annulation";
+                break;
+              default:
+                winnerLabel = String(data.winner);
+                logWinner   = String(data.winner);
+                break;
+            }
+          }
+
+          setWinnerLabel(winnerLabel);
+
+          // ===== Scores finaux (totals ou champs à plat) =====
+          let totals;
+          if (data.totals && typeof data.totals === "object") {
+            totals = {
+              streamer: Number(data.totals.streamer) || 0,
+              viewers:  Number(data.totals.viewers)  || 0
+            };
+          } else {
+            totals = {
+              streamer: Number(data.streamerScore ?? data.streamer) || 0,
+              viewers:  Number(data.viewersScore  ?? data.viewers)  || 0
+            };
+          }
+
+          GTG_TOTALS = totals;
+
+          if (Number.isFinite(data.goalScore)) {
+            GTG_GOAL = Number(data.goalScore);
+          }
+
+          renderGlobalScore(GTG_TOTALS, GTG_GOAL);
+          refreshCancelAbility();
+
+          // ===== Log détaillé =====
+          const isCancelled = (rawWinner === "cancelled" || rawWinner === "canceled");
+          const baseMsg     = isCancelled ? "Partie annulée." : "Partie terminée.";
+          const extraWinner = logWinner ? ` Gagnant: ${logWinner}.` : "";
+          const extraScore  =
+            ` Score final — Streamer: ${GTG_TOTALS.streamer} / Viewers: ${GTG_TOTALS.viewers}` +
+            (Number.isFinite(GTG_GOAL) ? ` (objectif ${GTG_GOAL})` : "") +
+            ".";
+          appendLog("#guess-log", baseMsg + extraWinner + extraScore);
+          appendLogDebug("partieEnd.payload", data);
+
+          // ===== Reset état local =====
           setRunning(false);
           stopRoundTimer();
           GTG_ROUND_ID = null;
           renderPerGame(null, null);
+
+          // ===== HOOK OBS #3 optionnel =====
+          // Emplacement prêt pour un éventuel FX OBS de fin de match.
+          /*
+          safeDoAction("GTG Match Winner OBS FX", {
+            winner:        rawWinner || null,
+            winnerLabel,               // label lisible
+            streamerScore: GTG_TOTALS.streamer,
+            viewersScore:  GTG_TOTALS.viewers,
+            goalScore:     GTG_GOAL
+          });
+          */
+
           return;
         }
 
