@@ -1224,6 +1224,146 @@
   }
 
   /******************************************************************
+   *                 🎙️ TTS AUTO MESSAGE READER (mini-dashboard)
+   ******************************************************************/
+  let TTS_AUTO_ENABLED = false;
+
+  function formatDelay(ms){
+    if (!Number.isFinite(ms) || ms <= 0) return "—";
+    const totalSec = Math.round(ms / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    if (m <= 0) return `${s}s`;
+    return `${m}m${s>0?` ${s}s`:""}`;
+  }
+
+  function setTtsEnabledUI(on){
+    TTS_AUTO_ENABLED = !!on;
+    setDot(".dot-tts", !!on);
+    const txt = $("#tts-status-text");
+    if (txt) txt.textContent = on ? "TTS auto: actif" : "TTS auto: inactif";
+    const toggle = $("#tts-toggle-auto");
+    if (toggle){
+      toggle.textContent = on ? "Désactiver l'auto" : "Activer l'auto";
+      toggle.classList.toggle("on", on);
+    }
+  }
+
+  function setTtsQueueCount(n){
+    const el = $("#tts-queue-count");
+    if (el) el.textContent = Number.isFinite(n) ? String(n) : "—";
+  }
+
+  function setTtsLastMessage(user, msg){
+    const uEl = $("#tts-last-user");
+    const mEl = $("#tts-last-msg");
+    if (uEl) uEl.textContent = user ? String(user) : "—";
+    if (mEl) mEl.textContent = msg ? String(msg) : "—";
+  }
+
+  function setTtsNextRun(nextMs, cooldownSec){
+    const nextEl = $("#tts-next-run");
+    const cdEl   = $("#tts-cooldown");
+    if (nextEl){
+      if (Number.isFinite(nextMs) && nextMs > 0){
+        const delay = Math.max(0, nextMs - Date.now());
+        nextEl.textContent = formatDelay(delay);
+      } else {
+        nextEl.textContent = "—";
+      }
+    }
+    if (cdEl){
+      cdEl.textContent = Number.isFinite(cooldownSec) && cooldownSec > 0
+        ? `${Math.round(cooldownSec)}s`
+        : "—";
+    }
+  }
+
+  function bindTtsControls(){
+    const openBtn  = $("#tts-open-dashboard");
+    const forceBtn = $("#tts-force-read");
+    const toggleBtn = $("#tts-toggle-auto");
+
+    if (openBtn && !openBtn._bound){
+      openBtn._bound = true;
+      openBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        // Lien vers ton dashboard TTS dédié si tu en as un
+        const href = openBtn.getAttribute("data-href") || openBtn.getAttribute("href") || "tts_dashboard.html";
+        window.open(href, "_blank");
+      });
+    }
+
+    if (forceBtn && !forceBtn._bound){
+      forceBtn._bound = true;
+      forceBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        // Lecture forcée immédiate
+        safeDoAction("TTS Reader", { reason: "manualDashboardTrigger" });
+      });
+    }
+
+    if (toggleBtn && !toggleBtn._bound){
+      toggleBtn._bound = true;
+      toggleBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        const newState = !TTS_AUTO_ENABLED;
+        setTtsEnabledUI(newState); // feedback instantané
+        safeDoAction("TTS Timer Set", {
+          enabled: newState
+        });
+      });
+    }
+  }
+
+  function handleTtsWidgetEvent(raw){
+    const d = raw || {};
+    // On accepte plusieurs formes de payload pour être tolérant
+    const type = (d.type || "").toString().toLowerCase();
+
+    if (!type || type === "state" || type === "fullstate"){
+      const enabled = !!(d.enabled ?? d.autoEnabled ?? d.isEnabled);
+      const queue   = Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? d.bufferSize ?? 0);
+      const nextTs  = Number(d.nextRunUtcMs ?? d.nextRunTs ?? d.nextTs ?? 0);
+      const cooldownSec = Number(d.cooldownSec ?? d.cooldownSeconds ?? d.cooldown ?? 0);
+      const lastUser = d.lastUser ?? d.lastSender ?? d.lastAuthor ?? "";
+      const lastMsg  = d.lastMessage ?? d.lastText ?? d.lastContent ?? "";
+
+      setTtsEnabledUI(enabled);
+      setTtsQueueCount(queue);
+      setTtsNextRun(nextTs, cooldownSec);
+      setTtsLastMessage(lastUser, lastMsg);
+
+      appendLogDebug("tts.state", {
+        enabled, queue, nextTs, cooldownSec, lastUser, lastMsg
+      });
+      return;
+    }
+
+    if (type === "queue" || type === "queueupdate"){
+      const queue   = Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? 0);
+      setTtsQueueCount(queue);
+      appendLogDebug("tts.queue", { queue });
+      return;
+    }
+
+    if (type === "last" || type === "lastread"){
+      const lastUser = d.lastUser ?? d.lastSender ?? d.lastAuthor ?? "";
+      const lastMsg  = d.lastMessage ?? d.lastText ?? d.lastContent ?? "";
+      setTtsLastMessage(lastUser, lastMsg);
+      appendLogDebug("tts.last", { lastUser, lastMsg });
+      return;
+    }
+
+    if (type === "config" || type === "cooldown"){
+      const cooldownSec = Number(d.cooldownSec ?? d.cooldownSeconds ?? d.cooldown ?? 0);
+      setTtsNextRun(Number.NaN, cooldownSec);
+      appendLogDebug("tts.config", { cooldownSec });
+      return;
+    }
+  }
+
+  /******************************************************************
    *                       🧠 Handle SB Events
    ******************************************************************/
   const asArray = (v)=> Array.isArray(v) ? v : (v == null ? [] : [v]);
@@ -1280,6 +1420,19 @@
     try {
       if (event && event.type === "StreamUpdate"){
         setLiveIndicator(!!data?.live);
+      }
+
+      // ===== TTS reader widget (via General.Custom / Broadcast.Custom) =====
+      if (data && typeof data === "object") {
+        const widgetName = (data.widget || "").toString().toLowerCase();
+        if (widgetName === "ttsreader"
+          || widgetName === "tts_dashboard"
+          || widgetName === "tts-autoreader"
+          || widgetName === "tts_auto_message_reader"
+          || widgetName === "tts-dashboard") {
+          handleTtsWidgetEvent(data);
+          return;
+        }
       }
 
       if (event?.source === "Twitch" && SUB_EVENT_TYPES.has(event.type)){
@@ -1743,12 +1896,19 @@
     installFilterChangeGuard();
     bindFiltersCollapse();
     installDebugToggleButton();
+    bindTtsControls(); // === TTS mini-dashboard
     connectSB();
     renderGlobalScore(GTG_TOTALS, GTG_GOAL);
     refreshCancelAbility();
     renderPerGame(null, null);
     enableSecondsModeForDurationInput();   // UI “secondes”
     updatePoolBadge(null);
+
+    // TTS: état par défaut sur l'UI
+    setTtsEnabledUI(false);
+    setTtsQueueCount(0);
+    setTtsLastMessage("", "");
+    setTtsNextRun(Number.NaN, Number.NaN);
 
     // ===== Watchdog : si on croit être en cours mais qu'aucun timer n'est actif, on débloque localement =====
     setInterval(()=>{
