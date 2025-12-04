@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+  /* LOCK TOTAL DU THÈME SOMBRE */
+  :root {
+    color-scheme: dark;
+  }
+  
+  html, body {
+    background-color: #050505 !important;
+    color: #cccccc;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    height: 100%;
+    overflow-x: hidden;
+  }
+
+  /* CONTENEUR PRINCIPAL */
+  .plugin-section {
+    background: #0e0e0e;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 15px;
+    max-width: 600px;
+  }
+
+  /* TITRE */
+  .compact-title {
+    color: #66ccff;
+    font-size: 1.2em;
+    margin: 0 0 15px 0;
+    border-bottom: 2px solid #222;
+    padding-bottom: 5px;
+    font-weight: 600;
+  }
+
+  /* LISTE COMPACTE */
+  .plugin-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .plugin-row {
+    background: #161616;
+    border-left: 3px solid #444;
+    padding: 8px 12px;
+    border-radius: 0 4px 4px 0;
+    transition: background 0.2s, border-left-color 0.2s;
+  }
+  
+  .plugin-row:hover {
+    background: #1f1f1f;
+    border-left-color: #66ccff;
+  }
+
+  .row-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 3px;
+  }
+
+  .p-name {
+    font-weight: 700;
+    color: #e0e0e0;
+    font-size: 0.95em;
+  }
+
+  .p-author {
+    font-size: 0.75em;
+    color: #777;
+    margin-left: 10px;
+    flex-grow: 1;
+  }
+
+  .p-link {
+    font-size: 0.75em;
+    color: #66b3ff;
+    text-decoration: none;
+    background: #222;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+
+  .p-link:hover {
+    background: #66b3ff;
+    color: #000;
+  }
+
+  .p-desc {
+    margin: 0;
+    font-size: 0.85em;
+    color: #aaa;
+    line-height: 1.3;
+  }
+
+  /* ALERTE CRITIQUE */
+  .footer-alert {
+    margin-top: 15px;
+    background: #1a0505;
+    color: #ff6666;
+    padding: 10px;
+    font-size: 0.85em;
+    border-radius: 4px;
+    border: 1px solid #441111;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  code {
+    background: #000;
+    color: #ffcc66;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-family: Consolas, monospace;
+    font-size: 0.9em;
+    border: 1px solid #333;
+  }
+</style>
+</head>
+<body>
+
+<section class="plugin-section">
+  <h2 class="compact-title">📦 Plugins OBS requis</h2>
+
+  <div class="plugin-list">
+    
+    <div class="plugin-row">
+      <div class="row-header">
+        <span class="p-name">🔮 Shader Filter</span>
+        <span class="p-author">Exeldro</span>
+        <a href="https://obsproject.com/forum/resources/obs-shaderfilter.1736/" target="_blank" class="p-link">DL</a>
+      </div>
+      <p class="p-desc">Shaders personnalisés (zoom, flou, glitch). Vital.</p>
+    </div>
+
+    <div class="plugin-row">
+      <div class="row-header">
+        <span class="p-name">🎬 Move Transition</span>
+        <span class="p-author">Exeldro</span>
+        <a href="https://obsproject.com/forum/resources/move.913/" target="_blank" class="p-link">DL</a>
+      </div>
+      <p class="p-desc">Animations fluides des valeurs et filtres.</p>
+    </div>
+
+    <div class="plugin-row">
+      <div class="row-header">
+        <span class="p-name">🧱 3D Effect</span>
+        <span class="p-author">Exeldro</span>
+        <a href="https://obsproject.com/forum/resources/3d-effect.1692/" target="_blank" class="p-link">DL</a>
+      </div>
+      <p class="p-desc">Perspective 3D sur les sources.</p>
+    </div>
+
+    <div class="plugin-row">
+      <div class="row-header">
+        <span class="p-name">📝 Markdown Source</span>
+        <span class="p-author">Exeldro</span>
+        <a href="https://obsproject.com/forum/resources/markdown-source.1764/" target="_blank" class="p-link">DL</a>
+      </div>
+      <p class="p-desc">Rendu texte Markdown + CSS (Scoreboard).</p>
+    </div>
+
+    <div class="plugin-row">
+      <div class="row-header">
+        <span class="p-name">💡 Stroke / Glow</span>
+        <span class="p-author">FiniteSingularity</span>
+        <a href="https://obsproject.com/forum/resources/stroke-glow-shadow.1800/" target="_blank" class="p-link">DL</a>
+      </div>
+      <p class="p-desc">Contours, ombres et lueurs sur les textes.</p>
+    </div>
+
+    <div class="plugin-row">
+      <div class="row-header">
+        <span class="p-name">🌫️ Composite Blur</span>
+        <span class="p-author">FiniteSingularity</span>
+        <a href="https://obsproject.com/forum/resources/composite-blur.1780/" target="_blank" class="p-link">DL</a>
+      </div>
+      <p class="p-desc">Flou composite (cache indice).</p>
+    </div>
+
+    <div class="plugin-row">
+      <div class="row-header">
+        <span class="p-name">📺 Retro Effects</span>
+        <span class="p-author">FiniteSingularity</span>
+        <a href="https://obsproject.com/forum/resources/retro-effects.1972/" target="_blank" class="p-link">DL</a>
+      </div>
+      <p class="p-desc">Effets CRT/Rétro sur le HUD.</p>
+    </div>
+
+    <div class="plugin-row">
+      <div class="row-header">
+        <span class="p-name">🎙️ OBS Captions</span>
+        <span class="p-author">ratwithacompiler</span>
+        <a href="https://github.com/ratwithacompiler/OBS-captions-plugin/releases" target="_blank" class="p-link">DL</a>
+      </div>
+      <p class="p-desc">Sous-titrage / Captions (version GitHub requise).</p>
+    </div>
+
+  </div>
+
+  <div class="footer-alert">
+    <span>⚠️</span>
+    <div>
+      <strong>Fichier critique :</strong> <code>/GTG_assets/shaders/zoom_blur_v2.shader</code><br>
+      Requis pour la source <code>GTG_screenshot</code>.
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
