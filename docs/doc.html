@@ -9,7 +9,7 @@
   }
   
   html {
-    background-color: #050505; /* Fond racine */
+    background-color: #050505;
   }
 
   body {
@@ -18,9 +18,9 @@
     font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     margin: 0;
     padding: 20px;
-    min-height: 100vh; /* Force la hauteur minimale à la taille de la fenêtre */
+    min-height: 100vh;
     box-sizing: border-box;
-    display: flex; /* Permet de centrer ou gérer le layout si besoin */
+    display: flex;
     flex-direction: column;
   }
 
@@ -32,7 +32,6 @@
     padding: 15px;
     max-width: 650px;
     width: 100%;
-    /* On évite le margin auto pour l'instant pour coller à ton design gauche */
   }
 
   /* TITRE */
@@ -85,7 +84,7 @@
     flex-grow: 1;
   }
 
-  .p-link, .dl-btn {
+  .p-link, .action-btn {
     font-size: 0.75em;
     color: #66b3ff;
     text-decoration: none;
@@ -99,7 +98,7 @@
     display: inline-block;
   }
 
-  .p-link:hover, .dl-btn:hover {
+  .p-link:hover, .action-btn:hover {
     background: #66b3ff;
     color: #000;
   }
@@ -115,7 +114,7 @@
   .footer-alert {
     margin-top: 15px;
     background: #1a0505;
-    color: #ff8888; /* Texte un peu plus clair pour lisibilité */
+    color: #ff8888;
     padding: 12px;
     font-size: 0.85em;
     border-radius: 4px;
@@ -129,6 +128,12 @@
     margin-bottom: 8px;
   }
   
+  .path-container {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+  }
+
   .path-box {
     background: #000;
     color: #ffcc66;
@@ -137,11 +142,12 @@
     font-family: Consolas, monospace;
     font-size: 0.9em;
     border: 1px solid #333;
-    display: block;
+    flex-grow: 1;
     word-break: break-all;
-    user-select: all; /* Sélectionne tout au clic */
+    user-select: all;
   }
 
+  /* Boutons spéciaux footer */
   .dl-special {
     background: #cc4444;
     color: white;
@@ -149,6 +155,18 @@
   .dl-special:hover {
     background: #ff5555;
     color: white;
+  }
+  
+  .copy-btn {
+    background: #444;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .copy-btn:hover {
+    background: #666;
+  }
+  .copy-btn:active {
+    background: #4caf50; /* Vert au clic */
   }
 
 </style>
@@ -237,16 +255,19 @@
   <div class="footer-alert">
     <div class="footer-top">
       <span>⚠️ <strong>Fichier Manquant</strong></span>
-      <button onclick="downloadShader()" class="dl-btn dl-special">TÉLÉCHARGER LE SHADER</button>
+      <button onclick="downloadShader()" class="action-btn dl-special">TÉLÉCHARGER LE SHADER</button>
     </div>
     <div style="margin-bottom:5px;">Déplacer <code>zoom_blur_v2.shader</code> ici :</div>
-    <div class="path-box">C:\Program Files\obs-studio\data\obs-plugins\obs-shaderfilter\examples</div>
+    
+    <div class="path-container">
+      <div class="path-box" id="targetPath">C:\Program Files\obs-studio\data\obs-plugins\obs-shaderfilter\examples</div>
+      <button onclick="copyPath()" class="action-btn copy-btn">📋 COPIER</button>
+    </div>
   </div>
 </section>
 
 <script>
 function downloadShader() {
-    // Contenu nettoyé du fichier zoom_blur_v2.shader
     const content = `// Zoom Blur — version statique (sans animation) + first-frame bypass
 // Base: Fettinger / Q-mii & Exeldro
 // Patch: supprime speed/ease/startup, magnitude 0..10, atan2 émulé, hygiène (11/2025)
@@ -272,7 +293,6 @@ uniform string notes<
     string widget_type = "info";
 > = "Version statique: pas d’animation. Première frame = OFF. Augmentez 'Samples' pour une qualité supérieure (coût GPU).";
 
-// --- atan2 émulé (environnement n’ayant que atan(float)) ---
 float atan2_emu(float y, float x){
     float ax = (abs(x) < 1e-6) ? (x < 0.0 ? -1e-6 : 1e-6) : x;
     float a  = atan(y / ax);
@@ -284,29 +304,21 @@ float4 mainImage(VertData v_in) : TARGET
 {
     float4 c0 = image.Sample(textureSampler, v_in.uv);
 
-    // Première frame = OFF (bypass visuel net à l’activation)
     if (elapsed_time <= 1e-5) return c0;
-
-    // Bypass complet si aucun effet et pas de glitch
     if (magnitude <= 0.0 && !glitch) return c0;
 
-    // Coordonnées centrées
     float xTrans = (v_in.uv.x * 2.0) - 1.0;
     float yTrans = 1.0 - (v_in.uv.y * 2.0);
 
     float angle  = atan2_emu(yTrans, xTrans);
     float radius = sqrt(xTrans*xTrans + yTrans*yTrans);
 
-    // Nombre d’échantillons (constant, pas lié au temps)
     int nsamples = max(1, samples);
     float4 acc = c0 / float(nsamples);
 
-    // Facteur d’intensité: on utilise directement 'magnitude' (0..10)
     for (int i = 1; i < nsamples; i++) {
-        // Décrément radial proportionnel à magnitude
         float currentRadius = max(0.0, radius - (radius / 1000.0) * float(i) * magnitude);
 
-        // Option glitch léger: bruit frame-by-frame (facultatif)
         if (glitch) {
             currentRadius = max(0.0, currentRadius + ((rand_f * 2.0 - 1.0) * 0.0005 * magnitude));
         }
@@ -331,6 +343,21 @@ float4 mainImage(VertData v_in) : TARGET
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
+}
+
+function copyPath() {
+    const pathText = document.getElementById("targetPath").innerText;
+    navigator.clipboard.writeText(pathText).then(() => {
+        const btn = document.querySelector(".copy-btn");
+        const originalText = btn.innerText;
+        btn.innerText = "✅ COPIÉ";
+        setTimeout(() => {
+            btn.innerText = originalText;
+        }, 2000);
+    }).catch(err => {
+        console.error('Erreur copie :', err);
+        alert("Impossible de copier automatiquement.");
+    });
 }
 </script>
 
