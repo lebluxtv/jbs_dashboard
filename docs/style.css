@@ -296,6 +296,189 @@ body.gtg-running #filters button{
   opacity:.6;cursor:not-allowed;
 }
 
+/* ===================================================== */
+/*                TTS READER – LAYOUT / LOOK             */
+/* ===================================================== */
+
+/* Grille principale du panneau TTS Reader (gauche = contrôles, droite = log/queue) */
+.tts-grid{
+  display:grid;
+  grid-template-columns:2fr 3fr;
+  gap:14px;
+}
+
+/* Carte principale TTS (réutilise .card mais avec quelques ajustements optionnels) */
+.tts-card-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:8px;
+}
+.tts-card-header h3{
+  margin:0;
+  font-size:15px;
+}
+
+/* Ligne de statut TTS (dot + texte + infos cooldown) */
+.tts-status-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:13px;
+  color:var(--muted);
+}
+.tts-status-row .dot{
+  width:9px;
+  height:9px;
+}
+
+/* Ligne de méta-infos : compteur, cooldown, mode, etc. */
+.tts-meta-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:6px;
+  font-size:12px;
+  color:var(--muted);
+}
+.tts-meta-row span strong{
+  color:var(--text);
+}
+
+/* Compteur messages TTS / file d’attente */
+.tts-counter-pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:26px;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:700;
+  background:rgba(10,168,79,.1);
+  color:#b9f6cf;
+  border:1px solid rgba(10,168,79,.5);
+}
+
+/* Liste des messages TTS (historique / file) */
+#tts-queue-list,
+#tts-history-list{
+  list-style:none;
+  margin:0;
+  padding:0;
+  max-height:260px;
+  overflow:auto;
+  font-size:12px;
+}
+#tts-queue-list li,
+#tts-history-list li{
+  padding:6px 4px;
+  border-bottom:1px dashed #2a2a2d;
+}
+#tts-queue-list li:last-child,
+#tts-history-list li:last-child{
+  border-bottom:none;
+}
+#tts-queue-list li .user,
+#tts-history-list li .user{
+  font-weight:600;
+  color:#e8eaed;
+}
+#tts-queue-list li .msg,
+#tts-history-list li .msg{
+  display:block;
+  margin-top:2px;
+  color:#cfd2d6;
+}
+#tts-queue-list li .meta,
+#tts-history-list li .meta{
+  display:flex;
+  gap:6px;
+  margin-top:2px;
+  font-size:11px;
+  color:var(--muted);
+}
+
+/* Tags de type (chat / system / forced / skipped...) */
+.tts-tag{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:1px 6px;
+  border-radius:999px;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.6px;
+  border:1px solid rgba(255,255,255,.18);
+  color:#e8eaed;
+  background:rgba(255,255,255,.03);
+}
+.tts-tag--chat{border-color:rgba(10,168,79,.6);color:#b9f6cf}
+.tts-tag--system{border-color:rgba(154,160,166,.6);color:#d0d3d7}
+.tts-tag--skipped{border-color:rgba(215,58,29,.6);color:#f7c4bc}
+
+/* Petite barre de configuration (cooldown, slider, etc.) */
+.tts-config-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:8px;
+  font-size:12px;
+}
+.tts-config-row label{
+  font-weight:600;
+  color:#d9d9d9;
+}
+.tts-config-row input[type="number"]{
+  max-width:90px;
+}
+
+/* Zone d’aperçu / dernier TTS lu */
+.tts-last-read{
+  margin-top:10px;
+  padding:8px 10px;
+  border-radius:8px;
+  background:#121214;
+  border:1px solid #26262a;
+  font-size:12px;
+}
+.tts-last-read-title{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.6px;
+  color:var(--muted);
+  margin-bottom:4px;
+}
+.tts-last-read-main{
+  font-size:13px;
+  color:#e8eaed;
+}
+
+/* Intégration avec quick view : compteur TTS dans la carte overview */
+#qv-tts-counter{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:22px;
+  height:18px;
+  padding:0 6px;
+  border-radius:10px;
+  font-size:12px;
+  font-weight:700;
+  background:rgba(10,168,79,.15);
+  color:#b9f6cf;
+}
+
+/* État “aucun TTS” dans la vue TTS */
+.tts-empty{
+  padding:8px 4px;
+  font-size:12px;
+  color:var(--muted);
+  text-align:center;
+}
+
 /* ===================== Responsive ===================== */
 
 /* ≤ 1100px : Partie passe pleine largeur; trio sur une seule ligne (3x4 colonnes) */
@@ -311,6 +494,11 @@ body.gtg-running #filters button{
   .gtg-bottom .meta-card{grid-column:span 4}
 
   .form-group.sm{flex:1 1 48%;max-width:none}
+
+  /* TTS Reader : passe en pile verticale */
+  .tts-grid{
+    grid-template-columns:1fr;
+  }
 }
 
 /* ≤ 900px : champs plus compacts */
@@ -336,4 +524,9 @@ body.gtg-running #filters button{
 
   .form-group{flex:1 1 100%;min-width:0}
   .form-group.sm{flex:1 1 48%;max-width:none}
+
+  /* TTS Reader : full width sur mobile */
+  .tts-grid{
+    grid-template-columns:1fr;
+  }
 }
