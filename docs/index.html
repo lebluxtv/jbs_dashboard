@@ -74,6 +74,7 @@
             <div class="status-inline">
               <span class="dot dot-tts off"></span>
               <span id="tts-status-text">Inactif</span>
+              <span id="qv-tts-counter" class="badge" style="display:none">0</span>
             </div>
           </div>
           <div class="qv-body">
@@ -130,19 +131,52 @@
     <section id="tab-tts" class="tab-panel" style="display:none">
       <div class="panel-head">
         <h2>TTS Reader</h2>
-        <label id="tts-switch-label" class="switch">
-          <input id="tts-switch" type="checkbox" />
-          <span class="slider"></span>
-          <span class="switch-label-text">TTS OFF</span>
-        </label>
-      </div>
-      <div class="grid">
-        <div class="card stretch">
-          <h3>Messages lus</h3>
-          <ul id="tts-read-list" class="qv-list big"></ul>
+        <div class="status-inline">
+          <span class="dot dot-tts off"></span>
+          <span id="tts-status-main-text">Inactif</span>
+          <label id="tts-switch-label" class="switch">
+            <input id="tts-switch" type="checkbox" />
+            <span class="slider"></span>
+            <span class="switch-label-text">TTS OFF</span>
+          </label>
         </div>
-        <div class="card stretch">
-          <h3>Journal</h3>
+      </div>
+
+      <div class="tts-grid">
+        <!-- Colonne gauche : file d’attente + dernier TTS -->
+        <div class="card">
+          <div class="tts-card-header">
+            <h3>File d’attente</h3>
+            <div class="tts-status-row">
+              <span class="dot dot-tts off"></span>
+              <span id="tts-status-inline-text">Inactif</span>
+              <span id="tts-counter" class="tts-counter-pill" style="display:none">0</span>
+            </div>
+          </div>
+
+          <div class="tts-last-read">
+            <div class="tts-last-read-title">Dernier TTS lu</div>
+            <div class="tts-last-read-main" id="tts-last-read-text">Aucun TTS</div>
+          </div>
+
+          <h3 style="margin:10px 0 6px 0;font-size:14px;">File d’attente actuelle</h3>
+          <ul id="tts-queue-list">
+            <li class="tts-empty">Aucun message en file d’attente</li>
+          </ul>
+        </div>
+
+        <!-- Colonne droite : historique + log -->
+        <div class="card">
+          <div class="tts-card-header">
+            <h3>Historique & Journal</h3>
+          </div>
+
+          <h3 style="margin:0 0 6px 0;font-size:14px;">Historique des TTS lus</h3>
+          <ul id="tts-history-list">
+            <li class="tts-empty">Aucun TTS lu pour l’instant</li>
+          </ul>
+
+          <h3 style="margin:10px 0 6px 0;font-size:14px;">Journal</h3>
           <div id="tts-log" class="log"></div>
         </div>
       </div>
