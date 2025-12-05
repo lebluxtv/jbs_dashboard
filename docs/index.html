@@ -142,6 +142,26 @@
         </div>
       </div>
 
+      <!-- 🔁 Réglage de la fréquence du loop TTS (cooldown en minutes) -->
+      <div class="tts-settings">
+        <h3 style="margin:10px 0 6px 0;font-size:14px;">Intervalle de lecture automatique</h3>
+        <div class="tts-settings-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:13px;opacity:0.8;">Cooldown (1–10 minutes)</span>
+          <div class="tts-settings-input" style="display:flex;align-items:center;gap:6px;">
+            <input
+              id="tts-timer"
+              type="number"
+              min="1"
+              max="10"
+              value="3"
+              inputmode="numeric"
+              style="width:60px;"
+            />
+            <span id="tts-timer-label" style="font-size:13px;opacity:0.85;">3 min</span>
+          </div>
+        </div>
+      </div>
+
       <div class="tts-grid">
         <!-- Colonne gauche : file d’attente + dernier TTS -->
         <div class="card">
@@ -390,8 +410,6 @@
   </footer>
 
   <!-- Streamer.bot client -->
-  <!-- <script src="https://cdn.jsdelivr.net/npm/@streamerbot/client@1.12.2/dist/streamerbot-client.js"></script> -->
-  <!--<script src="https://unpkg.com/@streamerbot/client/dist/streamerbot-client.js"></script>-->
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@streamerbot/client/dist/streamerbot-client.js"></script>
   <script src="script.js"></script>
 </body>
