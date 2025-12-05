@@ -1029,6 +1029,7 @@
         log: false,
         onConnect: () => {
           window.sbClient = sbClient;
+          window.client   = sbClient;
           setConnected(true);
           appendLog("#guess-log", `Connecté à Streamer.bot (${host}:${port})`);
           try {
@@ -1044,6 +1045,49 @@
           // Re-sync complet à chaque connexion
           safeDoAction("GTG Bootstrap Genres & Years & Ratings", {});
           safeDoAction("GTG Scores Get", {});
+
+          // --- Extension TTS (async encapsulé) ---
+          (async () => {
+            const client = sbClient;
+            if (!client) return;
+
+            // 1) Récupération de l'ID de l'action "TTS Timer Set"
+            try {
+              const actionsObj = await client.getActions();
+              const ttsTimerAction = actionsObj.actions?.find(
+                a => a.name === "TTS Timer Set"
+              );
+              if (ttsTimerAction) {
+                TTS_TIMER_ACTION_ID = ttsTimerAction.id;
+              } else {
+                console.warn('Action "TTS Timer Set" non trouvée dans Streamer.bot');
+              }
+            } catch (e) {
+              console.warn("Erreur récupération des actions Streamer.bot :", e);
+            }
+
+            // 2) Récupération de la globale "ttsCooldownMinutes" pour l'UI
+            if (ttsTimerInput && ttsTimerLabel) {
+              try {
+                const cooldownResp = await client.getGlobal("ttsCooldownMinutes");
+                if (
+                  cooldownResp &&
+                  cooldownResp.status === "ok" &&
+                  typeof cooldownResp.variable?.value === "number"
+                ) {
+                  const v = cooldownResp.variable.value;
+                  lastSentTimer = v;
+                  ttsTimerInput.value = v;
+                  ttsTimerLabel.textContent = v + " min";
+                }
+              } catch (e) {
+                console.warn("Erreur récupération ttsCooldownMinutes :", e);
+              }
+            }
+
+            // 3) Sync initial du switch TTS ON/OFF
+            await syncTtsSwitchFromBackend();
+          })();
         },
         onDisconnect: () => {
           setConnected(false);
@@ -1059,6 +1103,10 @@
       }
 
       sbClient = new StreamerbotCtor(clientOpts);
+
+      // expose global client pour les autres blocs (optionnel)
+      window.sbClient = sbClient;
+      window.client   = sbClient;
 
       try {
         sbClient.on?.("*", ({ event, data }) => {
@@ -1224,6 +1272,118 @@
   }
 
   /******************************************************************
+   *                 🎙️ TTS SWITCH + TIMER (intégration SB)
+   ******************************************************************/
+  // ======== TTS Reader (intégration avec Streamer.bot) ========
+  const ttsSwitchInput      = document.getElementById('tts-switch');
+  const ttsSwitchLabel      = document.getElementById('tts-switch-label');
+  const ttsSwitchLabelText  = ttsSwitchLabel
+    ? ttsSwitchLabel.querySelector('.switch-label-text')
+    : null;
+
+  const ttsTimerInput = document.getElementById('tts-timer');
+  const ttsTimerLabel = document.getElementById('tts-timer-label');
+
+  // ID d'action côté Streamer.bot pour "TTS Timer Set"
+  let TTS_TIMER_ACTION_ID = null;
+  // Dernière valeur envoyée au script pour éviter le spam
+  let lastSentTimer = null;
+
+  // --- Mise à jour visuelle du switch ---
+  function updateTtsSwitchUI(enabled) {
+    if (!ttsSwitchInput || !ttsSwitchLabelText || !ttsSwitchLabel) return;
+    const val = !!enabled;
+    ttsSwitchInput.checked = val;
+    ttsSwitchLabelText.textContent = val ? 'TTS ON' : 'TTS OFF';
+    ttsSwitchLabel.style.opacity = val ? '1' : '0.55';
+  }
+
+  // --- Sync initial depuis la globale "ttsAutoReaderEnabled" ---
+  async function syncTtsSwitchFromBackend() {
+    if (!sbClient) return;
+    try {
+      const resp = await sbClient.getGlobal("ttsAutoReaderEnabled");
+      let val = false;
+      if (resp && resp.status === "ok") {
+        val = !!resp.variable?.value;
+      }
+      updateTtsSwitchUI(val);
+    } catch (e) {
+      console.warn("Erreur récupération ttsAutoReaderEnabled:", e);
+      updateTtsSwitchUI(false);
+    }
+  }
+
+  // --- Envoi ON/OFF vers Streamer.bot ---
+  async function setTtsAutoReader(enabled) {
+    if (!sbClient) return;
+
+    try {
+      const args = { mode: enabled ? "on" : "off" };
+      const wire = Object.assign({}, args, { _json: JSON.stringify(args) });
+      const actionId = await resolveActionIdByName("TTS Auto Message Reader Switch ON OFF");
+
+      try {
+        await sbClient.doAction(actionId, wire);
+        updateTtsSwitchUI(enabled);
+        return;
+      } catch (e) {
+        console.error("Erreur doAction Switch ON/OFF (client):", e);
+        const ok = sendRawDoActionById(actionId, args);
+        if (!ok) throw e;
+        updateTtsSwitchUI(enabled);
+      }
+    } catch (e) {
+      console.error("Erreur Switch ON/OFF:", e);
+      updateTtsSwitchUI(!enabled);
+      alert("Erreur lors du changement d'état du TTS Auto Reader.");
+    }
+  }
+
+  if (ttsSwitchInput) {
+    ttsSwitchInput.addEventListener('change', () => {
+      setTtsAutoReader(ttsSwitchInput.checked);
+    });
+  }
+
+  // --- Envoi du timer (cooldown en minutes) ---
+  function sendTtsTimer(timerValue) {
+    if (!sbClient) return;
+    if (!TTS_TIMER_ACTION_ID) {
+      console.warn("TTS_TIMER_ACTION_ID non initialisé, on ignore.");
+      return;
+    }
+
+    const v = Number(timerValue);
+    if (!Number.isFinite(v)) return;
+
+    const clamped = Math.min(10, Math.max(1, Math.round(v)));
+    if (clamped === lastSentTimer) return;
+
+    lastSentTimer = clamped;
+
+    const args = { timer: clamped };
+    const wire = Object.assign({}, args, { _json: JSON.stringify(args) });
+
+    sbClient
+      .doAction(TTS_TIMER_ACTION_ID, wire)
+      .catch(e => console.error("Erreur doAction TTS Timer Set :", e));
+
+    if (ttsTimerInput)  ttsTimerInput.value = clamped;
+    if (ttsTimerLabel) ttsTimerLabel.textContent = clamped + " min";
+  }
+
+  if (ttsTimerInput) {
+    const applyTimer = () => {
+      const v = ttsTimerInput.value;
+      sendTtsTimer(v);
+    };
+
+    ttsTimerInput.addEventListener('change', applyTimer);
+    ttsTimerInput.addEventListener('blur', applyTimer);
+  }
+
+  /******************************************************************
    *                 🎙️ TTS AUTO MESSAGE READER (mini-dashboard)
    ******************************************************************/
   let TTS_AUTO_ENABLED = false;
@@ -1247,6 +1407,8 @@
       toggle.textContent = on ? "Désactiver l'auto" : "Activer l'auto";
       toggle.classList.toggle("on", on);
     }
+    // Synchronise aussi le nouveau switch
+    updateTtsSwitchUI(on);
   }
 
   function setTtsQueueCount(n){
@@ -1909,6 +2071,7 @@
     setTtsQueueCount(0);
     setTtsLastMessage("", "");
     setTtsNextRun(Number.NaN, Number.NaN);
+    updateTtsSwitchUI(false);
 
     // ===== Watchdog : si on croit être en cours mais qu'aucun timer n'est actif, on débloque localement =====
     setInterval(()=>{
