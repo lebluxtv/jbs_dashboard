@@ -865,7 +865,7 @@
         && (GTG_TOTALS.streamer < GTG_GOAL && GTG_TOTALS.viewers < GTG_GOAL);
 
       if (!canCancel){
-        appendLog("#guess-log", "Annulation refusée : score cible déjà atteint ou partie inactive.");
+        appendLog("#guess-log", "Annulation refusée : score cible déjà atteinte ou partie inactive.");
         return;
       }
       if (!confirm("Confirmer l’annulation de la partie ?")) return;
@@ -1281,6 +1281,10 @@
     ? ttsSwitchLabel.querySelector('.switch-label-text')
     : null;
 
+  const ttsStatusMain   = document.getElementById('tts-status-main-text');
+  const ttsStatusInline = document.getElementById('tts-status-inline-text');
+  const ttsStatusOverview = document.getElementById('tts-status-text');
+
   const ttsTimerInput = document.getElementById('tts-timer');
   const ttsTimerLabel = document.getElementById('tts-timer-label');
 
@@ -1289,13 +1293,28 @@
   // Dernière valeur envoyée au script pour éviter le spam
   let lastSentTimer = null;
 
+  // --- Mise à jour du texte + points de statut ---
+  function setTtsStatusUI(enabled) {
+    const val = !!enabled;
+    const txt = val ? 'Actif' : 'Inactif';
+
+    if (ttsStatusMain)     ttsStatusMain.textContent = txt;
+    if (ttsStatusInline)   ttsStatusInline.textContent = txt;
+    if (ttsStatusOverview) ttsStatusOverview.textContent = txt;
+
+    setDot('.dot-tts', val);
+  }
+
   // --- Mise à jour visuelle du switch ---
   function updateTtsSwitchUI(enabled) {
-    if (!ttsSwitchInput || !ttsSwitchLabelText || !ttsSwitchLabel) return;
     const val = !!enabled;
-    ttsSwitchInput.checked = val;
-    ttsSwitchLabelText.textContent = val ? 'TTS ON' : 'TTS OFF';
-    ttsSwitchLabel.style.opacity = val ? '1' : '0.55';
+
+    if (ttsSwitchInput)      ttsSwitchInput.checked = val;
+    if (ttsSwitchLabelText)  ttsSwitchLabelText.textContent = val ? 'TTS ON' : 'TTS OFF';
+    if (ttsSwitchLabel)      ttsSwitchLabel.style.opacity   = val ? '1' : '0.55';
+
+    // toujours synchroniser les textes + pastilles
+    setTtsStatusUI(val);
   }
 
   // --- Sync initial depuis la globale "ttsAutoReaderEnabled" ---
@@ -1399,16 +1418,15 @@
 
   function setTtsEnabledUI(on){
     TTS_AUTO_ENABLED = !!on;
-    setDot(".dot-tts", !!on);
-    const txt = $("#tts-status-text");
-    if (txt) txt.textContent = on ? "TTS auto: actif" : "TTS auto: inactif";
+
+    // Centralise tout : switch + textes + pastilles
+    updateTtsSwitchUI(on);
+
     const toggle = $("#tts-toggle-auto");
     if (toggle){
       toggle.textContent = on ? "Désactiver l'auto" : "Activer l'auto";
       toggle.classList.toggle("on", on);
     }
-    // Synchronise aussi le nouveau switch
-    updateTtsSwitchUI(on);
   }
 
   function setTtsQueueCount(n){
