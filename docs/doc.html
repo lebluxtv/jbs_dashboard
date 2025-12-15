@@ -2,362 +2,221 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<title>Installation GTG_FINAL</title>
 <style>
-  /* LOCK TOTAL DU THÈME SOMBRE */
-  :root {
-    color-scheme: dark;
-  }
-  
-  html {
-    background-color: #050505;
-  }
-
+  :root { color-scheme: dark; }
   body {
-    background-color: #050505 !important;
-    color: #cccccc;
-    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: #050505;
+    color: #e0e0e0;
+    font-family: "Segoe UI", system-ui, sans-serif;
     margin: 0;
-    padding: 20px;
-    min-height: 100vh;
-    box-sizing: border-box;
+    padding: 40px;
     display: flex;
-    flex-direction: column;
+    justify-content: center;
   }
-
-  /* CONTENEUR PRINCIPAL */
-  .plugin-section {
+  .container {
+    max-width: 760px;
+    width: 100%;
     background: #0e0e0e;
     border: 1px solid #333;
-    border-radius: 8px;
-    padding: 15px;
-    max-width: 650px;
-    width: 100%;
+    border-radius: 12px;
+    padding: 24px 28px;
+    box-shadow: 0 0 25px rgba(0,0,0,0.6);
   }
-
-  /* TITRE */
-  .compact-title {
-    color: #66ccff;
-    font-size: 1.2em;
-    margin: 0 0 15px 0;
-    border-bottom: 2px solid #222;
-    padding-bottom: 5px;
-    font-weight: 600;
-  }
-
-  /* LISTE COMPACTE */
-  .plugin-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .plugin-row {
-    background: #161616;
-    border-left: 3px solid #444;
-    padding: 8px 12px;
-    border-radius: 0 4px 4px 0;
-    transition: background 0.2s, border-left-color 0.2s;
-  }
-  
-  .plugin-row:hover {
-    background: #1f1f1f;
-    border-left-color: #66ccff;
-  }
-
-  .row-header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: 3px;
-  }
-
-  .p-name {
-    font-weight: 700;
-    color: #e0e0e0;
-    font-size: 0.95em;
-  }
-
-  .p-author {
-    font-size: 0.75em;
-    color: #777;
-    margin-left: 10px;
-    flex-grow: 1;
-  }
-
-  .p-link, .action-btn {
-    font-size: 0.75em;
-    color: #66b3ff;
-    text-decoration: none;
-    background: #222;
-    padding: 3px 8px;
-    border-radius: 3px;
-    font-weight: 600;
-    transition: all 0.2s;
-    cursor: pointer;
-    border: none;
-    display: inline-block;
-  }
-
-  .p-link:hover, .action-btn:hover {
-    background: #66b3ff;
-    color: #000;
-  }
-
-  .p-desc {
-    margin: 0;
-    font-size: 0.85em;
-    color: #aaa;
-    line-height: 1.3;
-  }
-
-  /* ALERTE CRITIQUE / FOOTER */
-  .footer-alert {
-    margin-top: 15px;
-    background: #1a0505;
-    color: #ff8888;
-    padding: 12px;
-    font-size: 0.85em;
-    border-radius: 4px;
-    border: 1px solid #441111;
-  }
-
-  .footer-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-  
-  .path-container {
-    display: flex;
-    gap: 5px;
-    align-items: center;
-  }
-
-  .path-box {
-    background: #000;
-    color: #ffcc66;
-    padding: 6px;
-    border-radius: 4px;
-    font-family: Consolas, monospace;
-    font-size: 0.9em;
-    border: 1px solid #333;
-    flex-grow: 1;
-    word-break: break-all;
-    user-select: all;
-  }
-
-  /* Boutons spéciaux footer */
-  .dl-special {
-    background: #cc4444;
-    color: white;
-  }
-  .dl-special:hover {
-    background: #ff5555;
-    color: white;
-  }
-  
-  .copy-btn {
-    background: #444;
+  h1, h2 {
     color: #fff;
-    white-space: nowrap;
+    margin-top: 0;
   }
-  .copy-btn:hover {
-    background: #666;
+  pre {
+    background: #111;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    overflow-x: auto;
+    font-size: 0.9rem;
   }
-  .copy-btn:active {
-    background: #4caf50; /* Vert au clic */
+  code {
+    background: #111;
+    border: 1px solid #333;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-family: Consolas, "Fira Code", monospace;
+    font-size: 0.9rem;
   }
-
+  .note {
+    background: #151515;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 0.9rem;
+    margin: 10px 0;
+  }
+  button {
+    background: linear-gradient(90deg, #222, #444);
+    color: #fff;
+    border: 1px solid #555;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 12px;
+    font-weight: 500;
+  }
+  button:hover {
+    background: linear-gradient(90deg, #333, #555);
+  }
+  .step {
+    display: none;
+    animation: fadeIn 0.4s ease;
+  }
+  .step.active {
+    display: block;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .nav {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+  }
 </style>
 </head>
 <body>
+<div class="container">
 
-<section class="plugin-section">
-  <h2 class="compact-title">📦 Plugins OBS requis</h2>
+  <h1>🎮 Installation complète de <strong>GTG_FINAL</strong></h1>
+  <p>🧠 <strong>Projet :</strong> Guess The Game – JeanBaptisteShow (Version finale)<br>
+     📁 <strong>Dossier d’installation :</strong> <code>C:\OBS_JBS\GTG_FINAL</code></p>
 
-  <div class="plugin-list">
-    
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">🔮 Shader Filter</span>
-        <span class="p-author">Exeldro</span>
-        <a href="https://obsproject.com/forum/resources/obs-shaderfilter.1736/" target="_blank" class="p-link">DL</a>
-      </div>
-      <p class="p-desc">Shaders personnalisés (zoom, flou, glitch). Vital.</p>
+  <!-- Étape 1 -->
+  <section id="step1" class="step active">
+    <h2>⚡ Étape 1 — Installation du pack</h2>
+    <ol>
+      <li>Télécharge <code>GTG_FINAL.zip</code>.</li>
+      <li>Place-le dans :
+        <pre><code>C:\OBS_JBS\</code></pre>
+      </li>
+      <li>Clique droit → <strong>Extraire ici</strong>.</li>
+    </ol>
+    <p>Tu obtiens le dossier :</p>
+    <pre><code>C:\OBS_JBS\GTG_FINAL\</code></pre>
+    <p>Ce dossier contient tout le nécessaire pour OBS, Streamer.bot et les overlays.</p>
+
+    <div class="nav">
+      <span></span>
+      <button onclick="nextStep(1)">SUITE →</button>
     </div>
+  </section>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">🎬 Move Transition</span>
-        <span class="p-author">Exeldro</span>
-        <a href="https://obsproject.com/forum/resources/move.913/" target="_blank" class="p-link">DL</a>
-      </div>
-      <p class="p-desc">Animations fluides des valeurs et filtres.</p>
+  <!-- Étape 2 -->
+  <section id="step2" class="step">
+    <h2>🧱 Étape 2 — Préparation d’OBS (plugins &amp; STT)</h2>
+    <p>Ouvre la documentation intégrée :</p>
+    <pre><code>C:\OBS_JBS\GTG_FINAL\DOC\doc.html</code></pre>
+    <p>Ce fichier contient :</p>
+    <ul>
+      <li>la liste complète des plugins OBS nécessaires ;</li>
+      <li>les liens officiels de téléchargement ;</li>
+      <li>les captures de configuration du plugin Cloud Closed Captions.</li>
+    </ul>
+    <p>Installe tous les plugins indiqués dans <code>doc.html</code> puis configure Cloud Closed Captions comme sur les captures.</p>
+    <ul>
+      <li><strong>Langue :</strong> <code>French (France)</code></li>
+      <li><strong>Output Folder :</strong> <code>C:\OBS_JBS\GTG_FINAL\TXT</code></li>
+      <li><strong>Filename :</strong> <code>captions.txt</code></li>
+    </ul>
+    <div class="nav">
+      <button onclick="prevStep(2)">← PRÉCÉDENT</button>
+      <button onclick="nextStep(2)">SUITE →</button>
     </div>
+  </section>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">🧱 3D Effect</span>
-        <span class="p-author">Exeldro</span>
-        <a href="https://obsproject.com/forum/resources/3d-effect.1692/" target="_blank" class="p-link">DL</a>
-      </div>
-      <p class="p-desc">Perspective 3D sur les sources.</p>
+  <!-- Étape 3 -->
+  <section id="step3" class="step">
+    <h2>🧭 Étape 3 — Importation de la collection OBS</h2>
+    <ol>
+      <li>Ouvre <strong>OBS Studio</strong>.</li>
+      <li>Va dans <strong>Outils → Source Copy → Import Scene Collection</strong>.</li>
+      <li>Sélectionne :
+        <pre><code>C:\OBS_JBS\GTG_FINAL\GTG source copy.json</code></pre>
+      </li>
+      <li>Clique sur <strong>Import</strong>.</li>
+    </ol>
+    <p>La collection GTG est maintenant créée avec toutes les scènes, filtres, effets et sources navigateur.</p>
+    <div class="note">Ne crée <u>aucune</u> source manuellement. Tout est déjà configuré par le fichier <code>GTG source copy.json</code>.</div>
+    <div class="nav">
+      <button onclick="prevStep(3)">← PRÉCÉDENT</button>
+      <button onclick="nextStep(3)">SUITE →</button>
     </div>
+  </section>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">📝 Markdown Source</span>
-        <span class="p-author">Exeldro</span>
-        <a href="https://obsproject.com/forum/resources/markdown-source.1764/" target="_blank" class="p-link">DL</a>
-      </div>
-      <p class="p-desc">Rendu texte Markdown + CSS (Scoreboard).</p>
+  <!-- Étape 4 -->
+  <section id="step4" class="step">
+    <h2>🎙️ Étape 4 — Configuration du micro dans OBS</h2>
+    <p>La collection GTG importée contient une source audio nommée <code>GTG_mic</code>. Avant d’utiliser Cloud Closed Captions :</p>
+    <ol>
+      <li>Clique sur l’icône ⚙️ de la source <code>GTG_mic</code>.</li>
+      <li>Sélectionne ton <strong>micro réel</strong> dans la liste des périphériques audio.</li>
+      <li>Vérifie qu’en parlant, la barre de niveau de <code>GTG_mic</code> bouge bien dans OBS.</li>
+    </ol>
+    <div class="note">Sans ce lien vers ton vrai micro, le STT (speech-to-text) ne recevra aucun son.</div>
+    <div class="nav">
+      <button onclick="prevStep(4)">← PRÉCÉDENT</button>
+      <button onclick="nextStep(4)">SUITE →</button>
     </div>
+  </section>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">💡 Stroke / Glow</span>
-        <span class="p-author">FiniteSingularity</span>
-        <a href="https://obsproject.com/forum/resources/stroke-glow-shadow.1800/" target="_blank" class="p-link">DL</a>
-      </div>
-      <p class="p-desc">Contours, ombres et lueurs sur les textes.</p>
+  <!-- Étape 5 (anciennement 6) -->
+  <section id="step5" class="step">
+    <h2>🧠 Étape 5 — Importation des actions dans Streamer.bot</h2>
+    <ol>
+      <li>Ouvre <strong>Streamer.bot</strong>.</li>
+      <li>Va dans <strong>Actions → Import → Import from file</strong>.</li>
+      <li>Sélectionne :
+        <pre><code>C:\OBS_JBS\GTG_FINAL\GTG streamer.bot Import File.sb</code></pre>
+      </li>
+      <li>Valide l’import.</li>
+    </ol>
+    <p>Les actions GTG (Start, End, Guess Listener, Scores, etc.) sont ajoutées, avec les variables globales et la communication WebSocket configurée.</p>
+    <div class="nav">
+      <button onclick="prevStep(5)">← PRÉCÉDENT</button>
+      <button onclick="nextStep(5)">SUITE →</button>
     </div>
+  </section>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">🌫️ Composite Blur</span>
-        <span class="p-author">FiniteSingularity</span>
-        <a href="https://obsproject.com/forum/resources/composite-blur.1780/" target="_blank" class="p-link">DL</a>
-      </div>
-      <p class="p-desc">Flou composite (cache indice).</p>
+  <!-- Étape 6 (anciennement 7) -->
+  <section id="step6" class="step">
+    <h2>🚀 Étape 6 — Premier lancement</h2>
+    <ol>
+      <li>Lance <strong>OBS</strong> (collection GTG).</li>
+      <li>Lance <strong>Streamer.bot</strong>.</li>
+      <li>Ouvre le <strong>JBS Dashboard</strong> dans ton navigateur :</li>
+    </ol>
+    <pre><code>https://lebluxtv.github.io/jbs_dashboard/</code></pre>
+    <ol start="4">
+      <li>Vérifie que le dashboard est bien connecté à Streamer.bot.</li>
+      <li>Clique sur <strong>Start Round</strong> dans le dashboard.</li>
+    </ol>
+    <p><strong>Si tout est correct :</strong> le Boot s’affiche, le wireframe tourne, le timer démarre et les scores se mettent à jour 🎯</p>
+    <div class="nav">
+      <button onclick="prevStep(6)">← PRÉCÉDENT</button>
+      <span></span>
     </div>
+  </section>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">📺 Retro Effects</span>
-        <span class="p-author">FiniteSingularity</span>
-        <a href="https://obsproject.com/forum/resources/retro-effects.1972/" target="_blank" class="p-link">DL</a>
-      </div>
-      <p class="p-desc">Effets CRT/Rétro sur le HUD.</p>
-    </div>
-
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">🎙️ OBS Captions</span>
-        <span class="p-author">ratwithacompiler</span>
-        <a href="https://github.com/ratwithacompiler/OBS-captions-plugin/releases" target="_blank" class="p-link">DL</a>
-      </div>
-      <p class="p-desc">Sous-titrage / Captions (version GitHub requise).</p>
-    </div>
-
-  </div>
-
-  <div class="footer-alert">
-    <div class="footer-top">
-      <span>⚠️ <strong>Fichier Manquant</strong></span>
-      <button onclick="downloadShader()" class="action-btn dl-special">TÉLÉCHARGER LE SHADER</button>
-    </div>
-    <div style="margin-bottom:5px;">Déplacer <code>zoom_blur_v2.shader</code> ici :</div>
-    
-    <div class="path-container">
-      <div class="path-box" id="targetPath">C:\Program Files\obs-studio\data\obs-plugins\obs-shaderfilter\examples</div>
-      <button onclick="copyPath()" class="action-btn copy-btn">📋 COPIER</button>
-    </div>
-  </div>
-</section>
+</div>
 
 <script>
-function downloadShader() {
-    const content = `// Zoom Blur — version statique (sans animation) + first-frame bypass
-// Base: Fettinger / Q-mii & Exeldro
-// Patch: supprime speed/ease/startup, magnitude 0..10, atan2 émulé, hygiène (11/2025)
-
-uniform int samples <
-    string label = "Samples";
-    string widget_type = "slider";
-    int minimum = 1;
-    int maximum = 100;
-    int step = 1;
-> = 32;
-
-uniform float magnitude <
-    string label = "Magnitude (0..10)";
-    string widget_type = "slider";
-    float minimum = 0.0;
-    float maximum = 10.0;
-    float step = 0.01;
-> = 1.5;
-
-uniform bool glitch;
-uniform string notes<
-    string widget_type = "info";
-> = "Version statique: pas d’animation. Première frame = OFF. Augmentez 'Samples' pour une qualité supérieure (coût GPU).";
-
-float atan2_emu(float y, float x){
-    float ax = (abs(x) < 1e-6) ? (x < 0.0 ? -1e-6 : 1e-6) : x;
-    float a  = atan(y / ax);
-    a += (x < 0.0) ? ((y >= 0.0) ? 3.14159265 : -3.14159265) : 0.0;
-    return a;
+function nextStep(current) {
+  document.getElementById("step" + current).classList.remove("active");
+  document.getElementById("step" + (current + 1)).classList.add("active");
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-
-float4 mainImage(VertData v_in) : TARGET
-{
-    float4 c0 = image.Sample(textureSampler, v_in.uv);
-
-    if (elapsed_time <= 1e-5) return c0;
-    if (magnitude <= 0.0 && !glitch) return c0;
-
-    float xTrans = (v_in.uv.x * 2.0) - 1.0;
-    float yTrans = 1.0 - (v_in.uv.y * 2.0);
-
-    float angle  = atan2_emu(yTrans, xTrans);
-    float radius = sqrt(xTrans*xTrans + yTrans*yTrans);
-
-    int nsamples = max(1, samples);
-    float4 acc = c0 / float(nsamples);
-
-    for (int i = 1; i < nsamples; i++) {
-        float currentRadius = max(0.0, radius - (radius / 1000.0) * float(i) * magnitude);
-
-        if (glitch) {
-            currentRadius = max(0.0, currentRadius + ((rand_f * 2.0 - 1.0) * 0.0005 * magnitude));
-        }
-
-        float2 coord;
-        coord.x = (currentRadius * cos(angle) + 1.0) * 0.5;
-        coord.y = -1.0 * ((currentRadius * sin(angle) - 1.0) * 0.5);
-
-        float4 col = image.Sample(textureSampler, coord);
-        acc += col / float(nsamples);
-    }
-
-    return acc;
-}`;
-
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = "zoom_blur_v2.shader";
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-}
-
-function copyPath() {
-    const pathText = document.getElementById("targetPath").innerText;
-    navigator.clipboard.writeText(pathText).then(() => {
-        const btn = document.querySelector(".copy-btn");
-        const originalText = btn.innerText;
-        btn.innerText = "✅ COPIÉ";
-        setTimeout(() => {
-            btn.innerText = originalText;
-        }, 2000);
-    }).catch(err => {
-        console.error('Erreur copie :', err);
-        alert("Impossible de copier automatiquement.");
-    });
+function prevStep(current) {
+  document.getElementById("step" + current).classList.remove("active");
+  document.getElementById("step" + (current - 1)).classList.add("active");
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 </script>
 
