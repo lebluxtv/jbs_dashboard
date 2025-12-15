@@ -23,62 +23,34 @@
     padding: 24px 28px;
     box-shadow: 0 0 25px rgba(0,0,0,0.6);
   }
-  h1, h2 {
-    color: #fff;
-    margin-top: 0;
-  }
+  h1, h2 { color: #fff; margin-top: 0; }
   pre {
-    background: #111;
-    padding: 8px 10px;
-    border-radius: 6px;
-    border: 1px solid #333;
-    overflow-x: auto;
-    font-size: 0.9rem;
+    background: #111; padding: 8px 10px; border-radius: 6px;
+    border: 1px solid #333; overflow-x: auto; font-size: 0.9rem;
   }
   code {
-    background: #111;
-    border: 1px solid #333;
-    padding: 2px 4px;
-    border-radius: 4px;
-    font-family: Consolas, "Fira Code", monospace;
-    font-size: 0.9rem;
+    background: #111; border: 1px solid #333; padding: 2px 4px;
+    border-radius: 4px; font-family: Consolas, "Fira Code", monospace; font-size: 0.9rem;
   }
   .note {
-    background: #151515;
-    border: 1px solid #444;
-    border-radius: 6px;
-    padding: 10px;
-    font-size: 0.9rem;
-    margin: 10px 0;
+    background: #151515; border: 1px solid #444; border-radius: 6px;
+    padding: 10px; font-size: 0.9rem; margin: 10px 0;
   }
   button {
     background: linear-gradient(90deg, #222, #444);
-    color: #fff;
-    border: 1px solid #555;
-    padding: 8px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    margin-top: 12px;
+    color: #fff; border: 1px solid #555;
+    padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 12px;
     font-weight: 500;
   }
-  button:hover {
-    background: linear-gradient(90deg, #333, #555);
-  }
-  .step {
-    display: none;
-    animation: fadeIn 0.4s ease;
-  }
-  .step.active {
-    display: block;
-  }
+  button:hover { background: linear-gradient(90deg, #333, #555); }
+  .step { display: none; animation: fadeIn 0.4s ease; }
+  .step.active { display: block; }
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
   .nav {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 20px;
+    display: flex; justify-content: space-between; margin-top: 20px;
   }
 </style>
 </head>
@@ -86,7 +58,7 @@
 <div class="container">
 
   <h1>🎮 Installation complète de <strong>GTG_FINAL</strong></h1>
-  <p>🧠 <strong>Projet :</strong> Guess The Game – JeanBaptisteShow (Version finale)<br>
+  <p>🧠 <strong>Projet :</strong> Guess The Game – JeanBaptisteShow<br>
      📁 <strong>Dossier d’installation :</strong> <code>C:\OBS_JBS\GTG_FINAL</code></p>
 
   <!-- Étape 1 -->
@@ -101,7 +73,6 @@
     </ol>
     <p>Tu obtiens le dossier :</p>
     <pre><code>C:\OBS_JBS\GTG_FINAL\</code></pre>
-    <p>Ce dossier contient tout le nécessaire pour OBS, Streamer.bot et les overlays.</p>
 
     <div class="nav">
       <span></span>
@@ -111,21 +82,22 @@
 
   <!-- Étape 2 -->
   <section id="step2" class="step">
-    <h2>🧱 Étape 2 — Préparation d’OBS (plugins &amp; STT)</h2>
-    <p>Ouvre la documentation intégrée :</p>
-    <pre><code>C:\OBS_JBS\GTG_FINAL\DOC\doc.html</code></pre>
-    <p>Ce fichier contient :</p>
+    <h2>🧱 Étape 2 — Préparation d’OBS (plugins & STT)</h2>
+    <p>Installe les plugins nécessaires avant d’ouvrir OBS.  
+       Consulte la liste complète ici :</p>
+    <p>
+      <a href="https://lebluxtv.github.io/jbs_dashboard/doc_plugin.html" target="_blank">
+        <button>🔗 Voir les plugins requis</button>
+      </a>
+    </p>
     <ul>
-      <li>la liste complète des plugins OBS nécessaires ;</li>
-      <li>les liens officiels de téléchargement ;</li>
-      <li>les captures de configuration du plugin Cloud Closed Captions.</li>
-    </ul>
-    <p>Installe tous les plugins indiqués dans <code>doc.html</code> puis configure Cloud Closed Captions comme sur les captures.</p>
-    <ul>
+      <li>Installe tous les plugins listés dans la page ci-dessus ;</li>
+      <li>Configure Cloud Closed Captions comme indiqué ;</li>
       <li><strong>Langue :</strong> <code>French (France)</code></li>
       <li><strong>Output Folder :</strong> <code>C:\OBS_JBS\GTG_FINAL\TXT</code></li>
       <li><strong>Filename :</strong> <code>captions.txt</code></li>
     </ul>
+
     <div class="nav">
       <button onclick="prevStep(2)">← PRÉCÉDENT</button>
       <button onclick="nextStep(2)">SUITE →</button>
@@ -143,8 +115,8 @@
       </li>
       <li>Clique sur <strong>Import</strong>.</li>
     </ol>
-    <p>La collection GTG est maintenant créée avec toutes les scènes, filtres, effets et sources navigateur.</p>
-    <div class="note">Ne crée <u>aucune</u> source manuellement. Tout est déjà configuré par le fichier <code>GTG source copy.json</code>.</div>
+    <div class="note">Ne crée <u>aucune</u> source manuellement : tout est déjà configuré.</div>
+
     <div class="nav">
       <button onclick="prevStep(3)">← PRÉCÉDENT</button>
       <button onclick="nextStep(3)">SUITE →</button>
@@ -153,23 +125,23 @@
 
   <!-- Étape 4 -->
   <section id="step4" class="step">
-    <h2>🎙️ Étape 4 — Configuration du micro dans OBS</h2>
-    <p>La collection GTG importée contient une source audio nommée <code>GTG_mic</code>. Avant d’utiliser Cloud Closed Captions :</p>
+    <h2>🎙️ Étape 4 — Configuration du micro</h2>
     <ol>
-      <li>Clique sur l’icône ⚙️ de la source <code>GTG_mic</code>.</li>
-      <li>Sélectionne ton <strong>micro réel</strong> dans la liste des périphériques audio.</li>
-      <li>Vérifie qu’en parlant, la barre de niveau de <code>GTG_mic</code> bouge bien dans OBS.</li>
+      <li>Dans OBS, ouvre la source audio <code>GTG_mic</code>.</li>
+      <li>Sélectionne ton micro réel dans les paramètres de la source.</li>
+      <li>Parle pour vérifier que le niveau bouge dans OBS.</li>
     </ol>
-    <div class="note">Sans ce lien vers ton vrai micro, le STT (speech-to-text) ne recevra aucun son.</div>
+    <div class="note">Cette étape est indispensable pour que la transcription vocale fonctionne.</div>
+
     <div class="nav">
       <button onclick="prevStep(4)">← PRÉCÉDENT</button>
       <button onclick="nextStep(4)">SUITE →</button>
     </div>
   </section>
 
-  <!-- Étape 5 (anciennement 6) -->
+  <!-- Étape 5 -->
   <section id="step5" class="step">
-    <h2>🧠 Étape 5 — Importation des actions dans Streamer.bot</h2>
+    <h2>🧠 Étape 5 — Importation des actions Streamer.bot</h2>
     <ol>
       <li>Ouvre <strong>Streamer.bot</strong>.</li>
       <li>Va dans <strong>Actions → Import → Import from file</strong>.</li>
@@ -178,27 +150,28 @@
       </li>
       <li>Valide l’import.</li>
     </ol>
-    <p>Les actions GTG (Start, End, Guess Listener, Scores, etc.) sont ajoutées, avec les variables globales et la communication WebSocket configurée.</p>
+
     <div class="nav">
       <button onclick="prevStep(5)">← PRÉCÉDENT</button>
       <button onclick="nextStep(5)">SUITE →</button>
     </div>
   </section>
 
-  <!-- Étape 6 (anciennement 7) -->
+  <!-- Étape 6 -->
   <section id="step6" class="step">
     <h2>🚀 Étape 6 — Premier lancement</h2>
     <ol>
       <li>Lance <strong>OBS</strong> (collection GTG).</li>
       <li>Lance <strong>Streamer.bot</strong>.</li>
-      <li>Ouvre le <strong>JBS Dashboard</strong> dans ton navigateur :</li>
+      <li>Ouvre le Dashboard :</li>
     </ol>
     <pre><code>https://lebluxtv.github.io/jbs_dashboard/</code></pre>
     <ol start="4">
-      <li>Vérifie que le dashboard est bien connecté à Streamer.bot.</li>
-      <li>Clique sur <strong>Start Round</strong> dans le dashboard.</li>
+      <li>Vérifie la connexion avec Streamer.bot.</li>
+      <li>Clique sur <strong>Start Round</strong>.</li>
     </ol>
-    <p><strong>Si tout est correct :</strong> le Boot s’affiche, le wireframe tourne, le timer démarre et les scores se mettent à jour 🎯</p>
+    <p>Le Boot s’affiche, le wireframe tourne, et les scores se mettent à jour 🎯</p>
+
     <div class="nav">
       <button onclick="prevStep(6)">← PRÉCÉDENT</button>
       <span></span>
