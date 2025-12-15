@@ -2,306 +2,80 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<title>Plugins OBS requis</title>
 <style>
-  :root {
-    color-scheme: dark;
-  }
-
-  html, body {
-    background-color: #050505 !important;
-    color: #cccccc;
-    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    margin: 0;
-    padding: 20px;
-    height: 100%;
-    overflow-x: hidden;
-  }
-
+  :root { color-scheme: dark; }
   body {
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
+    background: #050505; color: #ccc;
+    font-family: "Segoe UI", sans-serif;
+    margin: 0; padding: 40px;
+    display: flex; justify-content: center;
   }
-
-  .plugin-section {
+  .container {
     background: #0e0e0e;
     border: 1px solid #333;
-    border-radius: 8px;
-    padding: 15px;
-    max-width: 600px;
-    box-shadow: 0 0 15px rgba(0,0,0,0.6);
+    border-radius: 10px;
+    max-width: 700px;
+    padding: 20px 30px;
+    box-shadow: 0 0 25px rgba(0,0,0,0.6);
   }
-
-  .compact-title {
-    margin: 0 0 10px 0;
-    font-size: 1.1em;
-    font-weight: 600;
-    color: #f0f0f0;
-  }
-
-  .plugin-list {
-    margin: 10px 0 0 0;
-    padding: 0;
-  }
-
-  .plugin-row {
-    border: 1px solid #444;
-    margin-bottom: 8px;
-    padding: 8px 10px;
-    border-radius: 4px;
+  h1 { color: #fff; margin-top: 0; }
+  .plugin {
+    border: 1px solid #333;
+    border-radius: 6px;
     background: #111;
-    display: flex;
-    flex-direction: column;
+    padding: 10px;
+    margin-bottom: 10px;
   }
-
-  .plugin-row .row-header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: 3px;
-  }
-
-  .plugin-row .p-name {
-    font-weight: 600;
-    color: #f5f5f5;
-    font-size: 0.95em;
-  }
-
-  .plugin-row .p-author {
-    font-size: 0.8em;
-    color: #777;
-    margin-left: 10px;
-    flex-grow: 1;
-  }
-
-  .plugin-row .p-link {
-    font-size: 0.8em;
+  .plugin strong { color: #fff; }
+  .link {
+    color: #6ab4ff;
     text-decoration: none;
-    color: #66b3ff;
     border: 1px solid #444;
     border-radius: 4px;
     padding: 2px 6px;
-    background: #181818;
-  }
-
-  .plugin-row .p-link:hover {
-    background: #223344;
-    border-color: #66b3ff;
-  }
-
-  .plugin-row .p-desc {
-    margin: 2px 0 0 0;
-    font-size: 0.85em;
-    color: #aaa;
-  }
-
-  .footer-alert {
-    margin-top: 15px;
-    background: #1a0505;
-    color: #ff6666;
-    padding: 10px;
-    font-size: 0.85em;
-    border-radius: 4px;
-    border: 1px solid #441111;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .footer-alert code {
-    background: #2b0b0b;
-    color: #ffaaaa;
-    padding: 1px 4px;
-    border-radius: 3px;
-    font-family: Consolas, monospace;
     font-size: 0.9em;
   }
-
-  code {
-    background: #000;
-    color: #ffcc66;
-    padding: 2px 5px;
-    border-radius: 3px;
-    font-family: Consolas, monospace;
-    font-size: 0.9em;
-    border: 1px solid #333;
+  .link:hover { background: #223344; }
+  button {
+    margin-top: 20px;
+    background: linear-gradient(90deg,#222,#444);
+    color:#fff; border:1px solid #555;
+    padding:8px 16px; border-radius:6px; cursor:pointer;
   }
-
-  .obs-prereq {
-    background: #111;
-    border: 1px solid #333;
-    border-radius: 6px;
-    padding: 8px 10px;
-    margin-bottom: 10px;
-    font-size: 0.82em;
-    color: #aaaaaa;
-    line-height: 1.35;
-  }
-
-  .obs-prereq code,
-  .obs-prereq strong {
-    color: #e0e0e0;
-  }
-
-  /* Bloc de configuration STT / screenshots */
-  .caption-config {
-    margin-top: 14px;
-    padding: 10px;
-    border-radius: 6px;
-    border: 1px solid #333;
-    background: #101010;
-    font-size: 0.82em;
-    color: #bbbbbb;
-  }
-
-  .caption-config-title {
-    font-weight: 600;
-    margin: 0 0 6px 0;
-    color: #f0f0f0;
-    font-size: 0.9em;
-  }
-
-  .caption-config p {
-    margin: 0 0 6px 0;
-    line-height: 1.3;
-  }
-
-  .caption-figure {
-    margin: 8px 0;
-  }
-
-  .caption-figure img {
-    display: block;
-    max-width: 100%;
-    border-radius: 4px;
-    border: 1px solid #333;
-    box-shadow: 0 0 8px rgba(0,0,0,0.7);
-  }
-
-  .caption-figure figcaption {
-    margin-top: 4px;
-    font-size: 0.78em;
-    color: #999;
-  }
-
 </style>
 </head>
 <body>
+<div class="container">
 
-<section class="plugin-section">
-  <h2 class="compact-title">📦 Plugins OBS requis</h2>
+  <h1>📦 Plugins OBS requis</h1>
 
-  <div class="obs-prereq">
-    <p><strong>Version minimale recommandée :</strong> OBS <code>30.0.0</code> ou plus récent.</p>
-    <p>Assure-toi que <strong>OBS WebSocket</strong> est activé (intégré nativement depuis OBS 28) et configuré pour communiquer avec <code>Streamer.bot</code>.</p>
-    <p>Pour installer la scène GTG telle qu’elle est fournie, importe le fichier <code>GTG_Source_Copy.json</code> avec le plugin <strong>Source Copy</strong> (<a href="https://obsproject.com/forum/resources/source-copy.1261/" target="_blank">🔗 Link</a>). Ce plugin n’est utile qu’à l’installation, pas pendant l’exécution.</p>
-  </div>
+  <p>Voici la liste complète des extensions nécessaires au bon fonctionnement du projet GTG :</p>
 
-  <div class="plugin-list">
+  <div class="plugin"><strong>🗣️ Cloud Closed Captions</strong> – <a class="link" target="_blank" href="https://github.com/ratwithacompiler/OBS-captions-plugin/releases">🔗 Link</a><br>
+  Transcription automatique de la voix du streamer (STT).</div>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">🗣️ Cloud Closed Captions</span>
-        <span class="p-author">ratwithacompiler</span>
-        <a href="https://github.com/ratwithacompiler/OBS-captions-plugin/releases" target="_blank" class="p-link">🔗 Link</a>
-      </div>
-      <p class="p-desc">Transcription automatique de la voix du streamer (STT). Nécessaire pour la détection vocale dans <code>GTG Guess Listener</code>.</p>
-    </div>
+  <div class="plugin"><strong>🔮 Shader Filter</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/obs-shaderfilter.1736/">🔗 Link</a><br>
+  Permet d’utiliser des shaders personnalisés.</div>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">🔮 Shader Filter</span>
-        <span class="p-author">Exeldro</span>
-        <a href="https://obsproject.com/forum/resources/obs-shaderfilter.1736/" target="_blank" class="p-link">🔗 Link</a>
-      </div>
-      <p class="p-desc">Permet d’utiliser les shaders personnalisés : zoom, flou, glitch.</p>
-    </div>
+  <div class="plugin"><strong>🎬 Move Transition</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/move.913/">🔗 Link</a><br>
+  Anime les valeurs et transitions.</div>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">🎬 Move Transition</span>
-        <span class="p-author">Exeldro</span>
-        <a href="https://obsproject.com/forum/resources/move.913/" target="_blank" class="p-link">🔗 Link</a>
-      </div>
-      <p class="p-desc">Anime les valeurs et les filtres pour des transitions fluides.</p>
-    </div>
+  <div class="plugin"><strong>🧱 3D Effect</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/3d-effect.1692/">🔗 Link</a></div>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">🧱 3D Effect</span>
-        <span class="p-author">Exeldro</span>
-        <a href="https://obsproject.com/forum/resources/3d-effect.1692/" target="_blank" class="p-link">🔗 Link</a>
-      </div>
-      <p class="p-desc">Ajoute un effet de perspective 3D sur les sources.</p>
-    </div>
+  <div class="plugin"><strong>📝 Markdown Source</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/markdown-source.1764/">🔗 Link</a></div>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">📝 Markdown Source</span>
-        <span class="p-author">Exeldro</span>
-        <a href="https://obsproject.com/forum/resources/markdown-source.1764/" target="_blank" class="p-link">🔗 Link</a>
-      </div>
-      <p class="p-desc">Affiche du texte stylé avec Markdown + CSS (scoreboard final).</p>
-    </div>
+  <div class="plugin"><strong>💡 Stroke / Glow</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/stroke-glow-shadow.1800/">🔗 Link</a></div>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">💡 Stroke / Glow</span>
-        <span class="p-author">FiniteSingularity</span>
-        <a href="https://obsproject.com/forum/resources/stroke-glow-shadow.1800/" target="_blank" class="p-link">🔗 Link</a>
-      </div>
-      <p class="p-desc">Ajoute des contours, ombres et lueurs aux textes.</p>
-    </div>
+  <div class="plugin"><strong>🌫️ Composite Blur</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/composite-blur.1780/">🔗 Link</a></div>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">🌫️ Composite Blur</span>
-        <span class="p-author">FiniteSingularity</span>
-        <a href="https://obsproject.com/forum/resources/composite-blur.1780/" target="_blank" class="p-link">🔗 Link</a>
-      </div>
-      <p class="p-desc">Crée un flou composite (parfait pour cacher un indice).</p>
-    </div>
+  <div class="plugin"><strong>📺 Retro Effects</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/retro-effects.1972/">🔗 Link</a></div>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">📺 Retro Effects</span>
-        <span class="p-author">FiniteSingularity</span>
-        <a href="https://obsproject.com/forum/resources/retro-effects.1972/" target="_blank" class="p-link">🔗 Link</a>
-      </div>
-      <p class="p-desc">Effets CRT / rétro sur le HUD et l’arrière-plan.</p>
-    </div>
+  <div class="plugin"><strong>📤 Source Copy</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/source-copy.1261/">🔗 Link</a><br>
+  Permet d’importer la scène <code>GTG_Source_Copy.json</code>.</div>
 
-    <div class="plugin-row">
-      <div class="row-header">
-        <span class="p-name">📤 Source Copy</span>
-        <span class="p-author">Exeldro</span>
-        <a href="https://obsproject.com/forum/resources/source-copy.1261/" target="_blank" class="p-link">🔗 Link</a>
-      </div>
-      <p class="p-desc">Permet d’importer ou d’exporter des scènes OBS complètes (<code>GTG_Source_Copy.json</code>).</p>
-    </div>
+  <button onclick="window.location.href='https://lebluxtv.github.io/jbs_dashboard/doc.html#step2'">⬅ Retour à l'installation</button>
 
-  </div>
-
-  <div class="caption-config">
-    <p class="caption-config-title">⚙️ Configuration recommandée pour Cloud Closed Captions</p>
-    <p>Tu peux t’aligner sur ces réglages pour que GTG récupère correctement ta voix via le fichier <code>captions.txt</code>.</p>
-
-    <figure class="caption-figure">
-      <img src="captions_general.png" alt="Cloud Closed Captions - onglet General">
-      <figcaption>Onglet <strong>General</strong> : source audio dédiée (ex. <code>GTG_mic</code>), langue <em>French (France)</em>, sortie native désactivée.</figcaption>
-    </figure>
-
-    <figure class="caption-figure">
-      <img src="captions_file_output.png" alt="Cloud Closed Captions - onglet File Output">
-      <figcaption>Onglet <strong>File Output</strong> : sortie activée vers le fichier <code>captions.txt</code> dans le dossier GTG.</figcaption>
-    </figure>
-  </div>
-
-  <div class="footer-alert">
-    <strong>⚠️ Fichier critique :</strong> <code>/GTG_assets/shaders/zoom_blur_v2.shader</code><br>
-    Requis pour la source <code>GTG_screenshot</code>.
-  </div>
-</section>
-
+</div>
 </body>
 </html>
