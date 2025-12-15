@@ -40,6 +40,20 @@
     font-family: Consolas, "Fira Code", monospace;
     font-size: 0.9rem;
   }
+  a.link {
+    color: #6ab4ff;
+    text-decoration: none;
+    border: 1px solid #444;
+    border-radius: 5px;
+    padding: 4px 8px;
+    background: #111;
+    transition: 0.2s;
+  }
+  a.link:hover {
+    background: #1c1c1c;
+    color: #fff;
+    border-color: #777;
+  }
   .note {
     background: #151515;
     border: 1px solid #444;
@@ -193,9 +207,15 @@
     <ol>
       <li>Lance <strong>OBS</strong> (collection GTG).</li>
       <li>Lance <strong>Streamer.bot</strong>.</li>
-      <li>Ouvre le <strong>JBS Dashboard</strong> dans ton navigateur :</li>
+      <li>Ouvre le <strong>JBS Dashboard</strong> :</li>
     </ol>
-    <pre><code>https://lebluxtv.github.io/jbs_dashboard/</code></pre>
+
+    <p>
+      🔗 <a href="https://lebluxtv.github.io/jbs_dashboard/" class="link" target="_blank">
+        https://lebluxtv.github.io/jbs_dashboard/
+      </a>
+    </p>
+
     <ol start="4">
       <li>Vérifie que le dashboard est bien connecté à Streamer.bot.</li>
       <li>Clique sur <strong>Start Round</strong>.</li>
@@ -216,20 +236,13 @@ function showStep(n) {
   const target = document.getElementById('step' + n);
   if (target) {
     target.classList.add('active');
-    // on remonte en haut de la page à chaque changement d'étape
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 }
 
-function nextStep(current) {
-  showStep(current + 1);
-}
+function nextStep(current) { showStep(current + 1); }
+function prevStep(current) { showStep(current - 1); }
 
-function prevStep(current) {
-  showStep(current - 1);
-}
-
-// Gestion du hash (#step2, #step3, etc.) au chargement
 document.addEventListener('DOMContentLoaded', () => {
   const hash = window.location.hash;
   const match = hash.match(/^#step(\d+)$/);
@@ -240,7 +253,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
   }
-  // fallback : étape 1 par défaut
   showStep(1);
 });
 </script>
