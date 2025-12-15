@@ -210,16 +210,39 @@
 </div>
 
 <script>
+function showStep(n) {
+  const steps = document.querySelectorAll('.step');
+  steps.forEach(step => step.classList.remove('active'));
+  const target = document.getElementById('step' + n);
+  if (target) {
+    target.classList.add('active');
+    // on remonte en haut de la page à chaque changement d'étape
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
 function nextStep(current) {
-  document.getElementById("step" + current).classList.remove("active");
-  document.getElementById("step" + (current + 1)).classList.add("active");
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  showStep(current + 1);
 }
+
 function prevStep(current) {
-  document.getElementById("step" + current).classList.remove("active");
-  document.getElementById("step" + (current - 1)).classList.add("active");
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  showStep(current - 1);
 }
+
+// Gestion du hash (#step2, #step3, etc.) au chargement
+document.addEventListener('DOMContentLoaded', () => {
+  const hash = window.location.hash;
+  const match = hash.match(/^#step(\d+)$/);
+  if (match) {
+    const n = parseInt(match[1], 10);
+    if (!Number.isNaN(n)) {
+      showStep(n);
+      return;
+    }
+  }
+  // fallback : étape 1 par défaut
+  showStep(1);
+});
 </script>
 
 </body>
