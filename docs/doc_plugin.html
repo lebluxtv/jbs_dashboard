@@ -2,79 +2,357 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Plugins OBS requis</title>
+<title>Plugins &amp; config OBS – GTG_FINAL</title>
 <style>
   :root { color-scheme: dark; }
   body {
-    background: #050505; color: #ccc;
-    font-family: "Segoe UI", sans-serif;
-    margin: 0; padding: 40px;
-    display: flex; justify-content: center;
+    background-color: #050505;
+    color: #cccccc;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 24px;
+    display: flex;
+    justify-content: center;
   }
-  .container {
+  .page {
+    max-width: 820px;
+    width: 100%;
     background: #0e0e0e;
-    border: 1px solid #333;
     border-radius: 10px;
-    max-width: 700px;
-    padding: 20px 30px;
-    box-shadow: 0 0 25px rgba(0,0,0,0.6);
-  }
-  h1 { color: #fff; margin-top: 0; }
-  .plugin {
     border: 1px solid #333;
-    border-radius: 6px;
-    background: #111;
-    padding: 10px;
-    margin-bottom: 10px;
+    padding: 20px 24px 26px;
+    box-shadow: 0 0 24px rgba(0,0,0,0.7);
   }
-  .plugin strong { color: #fff; }
-  .link {
-    color: #6ab4ff;
+  h1, h2, h3 {
+    color: #ffffff;
+    margin-top: 0;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 0.4rem; }
+  h2 { font-size: 1.25rem; margin-top: 1.3rem; margin-bottom: 0.4rem; }
+  h3 { font-size: 1.05rem; margin-top: 1.0rem; margin-bottom: 0.3rem; }
+
+  .intro {
+    font-size: 0.95rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .plugin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(260px,1fr));
+    gap: 10px;
+    margin-top: 0.5rem;
+  }
+
+  .plugin-card {
+    border-radius: 8px;
+    border: 1px solid #333;
+    background: #101010;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+
+  .plugin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+
+  .plugin-name {
+    font-weight: 600;
+    color: #ffffff;
+  }
+
+  .plugin-author {
+    font-size: 0.8rem;
+    color: #aaaaaa;
+    margin-left: 8px;
+  }
+
+  .plugin-link {
     text-decoration: none;
-    border: 1px solid #444;
-    border-radius: 4px;
+    font-size: 0.8rem;
+    border: 1px solid #555;
     padding: 2px 6px;
-    font-size: 0.9em;
+    border-radius: 4px;
+    color: #e0e0e0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
-  .link:hover { background: #223344; }
-  button {
-    margin-top: 20px;
-    background: linear-gradient(90deg,#222,#444);
-    color:#fff; border:1px solid #555;
-    padding:8px 16px; border-radius:6px; cursor:pointer;
+  .plugin-link:hover { background: #222; }
+
+  code {
+    background: #111;
+    border-radius: 4px;
+    padding: 2px 4px;
+    border: 1px solid #333;
+    font-family: Consolas, "Fira Code", monospace;
+    font-size: 0.85rem;
+  }
+
+  .note {
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+    color: #bbbbbb;
+  }
+
+  .config-block {
+    border-radius: 8px;
+    border: 1px solid #333;
+    background: #101010;
+    padding: 10px 12px;
+    margin-top: 0.4rem;
+    font-size: 0.9rem;
+  }
+
+  .config-block ul {
+    padding-left: 1.3rem;
+    margin: 0.3rem 0 0.3rem 0;
+  }
+
+  .img-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 0.5rem;
+  }
+
+  .img-row img {
+    max-width: 100%;
+    border-radius: 6px;
+    border: 1px solid #333;
+  }
+
+  .back-btn {
+    margin-top: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(90deg, #222, #444);
+    border: 1px solid #555;
+    color: #fff;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .back-btn:hover { background: linear-gradient(90deg,#333,#555); }
+
+  .shader-block {
+    border-radius: 8px;
+    border: 1px solid #444;
+    background: #121212;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    margin-top: 0.6rem;
   }
 </style>
 </head>
 <body>
-<div class="container">
+<div class="page">
 
-  <h1>📦 Plugins OBS requis</h1>
+  <h1>📦 Plugins &amp; configuration OBS – GTG_FINAL</h1>
+  <p class="intro">
+    Cette page liste les plugins OBS nécessaires au projet, ainsi que la configuration de
+    <strong>Cloud Closed Captions</strong> et l’information sur le shader utilisé.
+  </p>
 
-  <p>Voici la liste complète des extensions nécessaires au bon fonctionnement du projet GTG :</p>
+  <!-- PLUGINS LIST -->
+  <h2>1. Plugins OBS requis</h2>
+  <div class="plugin-grid">
 
-  <div class="plugin"><strong>🗣️ Cloud Closed Captions</strong> – <a class="link" target="_blank" href="https://github.com/ratwithacompiler/OBS-captions-plugin/releases">🔗 Link</a><br>
-  Transcription automatique de la voix du streamer (STT).</div>
+    <div class="plugin-card">
+      <div class="plugin-header">
+        <div>
+          <span class="plugin-name">🗣️ Cloud Closed Captions</span>
+          <span class="plugin-author">ratwithacompiler</span>
+        </div>
+        <a class="plugin-link" target="_blank"
+           href="https://github.com/ratwithacompiler/OBS-captions-plugin/releases">
+          🔗 <span>Link</span>
+        </a>
+      </div>
+      <div class="note">
+        Transcription automatique de ta voix (STT) vers un fichier texte exploité par GTG.
+      </div>
+    </div>
 
-  <div class="plugin"><strong>🔮 Shader Filter</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/obs-shaderfilter.1736/">🔗 Link</a><br>
-  Permet d’utiliser des shaders personnalisés.</div>
+    <div class="plugin-card">
+      <div class="plugin-header">
+        <div>
+          <span class="plugin-name">📤 Source Copy</span>
+          <span class="plugin-author">Exeldro</span>
+        </div>
+        <a class="plugin-link" target="_blank"
+           href="https://obsproject.com/forum/resources/source-copy.1261/">
+          🔗 <span>Link</span>
+        </a>
+      </div>
+      <div class="note">
+        Permet d’importer la collection de scènes fournie (<code>GTG source copy.json</code>)
+        avec toutes les sources et filtres pré-configurés.
+      </div>
+    </div>
 
-  <div class="plugin"><strong>🎬 Move Transition</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/move.913/">🔗 Link</a><br>
-  Anime les valeurs et transitions.</div>
+    <div class="plugin-card">
+      <div class="plugin-header">
+        <div>
+          <span class="plugin-name">🔮 Shader Filter</span>
+          <span class="plugin-author">Exeldro</span>
+        </div>
+        <a class="plugin-link" target="_blank"
+           href="https://obsproject.com/forum/resources/obs-shaderfilter.1736/">
+          🔗 <span>Link</span>
+        </a>
+      </div>
+      <div class="note">
+        Utilisé pour appliquer des shaders personnalisés (ex. flou radial) sur certaines sources GTG.
+      </div>
+    </div>
 
-  <div class="plugin"><strong>🧱 3D Effect</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/3d-effect.1692/">🔗 Link</a></div>
+    <div class="plugin-card">
+      <div class="plugin-header">
+        <div>
+          <span class="plugin-name">🎬 Move</span>
+          <span class="plugin-author">Exeldro</span>
+        </div>
+        <a class="plugin-link" target="_blank"
+           href="https://obsproject.com/forum/resources/move.913/">
+          🔗 <span>Link</span>
+        </a>
+      </div>
+      <div class="note">
+        Animation de positions, tailles et filtres des sources (transition dynamique des overlays).
+      </div>
+    </div>
 
-  <div class="plugin"><strong>📝 Markdown Source</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/markdown-source.1764/">🔗 Link</a></div>
+    <div class="plugin-card">
+      <div class="plugin-header">
+        <div>
+          <span class="plugin-name">🧱 3D Effect</span>
+          <span class="plugin-author">Exeldro</span>
+        </div>
+        <a class="plugin-link" target="_blank"
+           href="https://obsproject.com/forum/resources/3d-effect.1692/">
+          🔗 <span>Link</span>
+        </a>
+      </div>
+      <div class="note">
+        Effets de perspective 3D sur certaines sources (éléments d’UI).
+      </div>
+    </div>
 
-  <div class="plugin"><strong>💡 Stroke / Glow</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/stroke-glow-shadow.1800/">🔗 Link</a></div>
+    <div class="plugin-card">
+      <div class="plugin-header">
+        <div>
+          <span class="plugin-name">📝 Markdown Source</span>
+          <span class="plugin-author">Exeldro</span>
+        </div>
+        <a class="plugin-link" target="_blank"
+           href="https://obsproject.com/forum/resources/markdown-source.1764/">
+          🔗 <span>Link</span>
+        </a>
+      </div>
+      <div class="note">
+        Rendu du scoreboard via un fichier Markdown/CSS (source <code>GTG_markdown</code>).
+      </div>
+    </div>
 
-  <div class="plugin"><strong>🌫️ Composite Blur</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/composite-blur.1780/">🔗 Link</a></div>
+    <div class="plugin-card">
+      <div class="plugin-header">
+        <div>
+          <span class="plugin-name">💡 Stroke / Glow / Shadow</span>
+          <span class="plugin-author">FiniteSingularity</span>
+        </div>
+        <a class="plugin-link" target="_blank"
+           href="https://obsproject.com/forum/resources/stroke-glow-shadow.1800/">
+          🔗 <span>Link</span>
+        </a>
+      </div>
+      <div class="note">
+        Contours, lueurs et ombres portées pour les textes et éléments UI.
+      </div>
+    </div>
 
-  <div class="plugin"><strong>📺 Retro Effects</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/retro-effects.1972/">🔗 Link</a></div>
+    <div class="plugin-card">
+      <div class="plugin-header">
+        <div>
+          <span class="plugin-name">🌫️ Composite Blur</span>
+          <span class="plugin-author">FiniteSingularity</span>
+        </div>
+        <a class="plugin-link" target="_blank"
+           href="https://obsproject.com/forum/resources/composite-blur.1780/">
+          🔗 <span>Link</span>
+        </a>
+      </div>
+      <div class="note">
+        Effets de flou localisés sur des parties de l’overlay.
+      </div>
+    </div>
 
-  <div class="plugin"><strong>📤 Source Copy</strong> – <a class="link" target="_blank" href="https://obsproject.com/forum/resources/source-copy.1261/">🔗 Link</a><br>
-  Permet d’importer la scène <code>GTG_Source_Copy.json</code>.</div>
+    <div class="plugin-card">
+      <div class="plugin-header">
+        <div>
+          <span class="plugin-name">📺 Retro Effects</span>
+          <span class="plugin-author">FiniteSingularity</span>
+        </div>
+        <a class="plugin-link" target="_blank"
+           href="https://obsproject.com/forum/resources/retro-effects.1972/">
+          🔗 <span>Link</span>
+        </a>
+      </div>
+      <div class="note">
+        Effets CRT / glitch / rétro pour renforcer le style visuel GTG.
+      </div>
+    </div>
 
-  <button onclick="window.location.href='https://lebluxtv.github.io/jbs_dashboard/doc.html#step2'">⬅ Retour à l'installation</button>
+  </div>
+
+  <!-- CLOUD CLOSED CAPTIONS DETAIL -->
+  <h2>2. Configuration de Cloud Closed Captions</h2>
+
+  <div class="config-block">
+    <p>Dans les paramètres du plugin Cloud Closed Captions, vérifie :</p>
+    <ul>
+      <li><strong>Language :</strong> <code>French (France)</code></li>
+      <li><strong>Output type :</strong> fichier texte (file output activé)</li>
+      <li><strong>Output folder :</strong> <code>C:\OBS_JBS\GTG_FINAL\TXT</code></li>
+      <li><strong>Filename :</strong> <code>captions.txt</code></li>
+    </ul>
+    <p>Le fichier <code>captions.txt</code> est ensuite lu par GTG pour détecter les réponses.</p>
+
+    <div class="img-row">
+      <div style="flex:1 1 260px;">
+        <img src="captions_general.png" alt="Cloud Closed Captions - onglet General">
+        <div class="note">Exemple de configuration onglet <strong>General</strong>.</div>
+      </div>
+      <div style="flex:1 1 260px;">
+        <img src="captions_file_output.png" alt="Cloud Closed Captions - File Output">
+        <div class="note">Exemple de configuration de la sortie <strong>File Output</strong>.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHADER INFO -->
+  <h2>3. Shader utilisé</h2>
+  <div class="shader-block">
+    <p>Le projet utilise un shader personnalisé :</p>
+    <ul>
+      <li><strong>Fichier :</strong> <code>zoom_blur_v2.shader</code></li>
+      <li><strong>Emplacement :</strong> fourni à la racine du pack <code>GTG_FINAL</code></li>
+      <li><strong>Usage :</strong> appliqué via le plugin <strong>Shader Filter</strong> sur certaines sources GTG (effet de flou radial / zoom).</li>
+    </ul>
+    <p>Évite de renommer ou déplacer ce fichier dans la structure d’installation recommandée.</p>
+  </div>
+
+  <!-- BACK LINK -->
+  <p>
+    <a class="back-btn" href="https://lebluxtv.github.io/jbs_dashboard/doc.html#step2">
+      ⬅ Retour à l’installation (Étape 2)
+    </a>
+  </p>
 
 </div>
 </body>
