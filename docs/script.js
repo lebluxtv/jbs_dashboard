@@ -1035,7 +1035,10 @@
         host,
         port,
         endpoint: "/",
-        subscribe: "*",
+        subscribe: {
+        General: ["Custom"],
+        Twitch: ["Follow","Cheer","Raid","Sub","ReSub","GiftSub","GiftBomb"]
+      },
         immediate: true,
         autoReconnect: true,
         retries: -1,
