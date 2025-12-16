@@ -1045,16 +1045,7 @@
           window.client   = sbClient;
           setConnected(true);
           appendLog("#guess-log", `Connecté à Streamer.bot (${host}:${port})`);
-          try {
-            sbClient.subscribe?.({
-              events: {
-                General: ["Custom"],
-                Broadcast: ["Custom"],
-                Twitch: ["Follow","Cheer","Raid","Sub","ReSub","GiftSub","GiftBomb"]
-              }
-            });
-          } catch {}
-
+          // NOTE: subscribe:'*' est déjà actif (voir clientOpts). On évite un subscribe() explicite ici pour ne pas provoquer d'avertissements / subscriptions invalides.
           // Re-sync complet à chaque connexion
           safeDoAction("GTG Bootstrap Genres & Years & Ratings", {});
           safeDoAction("GTG Scores Get", {});
@@ -1699,52 +1690,44 @@ function logSbSubEventToConsole(evt, payload){
       if (data && typeof data === "object") {
         const widgetName = (data.widget || "").toString().toLowerCase();
 
-        // --- Dashboard(s) TTS : états / queue / config (payload "type" déjà normalisé) ---
+        // ===== TTS widgets (payloads Custom) =====
+        // Le dashboard TTS "fonctionnel" envoie notamment :
+        // - widget: tts-reader-selection  (dernier message sélectionné/lu)
+        // - widget: tts-reader-tick       (état: enabled/queue/nextRun/cooldown...)
+        // - widget: tts-catcher           (messages chat entrants)
         if (widgetName === "ttsreader"
           || widgetName === "tts_dashboard"
           || widgetName === "tts-autoreader"
           || widgetName === "tts_auto_message_reader"
-          || widgetName === "tts-dashboard") {
-          handleTtsWidgetEvent(data);
+          || widgetName === "tts-dashboard"
+          || widgetName === "tts-reader-selection"
+          || widgetName === "tts-reader-tick"
+          || widgetName === "tts-catcher") {
+
+          // Adaptation minimale au format attendu par handleTtsWidgetEvent()
+          if (widgetName === "tts-reader-selection") {
+            const lastUser = data.user ?? data.selectedUser ?? data.lastUser ?? data.lastSender ?? data.author ?? "";
+            const lastMsg  = data.message ?? data.lastMessage ?? data.text ?? data.content ?? "";
+            handleTtsWidgetEvent({
+              type: "lastread",
+              lastUser,
+              lastMessage: lastMsg,
+              // on garde le payload brut en debug (sans impacter l'UI)
+              _raw: data
+            });
+            return;
+          }
+
+          if (widgetName === "tts-reader-tick") {
+            handleTtsWidgetEvent(Object.assign({ type: "state" }, data));
+            return;
+          }
+
+          // tts-catcher / autres: on ne casse rien, on laisse handleTtsWidgetEvent décider
+          handleTtsWidgetEvent(Object.assign({ _raw: data }, data));
           return;
-        }
-
-        // --- TTS Auto Message Reader : widgets "bruts" (issus du dashboard dédié) ---
-        // Ces events ne portent pas forcément "type", donc on normalise ici.
-        if (widgetName === "tts-reader-selection" || widgetName === "tts_reader_selection") {
-          const lastUser = data.user ?? data.selectedUser ?? data.lastUser ?? data.lastSender ?? data.author ?? "";
-          const lastMsg  = data.message ?? data.lastMessage ?? data.lastText ?? data.text ?? "";
-          handleTtsWidgetEvent({ type: "last", lastUser, lastMessage: lastMsg });
-          appendLogDebug("tts-reader-selection.raw", data);
-          return;
-        }
-
-        if (widgetName === "tts-reader-tick" || widgetName === "tts_reader_tick") {
-          // tick = métriques / prochain run / queue / cooldown (selon ton dashboard)
-          const enabled = !!(data.enabled ?? data.autoEnabled ?? data.isEnabled);
-          const queue   = Number(data.queueCount ?? data.queuedCount ?? data.pendingCount ?? data.bufferSize ?? 0);
-          const nextTs  = Number(data.nextRunUtcMs ?? data.nextRunTs ?? data.nextTs ?? 0);
-          const cooldownSec = Number(data.cooldownSec ?? data.cooldownSeconds ?? data.cooldown ?? 0);
-
-          handleTtsWidgetEvent({
-            type: "state",
-            enabled,
-            queueCount: queue,
-            nextRunUtcMs: nextTs,
-            cooldownSec
-          });
-
-          appendLogDebug("tts-reader-tick.raw", data);
-          return;
-        }
-
-        // Event à très haute fréquence : on le log juste en debug si besoin
-        if (widgetName === "tts-catcher" || widgetName === "tts_catcher") {
-          appendLogDebug("tts-catcher.raw", data);
-          // pas de return ici : on laisse tomber, ça ne doit pas bloquer d'autres handlers
         }
       }
-
 
       if (event?.source === "Twitch"){
 
