@@ -183,6 +183,19 @@
       const toTxt   = e.recipient ? ` <span class="muted">to ${e.recipient}</span>` : "";
       return `<strong>${e.user}</strong> — Gifted sub${tierTxt}${toTxt}`;
     }
+
+    if (e.type === "Cheer") {
+      const bits = isNum(e.bits) ? e.bits : 0;
+      return `<strong>${e.user}</strong> — Cheer <span class="muted">${bits} bits</span>`;
+    }
+    if (e.type === "Follow") {
+      return `<strong>${e.user}</strong> — Follow`;
+    }
+    if (e.type === "Raid") {
+      const viewers = isNum(e.viewers) ? e.viewers : 0;
+      const from = e.from ? ` <span class="muted">from ${e.from}</span>` : "";
+      return `<strong>${e.user}</strong> — Raid <span class="muted">${viewers} viewers</span>${from}`;
+    }
     return `<strong>${e.user}</strong> — ${e.type} • ${e.tier?("Tier "+e.tier):""} • ${e.tierLabel}${e.months>0?` • ${e.months} mois`:""}`;
   }
 
@@ -235,8 +248,8 @@
     if (qv)   qv.innerHTML = "";
     if (full) full.innerHTML = "";
     if (!eventsStore.length){
-      if (qv)   qv.innerHTML   = '<li class="muted">Aucun sub récent</li>';
-      if (full) full.innerHTML = '<li class="muted">Aucun sub</li>';
+      if (qv)   qv.innerHTML   = '<li class="muted">Aucun event récent</li>';
+      if (full) full.innerHTML = '<li class="muted">Aucun event</li>';
       qvUnreadEvents = 0;
       syncEventsStatusUI();
       return;
@@ -1037,7 +1050,7 @@
               events: {
                 General: ["Custom"],
                 Broadcast: ["Custom"],
-                Twitch: ["Subs","Bits","Cheer","GiftBomb","GiftSub","ReSub","Sub"]
+                Twitch: ["Follow","Cheer","Raid","Sub","ReSub","GiftSub","GiftBomb"]
               }
             });
           } catch {}
@@ -1231,6 +1244,19 @@
   function extractMonths(d){
     const m = Number(d?.cumulativeMonths ?? d?.months ?? d?.streak ?? 0);
     return Number.isFinite(m) ? m : 0;
+  }
+
+  function extractBits(d){
+    const b = Number(d?.bits ?? d?.amount ?? d?.count ?? d?.bitsUsed ?? d?.bitsAmount ?? d?.cheerAmount ?? d?.message?.bits);
+    return Number.isFinite(b) ? Math.trunc(b) : 0;
+  }
+  function extractRaidViewers(d){
+    const v = Number(d?.viewers ?? d?.viewerCount ?? d?.raidViewers ?? d?.raidCount ?? d?.amount ?? d?.count);
+    return Number.isFinite(v) ? Math.trunc(v) : 0;
+  }
+  function extractRaiderName(d){
+    // Incoming raid: try to identify the raiding channel/user
+    return extractUserName(d?.raider ?? d?.from_broadcaster ?? d?.fromBroadcaster ?? d?.user ?? d);
   }
   function logSbSubEventToConsole(evt, payload){
     try {
@@ -1615,7 +1641,49 @@
         }
       }
 
-      if (event?.source === "Twitch" && SUB_EVENT_TYPES.has(event.type)){
+      if (event?.source === "Twitch"){
+
+        // ===== Cheer (bits) =====
+        if (event.type === "Cheer"){
+          const d = data || {};
+          const user = extractUserName(d.user || d);
+          const bits = extractBits(d);
+          eventsStore.push({ id: Date.now(), type:"Cheer", user, bits, ack:false });
+          saveEvents(eventsStore);
+          renderStoredEventsIntoUI();
+          appendLog("#events-log", `Cheer — ${user} (${bits} bits)`);
+          appendLogDebug("twitch.cheer", { user, bits });
+          return;
+        }
+
+        // ===== Follow =====
+        if (event.type === "Follow"){
+          const d = data || {};
+          const user = extractUserName(d.user || d);
+          eventsStore.push({ id: Date.now(), type:"Follow", user, ack:false });
+          saveEvents(eventsStore);
+          renderStoredEventsIntoUI();
+          appendLog("#events-log", `Follow — ${user}`);
+          appendLogDebug("twitch.follow", { user });
+          return;
+        }
+
+        // ===== Incoming Raid =====
+        if (event.type === "Raid"){
+          const d = data || {};
+          const from = extractRaiderName(d);
+          const user = from; // affichage principal = raider
+          const viewers = extractRaidViewers(d);
+          eventsStore.push({ id: Date.now(), type:"Raid", user, from, viewers, ack:false });
+          saveEvents(eventsStore);
+          renderStoredEventsIntoUI();
+          appendLog("#events-log", `Raid — ${from} (${viewers} viewers)`);
+          appendLogDebug("twitch.raid", { from, viewers });
+          return;
+        }
+
+        // ===== Subs-related events =====
+        if (SUB_EVENT_TYPES.has(event.type)){
         logSbSubEventToConsole(event, data);
 
         if (event.type === "GiftBomb"){
@@ -1655,6 +1723,7 @@
         renderStoredEventsIntoUI();
         appendLog("#events-log", `${event.type} — ${user} (${tierLabel}${months>0?`, ${months} mois`:""})`);
         return;
+      }
       }
 
       if (data && data.widget === "gtg") {
