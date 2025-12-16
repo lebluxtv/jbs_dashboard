@@ -1256,8 +1256,25 @@
   }
   function extractRaiderName(d){
     // Incoming raid: try to identify the raiding channel/user
-    return extractUserName(d?.raider ?? d?.from_broadcaster ?? d?.fromBroadcaster ?? d?.user ?? d);
+    return extractUserName(
+      d?.raider ??
+      d?.from ?? d?.from_user ?? d?.fromUser ?? d?.fromUserName ?? d?.fromUsername ??
+      d?.from_broadcaster ?? d?.fromBroadcaster ?? d?.fromBroadcasterUser ?? d?.fromBroadcasterUserName ??
+      d?.user ??
+      d
+    );
   }
+  function extractFollowName(d){
+    // Follow: try to identify the follower user
+    return extractUserName(
+      d?.follower ??
+      d?.followUser ?? d?.followedBy ??
+      d?.from ?? d?.from_user ?? d?.fromUser ?? d?.fromUserName ?? d?.fromUsername ??
+      d?.user ??
+      d
+    );
+  }
+
   function logSbSubEventToConsole(evt, payload){
     try {
       const type = evt?.type || "Unknown";
@@ -1659,7 +1676,7 @@
         // ===== Follow =====
         if (event.type === "Follow"){
           const d = data || {};
-          const user = extractUserName(d.user || d);
+          const user = extractFollowName(d);
           eventsStore.push({ id: Date.now(), type:"Follow", user, ack:false });
           saveEvents(eventsStore);
           renderStoredEventsIntoUI();
