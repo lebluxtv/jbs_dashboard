@@ -215,7 +215,7 @@
     const a = document.createElement("a");
     a.href = "#";
     a.innerHTML = htmlText;
-    a.addEventListener("click", (ev)=>{ ev.preventDefault(); try { onToggle?.(); } catch {} });
+    a.addEventListener("click", (ev)=>{ ev.preventDefault(); ev.stopPropagation(); try { onToggle?.(); } catch {} });
     li.appendChild(a);
     if (ack) li.classList.add("acked");
     if (id != null) li.dataset.id = String(id);
