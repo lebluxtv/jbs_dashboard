@@ -1698,6 +1698,8 @@ function logSbSubEventToConsole(evt, payload){
       // ===== TTS reader widget (via General.Custom / Broadcast.Custom) =====
       if (data && typeof data === "object") {
         const widgetName = (data.widget || "").toString().toLowerCase();
+
+        // --- Dashboard(s) TTS : états / queue / config (payload "type" déjà normalisé) ---
         if (widgetName === "ttsreader"
           || widgetName === "tts_dashboard"
           || widgetName === "tts-autoreader"
@@ -1706,7 +1708,43 @@ function logSbSubEventToConsole(evt, payload){
           handleTtsWidgetEvent(data);
           return;
         }
+
+        // --- TTS Auto Message Reader : widgets "bruts" (issus du dashboard dédié) ---
+        // Ces events ne portent pas forcément "type", donc on normalise ici.
+        if (widgetName === "tts-reader-selection" || widgetName === "tts_reader_selection") {
+          const lastUser = data.user ?? data.selectedUser ?? data.lastUser ?? data.lastSender ?? data.author ?? "";
+          const lastMsg  = data.message ?? data.lastMessage ?? data.lastText ?? data.text ?? "";
+          handleTtsWidgetEvent({ type: "last", lastUser, lastMessage: lastMsg });
+          appendLogDebug("tts-reader-selection.raw", data);
+          return;
+        }
+
+        if (widgetName === "tts-reader-tick" || widgetName === "tts_reader_tick") {
+          // tick = métriques / prochain run / queue / cooldown (selon ton dashboard)
+          const enabled = !!(data.enabled ?? data.autoEnabled ?? data.isEnabled);
+          const queue   = Number(data.queueCount ?? data.queuedCount ?? data.pendingCount ?? data.bufferSize ?? 0);
+          const nextTs  = Number(data.nextRunUtcMs ?? data.nextRunTs ?? data.nextTs ?? 0);
+          const cooldownSec = Number(data.cooldownSec ?? data.cooldownSeconds ?? data.cooldown ?? 0);
+
+          handleTtsWidgetEvent({
+            type: "state",
+            enabled,
+            queueCount: queue,
+            nextRunUtcMs: nextTs,
+            cooldownSec
+          });
+
+          appendLogDebug("tts-reader-tick.raw", data);
+          return;
+        }
+
+        // Event à très haute fréquence : on le log juste en debug si besoin
+        if (widgetName === "tts-catcher" || widgetName === "tts_catcher") {
+          appendLogDebug("tts-catcher.raw", data);
+          // pas de return ici : on laisse tomber, ça ne doit pas bloquer d'autres handlers
+        }
       }
+
 
       if (event?.source === "Twitch"){
 
