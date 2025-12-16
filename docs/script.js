@@ -1035,10 +1035,7 @@
         host,
         port,
         endpoint: "/",
-        subscribe: {
-        General: ["Custom"],
-        Twitch: ["Follow","Cheer","Raid","Sub","ReSub","GiftSub","GiftBomb"]
-      },
+        subscribe: "*",
         immediate: true,
         autoReconnect: true,
         retries: -1,
@@ -1048,6 +1045,18 @@
           window.client   = sbClient;
           setConnected(true);
           appendLog("#guess-log", `Connecté à Streamer.bot (${host}:${port})`);
+try {
+  sbClient.subscribe?.({
+    events: {
+      General: ["Custom"],
+      Broadcast: ["Custom"],
+      Twitch: ["Follow","Raid","Cheer","Sub","ReSub","GiftSub","GiftBomb"]
+    }
+  });
+} catch (e) {
+  console.warn("subscribe failed:", e);
+}
+
           
 
           // Re-sync complet à chaque connexion
