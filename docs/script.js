@@ -1209,6 +1209,7 @@
 
   function extractUserName(d){
     if (!d) return "—";
+    if (typeof d === "string") return d;
     if (typeof d.displayName === "string") return d.displayName;
     if (typeof d.userName    === "string") return d.userName;
     if (typeof d.username    === "string") return d.username;
@@ -1260,10 +1261,13 @@
       d?.raider ??
       d?.from ?? d?.from_user ?? d?.fromUser ?? d?.fromUserName ?? d?.fromUsername ??
       d?.from_broadcaster ?? d?.fromBroadcaster ?? d?.fromBroadcasterUser ?? d?.fromBroadcasterUserName ??
+      d?.from_broadcaster_user_name ?? d?.from_broadcaster_user_login ?? d?.from_broadcaster_user_id ??
+      d?.raidingBroadcaster ?? d?.raiding_channel ?? d?.raidingChannel ??
       d?.user ??
       d
     );
   }
+
   function extractFollowName(d){
     // Follow: try to identify the follower user
     return extractUserName(
@@ -1271,11 +1275,57 @@
       d?.followUser ?? d?.followedBy ??
       d?.from ?? d?.from_user ?? d?.fromUser ?? d?.fromUserName ?? d?.fromUsername ??
       d?.user ??
+      d?.user_name ?? d?.user_login ?? d?.userName ?? d?.userLogin ?? d?.login ?? d?.username ?? d?.displayName ??
       d
     );
   }
 
-  function logSbSubEventToConsole(evt, payload){
+
+  
+  function logSbTwitchEventToConsole(evt, payload){
+    try {
+      const type = evt?.type || "Unknown";
+      console.groupCollapsed(`🟦 [Twitch:${type}] payload`);
+      console.log("event:", evt);
+      console.log("data :", payload);
+
+      // Quick visibility on top-level keys
+      if (payload && typeof payload === "object") {
+        console.log("keys:", Object.keys(payload));
+      }
+
+      // Common candidate fields (helps mapping fast)
+      const d = payload || {};
+      const candidates = {
+        user: d?.user,
+        follower: d?.follower,
+        raider: d?.raider,
+        from: d?.from,
+        from_user: d?.from_user,
+        fromUser: d?.fromUser,
+        fromBroadcaster: d?.fromBroadcaster,
+        from_broadcaster_user_name: d?.from_broadcaster_user_name,
+        from_broadcaster_user_login: d?.from_broadcaster_user_login,
+        from_broadcaster_user_id: d?.from_broadcaster_user_id,
+        displayName: d?.displayName,
+        userName: d?.userName,
+        username: d?.username,
+        login: d?.login,
+        name: d?.name,
+        bits: d?.bits,
+        amount: d?.amount,
+        viewers: d?.viewers,
+        viewerCount: d?.viewerCount,
+        count: d?.count
+      };
+      console.log("candidates:", candidates);
+      console.groupEnd();
+    } catch (e) {
+      console.warn("Console log error:", e);
+    }
+  }
+
+function logSbSubEventToConsole(evt, payload){
     try {
       const type = evt?.type || "Unknown";
       console.groupCollapsed(`🟣 [Twitch:${type}]`);
@@ -1662,6 +1712,7 @@
 
         // ===== Cheer (bits) =====
         if (event.type === "Cheer"){
+          logSbTwitchEventToConsole(event, data);
           const d = data || {};
           const user = extractUserName(d.user || d);
           const bits = extractBits(d);
@@ -1675,6 +1726,7 @@
 
         // ===== Follow =====
         if (event.type === "Follow"){
+          logSbTwitchEventToConsole(event, data);
           const d = data || {};
           const user = extractFollowName(d);
           eventsStore.push({ id: Date.now(), type:"Follow", user, ack:false });
@@ -1687,6 +1739,7 @@
 
         // ===== Incoming Raid =====
         if (event.type === "Raid"){
+          logSbTwitchEventToConsole(event, data);
           const d = data || {};
           const from = extractRaiderName(d);
           const user = from; // affichage principal = raider
