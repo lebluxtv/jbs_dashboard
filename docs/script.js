@@ -1045,15 +1045,7 @@
           window.client   = sbClient;
           setConnected(true);
           appendLog("#guess-log", `Connecté à Streamer.bot (${host}:${port})`);
-          try {
-            sbClient.subscribe?.({
-              events: {
-                General: ["Custom"],
-                Broadcast: ["Custom"],
-                Twitch: ["Follow","Cheer","Raid","Sub","ReSub","GiftSub","GiftBomb"]
-              }
-            });
-          } catch {}
+          
 
           // Re-sync complet à chaque connexion
           safeDoAction("GTG Bootstrap Genres & Years & Ratings", {});
@@ -1128,9 +1120,9 @@
         });
       } catch {}
 
-      try { sbClient.on?.("General.Custom", ({event, data})=>handleSBEvent(event, data)); } catch {}
-      try { sbClient.on?.("Broadcast.Custom", ({event, data})=>handleSBEvent(event, data)); } catch {}
-      try { sbClient.on?.("Twitch", ({event, data})=>handleSBEvent(event, data)); } catch {}
+      
+      
+      
 
       try {
         const sock = sbClient?.socket || sbClient?.ws;
