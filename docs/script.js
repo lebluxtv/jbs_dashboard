@@ -1597,35 +1597,49 @@ function clearTtsPlaceholders(){
 // ===========================
 // TTS : History + Overview sync
 // ===========================
+// internal state to avoid duplicating the current "last TTS" into the overview history list
+let __overviewTtsLastUser = "";
+let __overviewTtsLastMsg  = "";
+
+
 function appendToTtsHistory(user, msg){
   try {
     const u = (user ?? "").toString().trim();
     const m = (msg  ?? "").toString().trim();
     if (!u && !m) return;
 
+    // We do NOT duplicate the current "last TTS" inside the overview list.
+    // Instead, the overview list stores the *previous* last TTS (history).
+    const prevU = (__overviewTtsLastUser ?? "").toString();
+    const prevM = (__overviewTtsLastMsg  ?? "").toString();
+    const hasPrev = (prevU.trim() || prevM.trim()) && !(prevU === u && prevM === m);
+
     // 1) Overview "last TTS"
     try { updateOverviewTtsLast(u, m); } catch (e) {}
+    __overviewTtsLastUser = u;
+    __overviewTtsLastMsg  = m;
 
-    // 2) Full TTS panel history list is now disabled (redondant avec le journal)
+    // 2) Full TTS panel history list is disabled (redondant avec le journal)
     const full = document.getElementById("tts-history-list");
     if (full){
       full.style.display = "none";
-      // if a placeholder exists, remove it too
       const first = full.firstElementChild;
       if (first && (first.classList.contains("tts-empty") || first.classList.contains("muted"))) full.removeChild(first);
     }
 
-    // 3) Overview list ("Messages lus") — keep it short & useful
+    // 3) Overview list ("Messages lus") — store history, not the current last
     const qv = document.getElementById("qv-tts-list");
     if (qv){
       const first = qv.firstElementChild;
       if (first && (first.classList.contains("muted") || first.classList.contains("tts-empty"))) qv.removeChild(first);
 
-      const li = document.createElement("li");
-      li.textContent = (u && m) ? `${u} : ${m}` : (u || m);
-      qv.insertBefore(li, qv.firstChild);
+      if (hasPrev){
+        const li = document.createElement("li");
+        li.textContent = (prevU.trim() && prevM.trim()) ? `${prevU} : ${prevM}` : (prevU.trim() || prevM.trim());
+        qv.insertBefore(li, qv.firstChild);
 
-      while (qv.children.length > 8) qv.removeChild(qv.lastChild);
+        while (qv.children.length > 8) qv.removeChild(qv.lastChild);
+      }
     }
   } catch (e) {
     // Never throw from UI sync (must not break GTG / other panels)
