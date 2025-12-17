@@ -1616,6 +1616,32 @@ function logSbSubEventToConsole(evt, payload){
       });
       return;
     }
+    // === Events "compat dashboard" : tts-reader-selection / tick ===
+    // Le dashboard TTS envoie typiquement : {widget:'tts-reader-selection', user, message, ...}
+    // Ici, on accepte un type normalisé 'tts' (dernier message lu) ou 'tick' (heartbeat).
+    if (type === "tts" || type === "selection" || type === "lastread") {
+      const lastUser = d.lastUser ?? d.user ?? d.selectedUser ?? d.lastSender ?? d.author ?? d.displayName ?? d.userName ?? "";
+      const lastMsg  = d.lastMessage ?? d.message ?? d.text ?? d.content ?? d.lastText ?? d.lastContent ?? "";
+      if (lastUser || lastMsg) setTtsLastMessage(lastUser, lastMsg);
+      // Optionnel : certains payloads embarquent aussi queueCount / nextRun / cooldown
+      if (d.queueCount != null || d.queuedCount != null || d.pendingCount != null) {
+        const queue = Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? 0);
+        setTtsQueueCount(queue);
+      }
+      appendLogDebug("tts.lastread", { lastUser, lastMsg });
+      return;
+    }
+
+    if (type === "tick") {
+      // tick = heartbeat du reader; on peut en profiter pour rafraîchir cooldown/nextRun si fournis
+      const nextTs  = Number(d.nextRunUtcMs ?? d.nextRunTs ?? d.nextTs ?? 0);
+      const cooldownSec = Number(d.cooldownSec ?? d.cooldownSeconds ?? d.cooldown ?? 0);
+      if (Number.isFinite(nextTs) || Number.isFinite(cooldownSec)) {
+        setTtsNextRun(Number.isFinite(nextTs) ? nextTs : Number.NaN, cooldownSec);
+      }
+      appendLogDebug("tts.tick", { nextTs, cooldownSec });
+      return;
+    }
 
     if (type === "queue" || type === "queueupdate"){
       const queue   = Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? 0);
@@ -1692,27 +1718,15 @@ function logSbSubEventToConsole(evt, payload){
     );
     return { idx, goal };
   }
-  // ===== Unwrap helper: certains clients renvoient le payload Custom dans data.data =====
-  function unwrapWidgetPayload(obj){
-    try {
-      if (!obj || typeof obj !== "object") return obj;
-      if (obj.widget == null && obj.data && typeof obj.data === "object" && obj.data.widget != null) {
-        return obj.data;
-      }
-    } catch {}
-    return obj;
-  }
-
-
 
   function handleSBEvent(event, data){
     try {
-      const payload = unwrapWidgetPayload(data);
       if (event && event.type === "StreamUpdate"){
         setLiveIndicator(!!data?.live);
       }
 
       // ===== TTS reader widget (via General.Custom / Broadcast.Custom) =====
+      const payload = unwrapEventPayload(data);
       if (payload && typeof payload === "object") {
         const widgetName = (payload.widget || "").toString().toLowerCase();
 
@@ -1837,8 +1851,7 @@ function logSbSubEventToConsole(evt, payload){
       }
       }
 
-      if (payload && payload.widget === "gtg") {
-        const data = payload;
+      if (data && data.widget === "gtg") {
 
         // ——— gagnant instantané du round ———
         if (data.type === "roundWinner"){
