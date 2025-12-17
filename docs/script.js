@@ -1515,11 +1515,24 @@ function logSbSubEventToConsole(evt, payload){
   }
 
   function setTtsQueueCount(n){
-    const el = $("#tts-queue-count");
-    if (el) setText(el, Number.isFinite(n) ? String(n) : "—");
-  }
+    const v = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : null;
 
-  
+    // legacy
+    const el = $("#tts-queue-count");
+    if (el) setText(el, v != null ? String(v) : "—");
+
+    // JBS dashboard UI (badge/pill)
+    const pill = $("#tts-counter");
+    if (pill){
+      if (v != null){
+        pill.style.display = "";
+        pill.textContent = String(v);
+      } else {
+        pill.style.display = "none";
+        pill.textContent = "0";
+      }
+    }
+  }
 // Small helper: accept either a DOM element or a jQuery object
 function setText(target, text) {
   if (!target) return;
@@ -1529,13 +1542,36 @@ function setText(target, text) {
 }
 
 function setTtsLastMessage(user, msg){
+    const u = (user == null ? "" : String(user)).trim();
+    const m = (msg  == null ? "" : String(msg)).trim();
+
+    // legacy split fields
     const uEl = $("#tts-last-user");
     const mEl = $("#tts-last-msg");
-    if (uEl) setText(uEl, user ? String(user) : "—");
-    if (mEl) setText(mEl, msg ? String(msg) : "—");
-  }
+    if (uEl) setText(uEl, u || "—");
+    if (mEl) setText(mEl, m || "—");
 
-  function setTtsNextRun(nextMs, cooldownSec){
+    // JBS dashboard (single line)
+    const line = (u && m) ? `${u} — ${m}` : (m || u);
+    const comboEl = $("#tts-last-read-text");
+    if (comboEl) comboEl.textContent = line || "Aucun TTS";
+
+    // Optional: append to history if present (do not break if missing)
+    const hist = $("#tts-history-list");
+    if (hist && line){
+      try {
+        if (hist.firstElementChild && hist.firstElementChild.classList.contains("tts-empty")){
+          hist.removeChild(hist.firstElementChild);
+        }
+        const li = document.createElement("li");
+        li.textContent = line;
+        hist.insertBefore(li, hist.firstChild);
+        // cap
+        while (hist.children.length > 30) hist.removeChild(hist.lastChild);
+      } catch {}
+    }
+  }
+function setTtsNextRun(nextMs, cooldownSec){
     const nextEl = $("#tts-next-run");
     const cdEl   = $("#tts-cooldown");
     if (nextEl){
