@@ -58,7 +58,7 @@
 
   function setStatusText(txt){
     $$("#guess-status-text, #gtg-status-text, #guess-status-info, #qv-guess-status").forEach(el => {
-      if (el) el.textContent = txt;
+      if (el) setText(el, txt);
     });
   }
 
@@ -89,14 +89,14 @@
     const v   = $("#qv-score-viewers")  || $("#score-viewers")  || $("#score-viewers-val") || $("#gtg-score-viewers");
     const gEl = $("#qv-goal-score")     || $("#goal-score-badge") || $("#score-goal-val") || $("#gtg-goal-score");
 
-    if (s)   s.textContent   = String(Number.isFinite(totals?.streamer) ? totals.streamer : 0);
-    if (v)   v.textContent   = String(Number.isFinite(totals?.viewers)  ? totals.viewers  : 0);
-    if (gEl) gEl.textContent = Number.isFinite(goal) ? String(goal) : "—";
+    if (s) setText(s, String(Number.isFinite(totals?.streamer) ? totals.streamer : 0));
+    if (v) setText(v, String(Number.isFinite(totals?.viewers)  ? totals.viewers  : 0));
+    if (gEl) setText(gEl, Number.isFinite(goal) ? String(goal) : "—");
   }
 
   function setWinnerLabel(label){
     const w = $("#guess-winner");
-    if (w) w.textContent = label && String(label).trim() ? String(label) : "—";
+    if (w) setText(w, label && String(label).trim() ? String(label) : "—");
   }
 
   function refreshCancelAbility(){
@@ -130,8 +130,8 @@
     const idx  = Number.isFinite(index) ? Math.max(1, Math.min(5, Math.trunc(index))) : null;
     const cap  = Number.isFinite(goal)  ? Math.max(1, Math.min(5, Math.trunc(goal)))  : null;
     const text = (idx && cap) ? `${idx} / ${cap}` : "—";
-    if (note) note.textContent = `Sous-manche : ${text}`;
-    if (st)   st.textContent   = text;
+    if (note) setText(note, `Sous-manche : ${text}`);
+    if (st) setText(st, text);
   }
 
   function setLockVisual(){
@@ -206,8 +206,8 @@
     if (bQV) { bQV.textContent = String(qvUnreadEvents); bQV.style.display = qvUnreadEvents > 0 ? "" : "none"; }
     const bTab  = $(".badge-events");
     const bHead = $("#events-counter");
-    if (bTab)  bTab.textContent  = String(qvUnreadEvents);
-    if (bHead) bHead.textContent = String(qvUnreadEvents);
+    if (bTab)  setText(bTab, String(qvUnreadEvents));
+    if (bHead) setText(bHead, String(qvUnreadEvents));
   }
 
   function makeItem(htmlText, onToggle, ack=false, id=null){
@@ -290,12 +290,12 @@
   function setWsIndicator(state){
     setDot("#ws-dot", state);
     const t = $("#ws-status");
-    if (t) t.textContent = state ? "Connecté à Streamer.bot" : "Déconnecté de Streamer.bot";
+    if (t) setText(t, state ? "Connecté à Streamer.bot" : "Déconnecté de Streamer.bot");
   }
   function setLiveIndicator(isLive){
     setDot("#live-dot", !!isLive);
     const t = $("#live-status");
-    if (t) t.textContent = isLive ? "Live" : "Offline";
+    if (t) setText(t, isLive ? "Live" : "Offline");
   }
 
   /******************************************************************
@@ -402,14 +402,14 @@
   function enableSecondsModeForDurationInput(){
     if (!guessDurationMinInput) return;
     const lbl = document.querySelector('label[for="guess-duration-min"]');
-    if (lbl) lbl.textContent = "Durée d'une manche (secondes)";
+    if (lbl) setText(lbl, "Durée d'une manche (secondes)");
     guessDurationMinInput.min = String(DURATION_MIN_SEC);
     guessDurationMinInput.max = String(DURATION_MAX_SEC);
     if (!guessDurationMinInput.placeholder) guessDurationMinInput.placeholder = "ex: 120";
     // ⚠️ pas de conversion automatique ici (évite de multiplier 90s→5400s)
   }
 
-  const guessMsg = (t)=>{ if (guessMsgEl) guessMsgEl.textContent = t || ""; };
+  const guessMsg = (t)=>{ if (guessMsgEl) setText(guessMsgEl, t || ""); };
 
   const GTG_EXCLUDED = new Set();
 
@@ -1383,9 +1383,9 @@ function logSbSubEventToConsole(evt, payload){
     const val = !!enabled;
     const txt = val ? 'Actif' : 'Inactif';
 
-    if (ttsStatusMain)     ttsStatusMain.textContent = txt;
-    if (ttsStatusInline)   ttsStatusInline.textContent = txt;
-    if (ttsStatusOverview) ttsStatusOverview.textContent = txt;
+    if (ttsStatusMain) setText(ttsStatusMain, txt);
+    if (ttsStatusInline) setText(ttsStatusInline, txt);
+    if (ttsStatusOverview) setText(ttsStatusOverview, txt);
 
     setDot('.dot-tts', val);
   }
@@ -1395,7 +1395,7 @@ function logSbSubEventToConsole(evt, payload){
     const val = !!enabled;
 
     if (ttsSwitchInput)      ttsSwitchInput.checked = val;
-    if (ttsSwitchLabelText)  ttsSwitchLabelText.textContent = val ? 'TTS ON' : 'TTS OFF';
+    if (ttsSwitchLabelText) setText(ttsSwitchLabelText, val ? 'TTS ON' : 'TTS OFF');
     if (ttsSwitchLabel)      ttsSwitchLabel.style.opacity   = val ? '1' : '0.55';
 
     // toujours synchroniser les textes + pastilles
@@ -1474,7 +1474,7 @@ function logSbSubEventToConsole(evt, payload){
       .catch(e => console.error("Erreur doAction TTS Timer Set :", e));
 
     if (ttsTimerInput)  ttsTimerInput.value = clamped;
-    if (ttsTimerLabel) ttsTimerLabel.textContent = clamped + " min";
+    if (ttsTimerLabel) setText(ttsTimerLabel, clamped + " min");
   }
 
   if (ttsTimerInput) {
@@ -1516,14 +1516,23 @@ function logSbSubEventToConsole(evt, payload){
 
   function setTtsQueueCount(n){
     const el = $("#tts-queue-count");
-    if (el) el.textContent = Number.isFinite(n) ? String(n) : "—";
+    if (el) setText(el, Number.isFinite(n) ? String(n) : "—");
   }
 
-  function setTtsLastMessage(user, msg){
+  
+// Small helper: accept either a DOM element or a jQuery object
+function setText(target, text) {
+  if (!target) return;
+  const el = (target.jquery ? target[0] : target);
+  if (!el) return;
+  el.textContent = (text ?? "");
+}
+
+function setTtsLastMessage(user, msg){
     const uEl = $("#tts-last-user");
     const mEl = $("#tts-last-msg");
-    if (uEl) uEl.textContent = user ? String(user) : "—";
-    if (mEl) mEl.textContent = msg ? String(msg) : "—";
+    if (uEl) setText(uEl, user ? String(user) : "—");
+    if (mEl) setText(mEl, msg ? String(msg) : "—");
   }
 
   function setTtsNextRun(nextMs, cooldownSec){
@@ -1650,27 +1659,25 @@ function logSbSubEventToConsole(evt, payload){
   const pickNum = (...keys)=>{ for (const v of keys){ if (isNum(v)) return Math.trunc(v); } return null; };
 
 // --- Unwrap payload helpers (Streamer.bot events sometimes nest custom payload under .data/.payload/.args) ---
-function unwrapEventPayload(data) {
-  // Streamer.bot can wrap the payload in different shapes depending on the client version:
-  // - { data: { widget: "...", ... } }
-  // - { data: { data: { widget: "...", ... } } }
-  // - { widget: "...", ... }
-  // Keep this tolerant and non-destructive.
-  if (!data || typeof data !== "object") return data;
+function unwrapEventPayload(raw){
+  let d = raw;
+  for (let i = 0; i < 3; i++){
+    if (!d || typeof d !== "object") break;
 
-  const d1 = data.data;
-  if (d1 && typeof d1 === "object") {
-    if ("widget" in d1) return d1;
-    const d2 = d1.data;
-    if (d2 && typeof d2 === "object" && "widget" in d2) return d2;
+    // Most common wrappers
+    const cand1 = d.data;
+    const cand2 = d.payload;
+    const cand3 = d.args;
+
+    const looksLikeWidget = (o)=> o && typeof o === "object" && ("widget" in o || "type" in o || "message" in o || "user" in o);
+
+    if (looksLikeWidget(cand1)) { d = cand1; continue; }
+    if (looksLikeWidget(cand2)) { d = cand2; continue; }
+    if (looksLikeWidget(cand3)) { d = cand3; continue; }
+
+    break;
   }
-
-  if ("widget" in data) return data;
-
-  const p = data.payload;
-  if (p && typeof p === "object" && "widget" in p) return p;
-
-  return data;
+  return d;
 }
 
 
@@ -1743,8 +1750,6 @@ function unwrapEventPayload(data) {
 
         // ✅ Noms réels utilisés par ton dashboard TTS
         if (widgetName === "tts-reader-selection") {
-          console.debug("[TTS] tts-reader-selection raw payload:", payload);
-
           handleTtsWidgetEvent({
             type: "lastread",
             lastUser: (payload.user ?? payload.selectedUser ?? payload.lastUser ?? payload.lastSender ?? payload.author ?? ""),
