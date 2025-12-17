@@ -1528,72 +1528,213 @@ function setText(target, text) {
   el.textContent = (text ?? "");
 }
 
-function setTtsLastMessage(user, message) {
-  const u = (user ?? "").toString().trim();
-  const m = (message ?? "").toString();
-
-  const elUser = $("#tts-last-user");
-  const elMsg  = $("#tts-last-msg");
-
-  if (elUser) {
-    elUser.textContent = u || "—";
-    // Lisibilité rapide
-    elUser.style.fontSize = "16px";
-    elUser.style.fontWeight = "700";
-  }
-  if (elMsg) {
-    elMsg.textContent = m || "";
-    // Lisibilité rapide
-    elMsg.style.fontSize = "16px";
+function setTtsLastMessage(user, msg){
+  const uEl = $("#tts-last-user");
+  const mEl = $("#tts-last-msg");
+  if (uEl) {
+    uEl.textContent = user ? String(user) : "—";
+    uEl.style.fontSize = "18px";
+    uEl.style.lineHeight = "1.25";
+    uEl.style.fontWeight = "700";
   }
 
-  // Historique (onglet TTS) + Journal
-  pushTtsHistory(u, m);
 
-  // Overview (Quick View)
-  pushOverviewTts(u, m);
-}
+  // ===== TTS: record last reads into Overview + History + Journal (dedupe) =====
+let _LAST_TTS_KEY = "";
 
-function pushTtsHistory(user, message) {
-  const u = (user ?? "").toString().trim();
-  const m = (message ?? "").toString();
+function recordTtsRead(user, msg){
+  const u = (user == null ? "" : String(user)).trim();
+  const m = (msg  == null ? "" : String(msg)).trim();
   if (!u && !m) return;
 
-  const line = `${u || "—"} — ${m || ""}`.trim();
+  const key = u + "||" + m;
+  if (key === _LAST_TTS_KEY) return;
+  _LAST_TTS_KEY = key;
 
-  // Historique visuel
-  const ul = $("#tts-history-list");
-  if (ul) {
+  // Overview: prepend into #qv-tts-list if present note: keep it short
+  const qv = $("#qv-tts-list");
+  if (qv){
+    if (qv.firstElementChild && qv.firstElementChild.classList.contains("muted")) {
+      qv.removeChild(qv.firstElementChild);
+    }
     const li = document.createElement("li");
-    li.textContent = line;
-    ul.prepend(li);
-
-    // garde un historique raisonnable
-    while (ul.children.length > 30) ul.removeChild(ul.lastElementChild);
+    li.textContent = `${u || "—"} — ${m || "—"}`;
+    qv.insertBefore(li, qv.firstChild);
+    while (qv.children.length > 6) qv.removeChild(qv.lastChild);
   }
 
-  // Journal (préféré pour voir défiler les lectures)
-  if ($("#tts-log")) {
-    appendLog("#tts-log", line);
+  // History list
+    const hist = $("#tts-history-list");
+  if (hist){
+    if (hist.firstElementChild && hist.firstElementChild.classList.contains("muted")) {
+      hist.removeChild(hist.firstElementChild);
+    }
+    const li2 = document.createElement("li");
+    li2.textContent = `${u || "—"} — ${m || "—"}`;
+    hist.insertBefore(li2, hist.firstChild);
+    while (hist.children.length > 30) hist.removeChild(hist.lastChild);
+  }
+
+  // Journal
+  if ($("#tts-log")){
+    appendLog("#tts-log", `${u || "—"} — ${m || "—"}`);
+  }
+}
+  if (mEl) {
+    mEl.textContent = msg ? String(msg) : "—";
+    mEl.style.fontSize = "18px";
+    mEl.style.lineHeight = "1.25";
   }
 }
 
-function pushOverviewTts(user, message) {
-  const u = (user ?? "").toString().trim();
-  const m = (message ?? "").toString();
-  if (!u && !m) return;
-
-  const line = `${u || "—"} — ${m || ""}`.trim();
-
-  const ul = $("#qv-tts-list");
-  if (ul) {
-    const li = document.createElement("li");
-    li.textContent = line;
-    ul.prepend(li);
-    while (ul.children.length > 10) ul.removeChild(ul.lastElementChild);
+  function setTtsNextRun(nextMs, cooldownSec){
+    const nextEl = $("#tts-next-run");
+    const cdEl   = $("#tts-cooldown");
+    if (nextEl){
+      if (Number.isFinite(nextMs) && nextMs > 0){
+        const delay = Math.max(0, nextMs - Date.now());
+        nextEl.textContent = formatDelay(delay);
+      } else {
+        nextEl.textContent = "—";
+      }
+    }
+    if (cdEl){
+      cdEl.textContent = Number.isFinite(cooldownSec) && cooldownSec > 0
+        ? `${Math.round(cooldownSec)}s`
+        : "—";
+    }
   }
-}
 
+  function bindTtsControls(){
+    const openBtn  = $("#tts-open-dashboard");
+    const forceBtn = $("#tts-force-read");
+    const toggleBtn = $("#tts-toggle-auto");
+
+    if (openBtn && !openBtn._bound){
+      openBtn._bound = true;
+      openBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        // Lien vers ton dashboard TTS dédié si tu en as un
+        const href = openBtn.getAttribute("data-href") || openBtn.getAttribute("href") || "tts_dashboard.html";
+        window.open(href, "_blank");
+      });
+    }
+
+    if (forceBtn && !forceBtn._bound){
+      forceBtn._bound = true;
+      forceBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        // Lecture forcée immédiate
+        safeDoAction("TTS Reader", { reason: "manualDashboardTrigger" });
+      });
+    }
+
+    if (toggleBtn && !toggleBtn._bound){
+      toggleBtn._bound = true;
+      toggleBtn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        const newState = !TTS_AUTO_ENABLED;
+        setTtsEnabledUI(newState); // feedback instantané
+        safeDoAction("TTS Timer Set", {
+          enabled: newState
+        });
+      });
+    }
+  }
+
+  function handleTtsWidgetEvent(raw){
+    const d = raw || {};
+    // On accepte plusieurs formes de payload pour être tolérant
+    const type = (d.type || d.eventType || d.event_type || "").toString().toLowerCase();
+    const widget = (d.widget || "").toString().toLowerCase();
+
+    // Support the payload format used by the standalone TTS dashboard
+    // (Supports widget="tts-reader-selection" + eventType="ttsSelection")
+    if (widget === "tts-reader-selection" || type === "ttsselection") {
+      const u = d.selectedUser || d.user || d.username || d.displayName || d.display_name || "";
+      const msg = d.message || d.text || "";
+      if (u || msg) setTtsLastMessage(u, msg);
+      if (Array.isArray(d.candidatesPanel)) setTtsQueueCount(d.candidatesPanel.length);
+      if (typeof d.queueCount === "number") setTtsQueueCount(d.queueCount);
+      try { console.debug("[TTS] selection payload:", d); } catch (e) {}
+      return;
+    }
+
+
+    if (!type || type === "state" || type === "fullstate"){
+      const enabled = !!(d.enabled ?? d.autoEnabled ?? d.isEnabled);
+      const queue   = Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? d.bufferSize ?? 0);
+      const nextTs  = Number(d.nextRunUtcMs ?? d.nextRunTs ?? d.nextTs ?? 0);
+      const cooldownSec = Number(d.cooldownSec ?? d.cooldownSeconds ?? d.cooldown ?? 0);
+      const lastUser = d.lastUser ?? d.lastSender ?? d.lastAuthor ?? "";
+      const lastMsg  = d.lastMessage ?? d.lastText ?? d.lastContent ?? "";
+
+      setTtsEnabledUI(enabled);
+      setTtsQueueCount(queue);
+      setTtsNextRun(nextTs, cooldownSec);
+      setTtsLastMessage(lastUser, lastMsg);
+
+      
+      
+      recordTtsRead(lastUser, lastMsg);
+recordTtsRead(lastUser, lastMsg);
+appendLogDebug("tts.state", {
+        enabled, queue, nextTs, cooldownSec, lastUser, lastMsg
+      });
+      return;
+    }
+
+    if (type === "queue" || type === "queueupdate"){
+      const queue   = Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? 0);
+      setTtsQueueCount(queue);
+      appendLogDebug("tts.queue", { queue });
+      return;
+    }
+
+    if (type === "last" || type === "lastread"){
+      const lastUser = d.lastUser ?? d.lastSender ?? d.lastAuthor ?? "";
+      const lastMsg  = d.lastMessage ?? d.lastText ?? d.lastContent ?? "";
+      setTtsLastMessage(lastUser, lastMsg);
+      appendLogDebug("tts.last", { lastUser, lastMsg });
+      return;
+    }
+
+    if (type === "config" || type === "cooldown"){
+      const cooldownSec = Number(d.cooldownSec ?? d.cooldownSeconds ?? d.cooldown ?? 0);
+      setTtsNextRun(Number.NaN, cooldownSec);
+      appendLogDebug("tts.config", { cooldownSec });
+      return;
+    }
+  }
+
+  /******************************************************************
+   *                       🧠 Handle SB Events
+   ******************************************************************/
+  const asArray = (v)=> Array.isArray(v) ? v : (v == null ? [] : [v]);
+  const joinList = (arr)=> (Array.isArray(arr) && arr.length) ? arr.join(", ") : "—";
+  const pickNum = (...keys)=>{ for (const v of keys){ if (isNum(v)) return Math.trunc(v); } return null; };
+
+// --- Unwrap payload helpers (Streamer.bot events sometimes nest custom payload under .data/.payload/.args) ---
+function unwrapEventPayload(raw){
+  let d = raw;
+  for (let i = 0; i < 3; i++){
+    if (!d || typeof d !== "object") break;
+
+    // Most common wrappers
+    const cand1 = d.data;
+    const cand2 = d.payload;
+    const cand3 = d.args;
+
+    const looksLikeWidget = (o)=> o && typeof o === "object" && ("widget" in o || "type" in o || "message" in o || "user" in o);
+
+    if (looksLikeWidget(cand1)) { d = cand1; continue; }
+    if (looksLikeWidget(cand2)) { d = cand2; continue; }
+    if (looksLikeWidget(cand3)) { d = cand3; continue; }
+
+    break;
+  }
+  return d;
+}
 
 
   function extractYearFromGame(g){
