@@ -335,14 +335,15 @@
             <div class="form-group sm">
               <label for="gtg-pergame-goal">Nb de manches par jeu</label>
               <input id="gtg-pergame-goal" type="number" min="1" max="5" value="1" inputmode="numeric" />
+              <div id="gtg-zoom-preview" class="hint" style="margin-top:4px;">Zoom auto : x2</div>
             </div>
           </div>
 
           <!-- NEW: Zoom logique pour GTG Start (OBS) -->
           <div class="form-row">
             <div class="form-group sm">
-              <label for="gtg-zoom-level">Zoom (overlay OBS)</label>
-              <select id="gtg-zoom-level">
+              <label for="gtg-zoom-level">Zoom (auto)</label>
+              <select id="gtg-zoom-level" disabled>
                 <option value="">Aucun (par défaut)</option>
                 <option value="Zoom_x2">Zoom_x2</option>
                 <option value="Zoom_x2.5">Zoom_x2.5</option>
