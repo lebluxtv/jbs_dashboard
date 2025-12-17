@@ -1529,11 +1529,24 @@ function setText(target, text) {
 }
 
 function setTtsLastMessage(user, msg){
+    // Support multiple DOM layouts (older/newer) without breaking anything.
+    const safeUser = user ? String(user) : "—";
+    const safeMsg  = msg  ? String(msg)  : "—";
+
+    // Newer layout: split fields
     const uEl = $("#tts-last-user");
     const mEl = $("#tts-last-msg");
-    if (uEl) setText(uEl, user ? String(user) : "—");
-    if (mEl) setText(mEl, msg ? String(msg) : "—");
-  }
+    if (uEl) setText(uEl, safeUser);
+    if (mEl) setText(mEl, safeMsg);
+
+    // Older layout: single line field (this is what your current UI actually uses)
+    const comboEl = $("#tts-last-read-text") || $("#tts-last-read") || $("#ttsLastReadText");
+    if (comboEl) setText(comboEl, `${safeUser} — ${safeMsg}`);
+
+    // Keep history + journal in sync
+    appendToTtsHistory(safeUser, safeMsg);
+    appendToTtsJournalLine(safeUser, safeMsg);
+}
 
   function setTtsNextRun(nextMs, cooldownSec){
     const nextEl = $("#tts-next-run");
