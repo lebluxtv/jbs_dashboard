@@ -36,6 +36,7 @@
     let line = `DEBUG: ${text}`;
     if (obj !== undefined) {
       try {
+      const payload = unwrapEventPayload(data);
         const s = JSON.stringify(obj, replacerNoHuge, 0);
         line += " " + (s.length > 1200 ? (s.slice(0, 1200) + " …") : s);
       } catch {}
@@ -1045,20 +1046,7 @@
           window.client   = sbClient;
           setConnected(true);
           appendLog("#guess-log", `Connecté à Streamer.bot (${host}:${port})`);
-try {
-  sbClient.subscribe?.({
-    events: {
-      General: ["Custom"],
-      Broadcast: ["Custom"],
-      Twitch: ["Follow","Raid","Cheer","Sub","ReSub","GiftSub","GiftBomb"]
-    }
-  });
-} catch (e) {
-  console.warn("subscribe failed:", e);
-}
-
-          
-
+// NOTE: no manual subscribe here; the client is initialized with subscribe:"*".
           // Re-sync complet à chaque connexion
           safeDoAction("GTG Bootstrap Genres & Years & Ratings", {});
           safeDoAction("GTG Scores Get", {});
@@ -1616,32 +1604,6 @@ function logSbSubEventToConsole(evt, payload){
       });
       return;
     }
-    // === Events "compat dashboard" : tts-reader-selection / tick ===
-    // Le dashboard TTS envoie typiquement : {widget:'tts-reader-selection', user, message, ...}
-    // Ici, on accepte un type normalisé 'tts' (dernier message lu) ou 'tick' (heartbeat).
-    if (type === "tts" || type === "selection" || type === "lastread") {
-      const lastUser = d.lastUser ?? d.user ?? d.selectedUser ?? d.lastSender ?? d.author ?? d.displayName ?? d.userName ?? "";
-      const lastMsg  = d.lastMessage ?? d.message ?? d.text ?? d.content ?? d.lastText ?? d.lastContent ?? "";
-      if (lastUser || lastMsg) setTtsLastMessage(lastUser, lastMsg);
-      // Optionnel : certains payloads embarquent aussi queueCount / nextRun / cooldown
-      if (d.queueCount != null || d.queuedCount != null || d.pendingCount != null) {
-        const queue = Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? 0);
-        setTtsQueueCount(queue);
-      }
-      appendLogDebug("tts.lastread", { lastUser, lastMsg });
-      return;
-    }
-
-    if (type === "tick") {
-      // tick = heartbeat du reader; on peut en profiter pour rafraîchir cooldown/nextRun si fournis
-      const nextTs  = Number(d.nextRunUtcMs ?? d.nextRunTs ?? d.nextTs ?? 0);
-      const cooldownSec = Number(d.cooldownSec ?? d.cooldownSeconds ?? d.cooldown ?? 0);
-      if (Number.isFinite(nextTs) || Number.isFinite(cooldownSec)) {
-        setTtsNextRun(Number.isFinite(nextTs) ? nextTs : Number.NaN, cooldownSec);
-      }
-      appendLogDebug("tts.tick", { nextTs, cooldownSec });
-      return;
-    }
 
     if (type === "queue" || type === "queueupdate"){
       const queue   = Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? 0);
@@ -1672,6 +1634,29 @@ function logSbSubEventToConsole(evt, payload){
   const asArray = (v)=> Array.isArray(v) ? v : (v == null ? [] : [v]);
   const joinList = (arr)=> (Array.isArray(arr) && arr.length) ? arr.join(", ") : "—";
   const pickNum = (...keys)=>{ for (const v of keys){ if (isNum(v)) return Math.trunc(v); } return null; };
+
+// --- Unwrap payload helpers (Streamer.bot events sometimes nest custom payload under .data/.payload/.args) ---
+function unwrapEventPayload(raw){
+  let d = raw;
+  for (let i = 0; i < 3; i++){
+    if (!d || typeof d !== "object") break;
+
+    // Most common wrappers
+    const cand1 = d.data;
+    const cand2 = d.payload;
+    const cand3 = d.args;
+
+    const looksLikeWidget = (o)=> o && typeof o === "object" && ("widget" in o || "type" in o || "message" in o || "user" in o);
+
+    if (looksLikeWidget(cand1)) { d = cand1; continue; }
+    if (looksLikeWidget(cand2)) { d = cand2; continue; }
+    if (looksLikeWidget(cand3)) { d = cand3; continue; }
+
+    break;
+  }
+  return d;
+}
+
 
   function extractYearFromGame(g){
     if (!g || typeof g !== "object") return null;
@@ -1726,7 +1711,6 @@ function logSbSubEventToConsole(evt, payload){
       }
 
       // ===== TTS reader widget (via General.Custom / Broadcast.Custom) =====
-      const payload = unwrapEventPayload(data);
       if (payload && typeof payload === "object") {
         const widgetName = (payload.widget || "").toString().toLowerCase();
 
@@ -1758,7 +1742,7 @@ function logSbSubEventToConsole(evt, payload){
 
         // tts-catcher : utile côté dashboard TTS (chat buffer). Ici on ne l'utilise pas, mais on garde le payload en debug.
         if (widgetName === "tts-catcher") {
-          appendLogDebug("tts-catcher.raw", payload);
+          appendLogDebug("tts-catcher.raw", data);
           return;
         }
       }
@@ -1851,7 +1835,7 @@ function logSbSubEventToConsole(evt, payload){
       }
       }
 
-      if (data && data.widget === "gtg") {
+      if (data && payload.widget === "gtg") {
 
         // ——— gagnant instantané du round ———
         if (data.type === "roundWinner"){
