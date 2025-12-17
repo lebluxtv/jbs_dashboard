@@ -1529,63 +1529,11 @@ function setText(target, text) {
 }
 
 function setTtsLastMessage(user, msg){
-  const uEl = $("#tts-last-user");
-  const mEl = $("#tts-last-msg");
-  if (uEl) {
-    uEl.textContent = user ? String(user) : "—";
-    uEl.style.fontSize = "18px";
-    uEl.style.lineHeight = "1.25";
-    uEl.style.fontWeight = "700";
+    const uEl = $("#tts-last-user");
+    const mEl = $("#tts-last-msg");
+    if (uEl) setText(uEl, user ? String(user) : "—");
+    if (mEl) setText(mEl, msg ? String(msg) : "—");
   }
-
-
-  // ===== TTS: record last reads into Overview + History + Journal (dedupe) =====
-let _LAST_TTS_KEY = "";
-
-function recordTtsRead(user, msg){
-  const u = (user == null ? "" : String(user)).trim();
-  const m = (msg  == null ? "" : String(msg)).trim();
-  if (!u && !m) return;
-
-  const key = u + "||" + m;
-  if (key === _LAST_TTS_KEY) return;
-  _LAST_TTS_KEY = key;
-
-  // Overview: prepend into #qv-tts-list if present note: keep it short
-  const qv = $("#qv-tts-list");
-  if (qv){
-    if (qv.firstElementChild && qv.firstElementChild.classList.contains("muted")) {
-      qv.removeChild(qv.firstElementChild);
-    }
-    const li = document.createElement("li");
-    li.textContent = `${u || "—"} — ${m || "—"}`;
-    qv.insertBefore(li, qv.firstChild);
-    while (qv.children.length > 6) qv.removeChild(qv.lastChild);
-  }
-
-  // History list
-    const hist = $("#tts-history-list");
-  if (hist){
-    if (hist.firstElementChild && hist.firstElementChild.classList.contains("muted")) {
-      hist.removeChild(hist.firstElementChild);
-    }
-    const li2 = document.createElement("li");
-    li2.textContent = `${u || "—"} — ${m || "—"}`;
-    hist.insertBefore(li2, hist.firstChild);
-    while (hist.children.length > 30) hist.removeChild(hist.lastChild);
-  }
-
-  // Journal
-  if ($("#tts-log")){
-    appendLog("#tts-log", `${u || "—"} — ${m || "—"}`);
-  }
-}
-  if (mEl) {
-    mEl.textContent = msg ? String(msg) : "—";
-    mEl.style.fontSize = "18px";
-    mEl.style.lineHeight = "1.25";
-  }
-}
 
   function setTtsNextRun(nextMs, cooldownSec){
     const nextEl = $("#tts-next-run");
@@ -1672,13 +1620,9 @@ function recordTtsRead(user, msg){
       setTtsEnabledUI(enabled);
       setTtsQueueCount(queue);
       setTtsNextRun(nextTs, cooldownSec);
-      setTtsLastMessage(lastUser, lastMsg);
+      applyTtsLastEverywhere(lastUser, lastMsg);
 
-      
-      
-      recordTtsRead(lastUser, lastMsg);
-recordTtsRead(lastUser, lastMsg);
-appendLogDebug("tts.state", {
+      appendLogDebug("tts.state", {
         enabled, queue, nextTs, cooldownSec, lastUser, lastMsg
       });
       return;
@@ -1735,6 +1679,83 @@ function unwrapEventPayload(raw){
   }
   return d;
 }
+
+
+function updateOverviewTtsLast(user, msg){
+  // Best-effort: don't assume overview DOM ids exist
+  const candidates = [
+    { u:"overview-tts-last-user", m:"overview-tts-last-msg" },
+    { u:"overview-tts-user",      m:"overview-tts-msg" },
+    { u:"ov-tts-user",            m:"ov-tts-msg" },
+    { u:"tts-overview-user",      m:"tts-overview-msg" }
+  ];
+  for (const c of candidates){
+    const uEl = document.getElementById(c.u);
+    const mEl = document.getElementById(c.m);
+    if (uEl || mEl){
+      if (uEl){
+        uEl.textContent = user || "";
+        uEl.style.fontSize = "16px";
+        uEl.style.lineHeight = "1.2";
+      }
+      if (mEl){
+        mEl.textContent = msg || "";
+        mEl.style.fontSize = "16px";
+        mEl.style.lineHeight = "1.2";
+      }
+      return true;
+    }
+  }
+  // Also support a single combined element if present
+  const combinedIds = ["overview-tts-last", "overview-tts", "ov-tts-last"];
+  for (const id of combinedIds){
+    const el = document.getElementById(id);
+    if (el){
+      el.textContent = (user && msg) ? `${user} — ${msg}` : (user || msg || "");
+      el.style.fontSize = "16px";
+      el.style.lineHeight = "1.2";
+      return true;
+    }
+  }
+  return false;
+}
+
+function appendTtsToJournal(user, msg){
+  // Try common ids first
+  const ids = ["tts-journal", "ttsJournal", "tts-journal-box", "tts-journal-textarea", "tts-log", "ttsLog"];
+  for (const id of ids){
+    const el = document.getElementById(id);
+    if (!el) continue;
+
+    const line = (user && msg) ? `${user} — ${msg}` : (user || msg || "");
+    if (!line) return true;
+
+    if ("value" in el){
+      el.value = (el.value ? (el.value + "\n") : "") + line;
+      // keep it readable without forcing scroll
+      el.style.fontSize = "14px";
+      el.style.lineHeight = "1.25";
+      return true;
+    }
+    // non-textarea container
+    const div = document.createElement("div");
+    div.textContent = line;
+    el.appendChild(div);
+    el.style.fontSize = "14px";
+    el.style.lineHeight = "1.25";
+    return true;
+  }
+  return false;
+}
+
+function applyTtsLastEverywhere(user, msg){
+  setTtsLastMessage(user, msg);
+  updateOverviewTtsLast(user, msg);
+  appendTtsToJournal(user, msg);
+}
+
+
+
 
 
   function extractYearFromGame(g){
