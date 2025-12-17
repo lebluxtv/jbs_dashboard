@@ -1545,7 +1545,7 @@ function setTtsLastMessage(user, msg){
 
     // Keep history + journal in sync
     appendToTtsHistory(safeUser, safeMsg);
-    appendToTtsJournalLine(safeUser, safeMsg);
+    //appendToTtsJournalLine(safeUser, safeMsg);
 }
 
   function setTtsNextRun(nextMs, cooldownSec){
