@@ -1692,16 +1692,29 @@ function logSbSubEventToConsole(evt, payload){
     );
     return { idx, goal };
   }
+  // ===== Unwrap helper: certains clients renvoient le payload Custom dans data.data =====
+  function unwrapWidgetPayload(obj){
+    try {
+      if (!obj || typeof obj !== "object") return obj;
+      if (obj.widget == null && obj.data && typeof obj.data === "object" && obj.data.widget != null) {
+        return obj.data;
+      }
+    } catch {}
+    return obj;
+  }
+
+
 
   function handleSBEvent(event, data){
     try {
+      const payload = unwrapWidgetPayload(data);
       if (event && event.type === "StreamUpdate"){
         setLiveIndicator(!!data?.live);
       }
 
       // ===== TTS reader widget (via General.Custom / Broadcast.Custom) =====
-      if (data && typeof data === "object") {
-        const widgetName = (data.widget || "").toString().toLowerCase();
+      if (payload && typeof payload === "object") {
+        const widgetName = (payload.widget || "").toString().toLowerCase();
 
         // ✅ Noms "legacy" déjà supportés
         if (widgetName === "ttsreader"
@@ -1709,7 +1722,7 @@ function logSbSubEventToConsole(evt, payload){
           || widgetName === "tts-autoreader"
           || widgetName === "tts_auto_message_reader"
           || widgetName === "tts-dashboard") {
-          handleTtsWidgetEvent(data);
+          handleTtsWidgetEvent(payload);
           return;
         }
 
@@ -1717,21 +1730,21 @@ function logSbSubEventToConsole(evt, payload){
         if (widgetName === "tts-reader-selection") {
           handleTtsWidgetEvent({
             type: "lastread",
-            lastUser: (data.user ?? data.selectedUser ?? data.lastUser ?? data.lastSender ?? data.author ?? ""),
-            lastMessage: (data.message ?? data.text ?? data.lastMessage ?? data.lastText ?? data.content ?? "")
+            lastUser: (payload.user ?? payload.selectedUser ?? payload.lastUser ?? payload.lastSender ?? payload.author ?? ""),
+            lastMessage: (payload.message ?? payload.text ?? payload.lastMessage ?? payload.lastText ?? payload.content ?? "")
           });
           return;
         }
 
         if (widgetName === "tts-reader-tick") {
           // On passe tout le payload : handleTtsWidgetEvent sait piocher les champs (enabled/queue/next/cooldown)
-          handleTtsWidgetEvent(Object.assign({ type: "state" }, data));
+          handleTtsWidgetEvent(Object.assign({ type: "state" }, payload));
           return;
         }
 
         // tts-catcher : utile côté dashboard TTS (chat buffer). Ici on ne l'utilise pas, mais on garde le payload en debug.
         if (widgetName === "tts-catcher") {
-          appendLogDebug("tts-catcher.raw", data);
+          appendLogDebug("tts-catcher.raw", payload);
           return;
         }
       }
@@ -1824,7 +1837,8 @@ function logSbSubEventToConsole(evt, payload){
       }
       }
 
-      if (data && data.widget === "gtg") {
+      if (payload && payload.widget === "gtg") {
+        const data = payload;
 
         // ——— gagnant instantané du round ———
         if (data.type === "roundWinner"){
