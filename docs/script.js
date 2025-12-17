@@ -1584,7 +1584,21 @@ function logSbSubEventToConsole(evt, payload){
   function handleTtsWidgetEvent(raw){
     const d = raw || {};
     // On accepte plusieurs formes de payload pour être tolérant
-    const type = (d.type || "").toString().toLowerCase();
+    const type = (d.type || d.eventType || d.event_type || "").toString().toLowerCase();
+    const widget = (d.widget || "").toString().toLowerCase();
+
+    // Support the payload format used by the standalone TTS dashboard
+    // (Supports widget="tts-reader-selection" + eventType="ttsSelection")
+    if (widget === "tts-reader-selection" || type === "ttsselection") {
+      const u = d.selectedUser || d.user || d.username || d.displayName || d.display_name || "";
+      const msg = d.message || d.text || "";
+      if (u || msg) setTtsLastMessage(u, msg);
+      if (Array.isArray(d.candidatesPanel)) setTtsQueueCount(d.candidatesPanel.length);
+      if (typeof d.queueCount === "number") setTtsQueueCount(d.queueCount);
+      try { console.debug("[TTS] selection payload:", d); } catch (e) {}
+      return;
+    }
+
 
     if (!type || type === "state" || type === "fullstate"){
       const enabled = !!(d.enabled ?? d.autoEnabled ?? d.isEnabled);
