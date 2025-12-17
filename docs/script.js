@@ -1650,25 +1650,27 @@ function logSbSubEventToConsole(evt, payload){
   const pickNum = (...keys)=>{ for (const v of keys){ if (isNum(v)) return Math.trunc(v); } return null; };
 
 // --- Unwrap payload helpers (Streamer.bot events sometimes nest custom payload under .data/.payload/.args) ---
-function unwrapEventPayload(raw){
-  let d = raw;
-  for (let i = 0; i < 3; i++){
-    if (!d || typeof d !== "object") break;
+function unwrapEventPayload(data) {
+  // Streamer.bot can wrap the payload in different shapes depending on the client version:
+  // - { data: { widget: "...", ... } }
+  // - { data: { data: { widget: "...", ... } } }
+  // - { widget: "...", ... }
+  // Keep this tolerant and non-destructive.
+  if (!data || typeof data !== "object") return data;
 
-    // Most common wrappers
-    const cand1 = d.data;
-    const cand2 = d.payload;
-    const cand3 = d.args;
-
-    const looksLikeWidget = (o)=> o && typeof o === "object" && ("widget" in o || "type" in o || "message" in o || "user" in o);
-
-    if (looksLikeWidget(cand1)) { d = cand1; continue; }
-    if (looksLikeWidget(cand2)) { d = cand2; continue; }
-    if (looksLikeWidget(cand3)) { d = cand3; continue; }
-
-    break;
+  const d1 = data.data;
+  if (d1 && typeof d1 === "object") {
+    if ("widget" in d1) return d1;
+    const d2 = d1.data;
+    if (d2 && typeof d2 === "object" && "widget" in d2) return d2;
   }
-  return d;
+
+  if ("widget" in data) return data;
+
+  const p = data.payload;
+  if (p && typeof p === "object" && "widget" in p) return p;
+
+  return data;
 }
 
 
@@ -1741,6 +1743,8 @@ function unwrapEventPayload(raw){
 
         // ✅ Noms réels utilisés par ton dashboard TTS
         if (widgetName === "tts-reader-selection") {
+          console.debug("[TTS] tts-reader-selection raw payload:", payload);
+
           handleTtsWidgetEvent({
             type: "lastread",
             lastUser: (payload.user ?? payload.selectedUser ?? payload.lastUser ?? payload.lastSender ?? payload.author ?? ""),
