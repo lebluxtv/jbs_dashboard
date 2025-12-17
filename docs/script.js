@@ -1706,8 +1706,9 @@ function unwrapEventPayload(raw){
 
   function handleSBEvent(event, data){
     try {
+      const payload = unwrapEventPayload(data);
       if (event && event.type === "StreamUpdate"){
-        setLiveIndicator(!!data?.live);
+        setLiveIndicator(!!payload?.live);
       }
 
       // ===== TTS reader widget (via General.Custom / Broadcast.Custom) =====
