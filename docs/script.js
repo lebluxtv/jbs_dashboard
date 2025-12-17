@@ -134,6 +134,30 @@
     if (st) setText(st, text);
   }
 
+
+// ===========================
+// GTG : Zoom auto preview (UI only)
+// ===========================
+const GTG_ZOOM_PREVIEW_MAP = {
+  1: ["x2"],
+  2: ["x2.5", "x2"],
+  3: ["x3.3", "x2.5", "x2"],
+  4: ["x5", "x3.3", "x2.5", "x2"],
+  5: ["x10", "x5", "x3.3", "x2.5", "x2"]
+};
+
+function updateZoomPreview(perGameGoal){
+  const el = document.getElementById("gtg-zoom-preview");
+  if (!el) return;
+
+  const v = Number(perGameGoal);
+  const goal = Number.isFinite(v) ? Math.max(1, Math.min(5, Math.trunc(v))) : 1;
+
+  const seq = GTG_ZOOM_PREVIEW_MAP[goal];
+  el.textContent = seq ? ("Zoom auto : " + seq.join(" → ")) : "Zoom auto : —";
+}
+
+
   function setLockVisual(){
     const btn = $("#lock-btn"); if (!btn) return;
     const hasPwd = !!getStoredPwd();
@@ -605,6 +629,9 @@
     if (isNum(s.targetScore)  && guessTargetScoreInput) guessTargetScoreInput.value  = String(s.targetScore);
     if (isNum(s.perGameRoundCountGoal) && perGameGoalInput) perGameGoalInput.value = String(Math.max(1, Math.min(5, Math.trunc(s.perGameRoundCountGoal))));
 
+    // PATCH: refresh zoom preview after restore
+    updateZoomPreview(isNum(s.perGameRoundCountGoal) ? s.perGameRoundCountGoal : 1);
+
     // —— zoomLevel persisté (nom de filtre OBS) ——   
     if (s.zoomLevel != null && zoomLevelInput){
       zoomLevelInput.value = String(s.zoomLevel);
@@ -789,6 +816,18 @@
           el.addEventListener("input", ()=>{ debounceCount(); debouncePersist(); });
         }
       });
+
+// PATCH: Zoom auto preview (updates under "Nb de manches par jeu")
+if (perGameGoalInput){
+  const refresh = ()=>{
+    const v = Number(perGameGoalInput.value);
+    const goal = Number.isFinite(v) ? Math.max(1, Math.min(5, Math.trunc(v))) : 1;
+    updateZoomPreview(goal);
+  };
+  perGameGoalInput.addEventListener("input", refresh);
+  perGameGoalInput.addEventListener("change", refresh);
+  refresh(); // init
+}
 
     // maj goal en live pour l’UI/annulation
     if (guessTargetScoreInput){
