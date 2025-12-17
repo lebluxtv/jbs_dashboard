@@ -1569,39 +1569,60 @@ function setText(target, text) {
 
 
 
+function clearTtsPlaceholders(){
+  // If there is no activity yet, we don't want placeholder text / fake entries.
+  const last = document.getElementById("tts-last-read-text");
+  if (last && /aucun\s+tts/i.test((last.textContent || "").trim())) last.textContent = "";
+
+  const q = document.getElementById("tts-queue-list");
+  if (q){
+    Array.from(q.querySelectorAll(".tts-empty, .muted")).forEach(n => n.remove());
+  }
+
+  const h = document.getElementById("tts-history-list");
+  if (h){
+    h.style.display = "none";
+    Array.from(h.querySelectorAll(".tts-empty, .muted")).forEach(n => n.remove());
+  }
+
+  // hide the "Historique des TTS lus" title if present (same card)
+  const card = h ? h.parentElement : null;
+  if (card){
+    const titles = Array.from(card.querySelectorAll("h3"));
+    const histTitle = titles.find(x => /historique\s+des\s+tts/i.test((x.textContent||"").trim()));
+    if (histTitle) histTitle.style.display = "none";
+  }
+}
+
 // ===========================
 // TTS : History + Overview sync
 // ===========================
 function appendToTtsHistory(user, msg){
   try {
-    // 1) Overview "last TTS"
-    try { updateOverviewTtsLast(user, msg); } catch (e) {}
+    const u = (user ?? "").toString().trim();
+    const m = (msg  ?? "").toString().trim();
+    if (!u && !m) return;
 
-    // 2) Full TTS panel history list
+    // 1) Overview "last TTS"
+    try { updateOverviewTtsLast(u, m); } catch (e) {}
+
+    // 2) Full TTS panel history list is now disabled (redondant avec le journal)
     const full = document.getElementById("tts-history-list");
     if (full){
-      // remove placeholder
+      full.style.display = "none";
+      // if a placeholder exists, remove it too
       const first = full.firstElementChild;
       if (first && (first.classList.contains("tts-empty") || first.classList.contains("muted"))) full.removeChild(first);
-
-      const li = document.createElement("li");
-      li.className = "tts-item";
-      const ts = new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
-      li.textContent = `${ts} — ${user} : ${msg}`;
-      full.insertBefore(li, full.firstChild);
-
-      // keep reasonable length
-      while (full.children.length > 50) full.removeChild(full.lastChild);
     }
 
-    // 3) Overview list ("Messages lus")
+    // 3) Overview list ("Messages lus") — keep it short & useful
     const qv = document.getElementById("qv-tts-list");
     if (qv){
       const first = qv.firstElementChild;
       if (first && (first.classList.contains("muted") || first.classList.contains("tts-empty"))) qv.removeChild(first);
 
       const li = document.createElement("li");
-      li.textContent = `${user} : ${msg}`;
+      li.textContent = (u && m) ? `${u} : ${m}` : (u || m);
       qv.insertBefore(li, qv.firstChild);
 
       while (qv.children.length > 8) qv.removeChild(qv.lastChild);
@@ -1617,27 +1638,32 @@ function appendToTtsJournalLine(user, msg){
   try { appendTtsToJournal(user, msg); } catch (e) {}
 }
 
-function setTtsLastMessage(user, msg){
+function setTtsLastMessage(user, msg, opts){
     // Support multiple DOM layouts (older/newer) without breaking anything.
-    const safeUser = user ? String(user) : "—";
-    const safeMsg  = msg  ? String(msg)  : "—";
+    const u = (user ?? "").toString().trim();
+    const m = (msg  ?? "").toString().trim();
+    if (!u && !m) return;
+
+    const record = !(opts && opts.record === false);
 
     // Newer layout: split fields
     const uEl = $("#tts-last-user");
     const mEl = $("#tts-last-msg");
-    if (uEl) setText(uEl, safeUser);
-    if (mEl) setText(mEl, safeMsg);
+    if (uEl) setText(uEl, u);
+    if (mEl) setText(mEl, m);
 
     // Older layout: single line field (this is what your current UI actually uses)
     const comboEl = $("#tts-last-read-text") || $("#tts-last-read") || $("#ttsLastReadText");
-    if (comboEl) setText(comboEl, `${safeUser} — ${safeMsg}`);
+    if (comboEl) setText(comboEl, (u && m) ? `${u} — ${m}` : (u || m));
 
-    
     // Overview card (if present)
-    try { updateOverviewTtsLast(safeUser, safeMsg); } catch (e) {}
-// Keep history + journal in sync
-    appendToTtsHistory(safeUser, safeMsg);
-    appendToTtsJournalLine(safeUser, safeMsg);
+    try { updateOverviewTtsLast(u, m); } catch (e) {}
+
+    if (record){
+      // Keep history + journal in sync (best-effort)
+      appendToTtsHistory(u, m);
+      appendToTtsJournalLine(u, m);
+    }
 }
 
   function setTtsNextRun(nextMs, cooldownSec){
@@ -1828,12 +1854,16 @@ function updateOverviewTtsLast(user, msg){
 function appendTtsToJournal(user, msg){
   // Try common ids first
   const ids = ["tts-journal", "ttsJournal", "tts-journal-box", "tts-journal-textarea", "tts-log", "ttsLog"];
+  const u = (user ?? "").toString().trim();
+  const m = (msg  ?? "").toString().trim();
+  if (!u && !m) return false;
+
+  const ts = new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+  const line = (u && m) ? `${ts} — ${u} : ${m}` : `${ts} — ${u || m}`;
+
   for (const id of ids){
     const el = document.getElementById(id);
     if (!el) continue;
-
-    const line = (user && msg) ? `${user} — ${msg}` : (user || msg || "");
-    if (!line) return true;
 
     if ("value" in el){
       el.value = (el.value ? (el.value + "\n") : "") + line;
@@ -1854,9 +1884,14 @@ function appendTtsToJournal(user, msg){
 }
 
 function applyTtsLastEverywhere(user, msg){
-  setTtsLastMessage(user, msg);
-  updateOverviewTtsLast(user, msg);
-  appendTtsToJournal(user, msg);
+  const u = (user ?? "").toString().trim();
+  const m = (msg  ?? "").toString().trim();
+  if (!u && !m) return;
+
+  // IMPORTANT: this is used by "state" refresh payloads.
+  // We only want to UPDATE the UI, not add entries to journal/history.
+  setTtsLastMessage(u, m, { record: false });
+  updateOverviewTtsLast(u, m);
 }
 
 
@@ -2461,7 +2496,9 @@ function applyTtsLastEverywhere(user, msg){
     bindFiltersCollapse();
     installDebugToggleButton();
     bindTtsControls(); // === TTS mini-dashboard
-    connectSB();
+    
+    clearTtsPlaceholders();
+connectSB();
     renderGlobalScore(GTG_TOTALS, GTG_GOAL);
     refreshCancelAbility();
     renderPerGame(null, null);
