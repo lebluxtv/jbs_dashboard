@@ -1515,24 +1515,11 @@ function logSbSubEventToConsole(evt, payload){
   }
 
   function setTtsQueueCount(n){
-    const v = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : null;
-
-    // legacy
     const el = $("#tts-queue-count");
-    if (el) setText(el, v != null ? String(v) : "—");
-
-    // JBS dashboard UI (badge/pill)
-    const pill = $("#tts-counter");
-    if (pill){
-      if (v != null){
-        pill.style.display = "";
-        pill.textContent = String(v);
-      } else {
-        pill.style.display = "none";
-        pill.textContent = "0";
-      }
-    }
+    if (el) setText(el, Number.isFinite(n) ? String(n) : "—");
   }
+
+  
 // Small helper: accept either a DOM element or a jQuery object
 function setText(target, text) {
   if (!target) return;
@@ -1541,180 +1528,72 @@ function setText(target, text) {
   el.textContent = (text ?? "");
 }
 
-function setTtsLastMessage(user, msg){
-    const u = (user == null ? "" : String(user)).trim();
-    const m = (msg  == null ? "" : String(msg)).trim();
+function setTtsLastMessage(user, message) {
+  const u = (user ?? "").toString().trim();
+  const m = (message ?? "").toString();
 
-    // legacy split fields
-    const uEl = $("#tts-last-user");
-    const mEl = $("#tts-last-msg");
-    if (uEl) setText(uEl, u || "—");
-    if (mEl) setText(mEl, m || "—");
+  const elUser = $("#tts-last-user");
+  const elMsg  = $("#tts-last-msg");
 
-    // JBS dashboard (single line)
-    const line = (u && m) ? `${u} — ${m}` : (m || u);
-    const comboEl = $("#tts-last-read-text");
-    if (comboEl) comboEl.textContent = line || "Aucun TTS";
-
-    // Optional: append to history if present (do not break if missing)
-    const hist = $("#tts-history-list");
-    if (hist && line){
-      try {
-        if (hist.firstElementChild && hist.firstElementChild.classList.contains("tts-empty")){
-          hist.removeChild(hist.firstElementChild);
-        }
-        const li = document.createElement("li");
-        li.textContent = line;
-        hist.insertBefore(li, hist.firstChild);
-        // cap
-        while (hist.children.length > 30) hist.removeChild(hist.lastChild);
-      } catch {}
-    }
+  if (elUser) {
+    elUser.textContent = u || "—";
+    // Lisibilité rapide
+    elUser.style.fontSize = "16px";
+    elUser.style.fontWeight = "700";
   }
-function setTtsNextRun(nextMs, cooldownSec){
-    const nextEl = $("#tts-next-run");
-    const cdEl   = $("#tts-cooldown");
-    if (nextEl){
-      if (Number.isFinite(nextMs) && nextMs > 0){
-        const delay = Math.max(0, nextMs - Date.now());
-        nextEl.textContent = formatDelay(delay);
-      } else {
-        nextEl.textContent = "—";
-      }
-    }
-    if (cdEl){
-      cdEl.textContent = Number.isFinite(cooldownSec) && cooldownSec > 0
-        ? `${Math.round(cooldownSec)}s`
-        : "—";
-    }
+  if (elMsg) {
+    elMsg.textContent = m || "";
+    // Lisibilité rapide
+    elMsg.style.fontSize = "16px";
   }
 
-  function bindTtsControls(){
-    const openBtn  = $("#tts-open-dashboard");
-    const forceBtn = $("#tts-force-read");
-    const toggleBtn = $("#tts-toggle-auto");
+  // Historique (onglet TTS) + Journal
+  pushTtsHistory(u, m);
 
-    if (openBtn && !openBtn._bound){
-      openBtn._bound = true;
-      openBtn.addEventListener("click", (e)=>{
-        e.preventDefault();
-        // Lien vers ton dashboard TTS dédié si tu en as un
-        const href = openBtn.getAttribute("data-href") || openBtn.getAttribute("href") || "tts_dashboard.html";
-        window.open(href, "_blank");
-      });
-    }
-
-    if (forceBtn && !forceBtn._bound){
-      forceBtn._bound = true;
-      forceBtn.addEventListener("click", (e)=>{
-        e.preventDefault();
-        // Lecture forcée immédiate
-        safeDoAction("TTS Reader", { reason: "manualDashboardTrigger" });
-      });
-    }
-
-    if (toggleBtn && !toggleBtn._bound){
-      toggleBtn._bound = true;
-      toggleBtn.addEventListener("click", (e)=>{
-        e.preventDefault();
-        const newState = !TTS_AUTO_ENABLED;
-        setTtsEnabledUI(newState); // feedback instantané
-        safeDoAction("TTS Timer Set", {
-          enabled: newState
-        });
-      });
-    }
-  }
-
-  function handleTtsWidgetEvent(raw){
-    const d = raw || {};
-    // On accepte plusieurs formes de payload pour être tolérant
-    const type = (d.type || d.eventType || d.event_type || "").toString().toLowerCase();
-    const widget = (d.widget || "").toString().toLowerCase();
-
-    // Support the payload format used by the standalone TTS dashboard
-    // (Supports widget="tts-reader-selection" + eventType="ttsSelection")
-    if (widget === "tts-reader-selection" || type === "ttsselection") {
-      const u = d.selectedUser || d.user || d.username || d.displayName || d.display_name || "";
-      const msg = d.message || d.text || "";
-      if (u || msg) setTtsLastMessage(u, msg);
-      if (Array.isArray(d.candidatesPanel)) setTtsQueueCount(d.candidatesPanel.length);
-      if (typeof d.queueCount === "number") setTtsQueueCount(d.queueCount);
-      try { console.debug("[TTS] selection payload:", d); } catch (e) {}
-      return;
-    }
-
-
-    if (!type || type === "state" || type === "fullstate"){
-      const enabled = !!(d.enabled ?? d.autoEnabled ?? d.isEnabled);
-      const queue   = Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? d.bufferSize ?? 0);
-      const nextTs  = Number(d.nextRunUtcMs ?? d.nextRunTs ?? d.nextTs ?? 0);
-      const cooldownSec = Number(d.cooldownSec ?? d.cooldownSeconds ?? d.cooldown ?? 0);
-      const lastUser = d.lastUser ?? d.lastSender ?? d.lastAuthor ?? "";
-      const lastMsg  = d.lastMessage ?? d.lastText ?? d.lastContent ?? "";
-
-      setTtsEnabledUI(enabled);
-      setTtsQueueCount(queue);
-      setTtsNextRun(nextTs, cooldownSec);
-      setTtsLastMessage(lastUser, lastMsg);
-
-      appendLogDebug("tts.state", {
-        enabled, queue, nextTs, cooldownSec, lastUser, lastMsg
-      });
-      return;
-    }
-
-    if (type === "queue" || type === "queueupdate"){
-      const queue   = Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? 0);
-      setTtsQueueCount(queue);
-      appendLogDebug("tts.queue", { queue });
-      return;
-    }
-
-    if (type === "last" || type === "lastread"){
-      const lastUser = d.lastUser ?? d.lastSender ?? d.lastAuthor ?? "";
-      const lastMsg  = d.lastMessage ?? d.lastText ?? d.lastContent ?? "";
-      setTtsLastMessage(lastUser, lastMsg);
-      appendLogDebug("tts.last", { lastUser, lastMsg });
-      return;
-    }
-
-    if (type === "config" || type === "cooldown"){
-      const cooldownSec = Number(d.cooldownSec ?? d.cooldownSeconds ?? d.cooldown ?? 0);
-      setTtsNextRun(Number.NaN, cooldownSec);
-      appendLogDebug("tts.config", { cooldownSec });
-      return;
-    }
-  }
-
-  /******************************************************************
-   *                       🧠 Handle SB Events
-   ******************************************************************/
-  const asArray = (v)=> Array.isArray(v) ? v : (v == null ? [] : [v]);
-  const joinList = (arr)=> (Array.isArray(arr) && arr.length) ? arr.join(", ") : "—";
-  const pickNum = (...keys)=>{ for (const v of keys){ if (isNum(v)) return Math.trunc(v); } return null; };
-
-// --- Unwrap payload helpers (Streamer.bot events sometimes nest custom payload under .data/.payload/.args) ---
-function unwrapEventPayload(raw){
-  let d = raw;
-  for (let i = 0; i < 3; i++){
-    if (!d || typeof d !== "object") break;
-
-    // Most common wrappers
-    const cand1 = d.data;
-    const cand2 = d.payload;
-    const cand3 = d.args;
-
-    const looksLikeWidget = (o)=> o && typeof o === "object" && ("widget" in o || "type" in o || "message" in o || "user" in o);
-
-    if (looksLikeWidget(cand1)) { d = cand1; continue; }
-    if (looksLikeWidget(cand2)) { d = cand2; continue; }
-    if (looksLikeWidget(cand3)) { d = cand3; continue; }
-
-    break;
-  }
-  return d;
+  // Overview (Quick View)
+  pushOverviewTts(u, m);
 }
+
+function pushTtsHistory(user, message) {
+  const u = (user ?? "").toString().trim();
+  const m = (message ?? "").toString();
+  if (!u && !m) return;
+
+  const line = `${u || "—"} — ${m || ""}`.trim();
+
+  // Historique visuel
+  const ul = $("#tts-history-list");
+  if (ul) {
+    const li = document.createElement("li");
+    li.textContent = line;
+    ul.prepend(li);
+
+    // garde un historique raisonnable
+    while (ul.children.length > 30) ul.removeChild(ul.lastElementChild);
+  }
+
+  // Journal (préféré pour voir défiler les lectures)
+  if ($("#tts-log")) {
+    appendLog("#tts-log", line);
+  }
+}
+
+function pushOverviewTts(user, message) {
+  const u = (user ?? "").toString().trim();
+  const m = (message ?? "").toString();
+  if (!u && !m) return;
+
+  const line = `${u || "—"} — ${m || ""}`.trim();
+
+  const ul = $("#qv-tts-list");
+  if (ul) {
+    const li = document.createElement("li");
+    li.textContent = line;
+    ul.prepend(li);
+    while (ul.children.length > 10) ul.removeChild(ul.lastElementChild);
+  }
+}
+
 
 
   function extractYearFromGame(g){
