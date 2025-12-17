@@ -1528,6 +1528,56 @@ function setText(target, text) {
   el.textContent = (text ?? "");
 }
 
+
+
+// ===========================
+// TTS : History + Overview sync
+// ===========================
+function appendToTtsHistory(user, msg){
+  try {
+    // 1) Overview "last TTS"
+    try { updateOverviewTtsLast(user, msg); } catch (e) {}
+
+    // 2) Full TTS panel history list
+    const full = document.getElementById("tts-history-list");
+    if (full){
+      // remove placeholder
+      const first = full.firstElementChild;
+      if (first && (first.classList.contains("tts-empty") || first.classList.contains("muted"))) full.removeChild(first);
+
+      const li = document.createElement("li");
+      li.className = "tts-item";
+      const ts = new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+      li.textContent = `${ts} — ${user} : ${msg}`;
+      full.insertBefore(li, full.firstChild);
+
+      // keep reasonable length
+      while (full.children.length > 50) full.removeChild(full.lastChild);
+    }
+
+    // 3) Overview list ("Messages lus")
+    const qv = document.getElementById("qv-tts-list");
+    if (qv){
+      const first = qv.firstElementChild;
+      if (first && (first.classList.contains("muted") || first.classList.contains("tts-empty"))) qv.removeChild(first);
+
+      const li = document.createElement("li");
+      li.textContent = `${user} : ${msg}`;
+      qv.insertBefore(li, qv.firstChild);
+
+      while (qv.children.length > 8) qv.removeChild(qv.lastChild);
+    }
+  } catch (e) {
+    // Never throw from UI sync (must not break GTG / other panels)
+    try { console.warn("[TTS] appendToTtsHistory error:", e); } catch {}
+  }
+}
+
+// Keep journal logging separate (best-effort)
+function appendToTtsJournalLine(user, msg){
+  try { appendTtsToJournal(user, msg); } catch (e) {}
+}
+
 function setTtsLastMessage(user, msg){
     // Support multiple DOM layouts (older/newer) without breaking anything.
     const safeUser = user ? String(user) : "—";
@@ -1543,9 +1593,12 @@ function setTtsLastMessage(user, msg){
     const comboEl = $("#tts-last-read-text") || $("#tts-last-read") || $("#ttsLastReadText");
     if (comboEl) setText(comboEl, `${safeUser} — ${safeMsg}`);
 
-    // Keep history + journal in sync
+    
+    // Overview card (if present)
+    try { updateOverviewTtsLast(safeUser, safeMsg); } catch (e) {}
+// Keep history + journal in sync
     appendToTtsHistory(safeUser, safeMsg);
-    //appendToTtsJournalLine(safeUser, safeMsg);
+    appendToTtsJournalLine(safeUser, safeMsg);
 }
 
   function setTtsNextRun(nextMs, cooldownSec){
