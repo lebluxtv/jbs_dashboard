@@ -6,6 +6,7 @@
    ******************************************************************/
   const $  = (s, root=document) => root.querySelector(s);
   const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
+const DEBUG_TARGET_ONLY = true; // <- quand true, on n'affiche QUE le nom du jeu à deviner
 
   const EVENTS_KEY     = "jbs.events.v1";
   const LAST_SETUP_KEY = "gtg.lastSetup.v1";
@@ -31,25 +32,25 @@
     el.scrollTop = el.scrollHeight;
   }
 
-function appendLogDebug(text, obj){
+function appendLogDebug(tag, obj){
   if (!DEBUG_VERBOSE) return;
 
-  let line = `DEBUG: ${text}`;
-
-  if (obj !== undefined) {
-    try {
-      // si c'est déjà une string (ex: nom du jeu), on l'affiche direct
-      if (typeof obj === "string") {
-        line += " " + obj;
-      } else {
-        const s = JSON.stringify(obj, replacerNoHuge, 0);
-        line += " " + (s.length > 1200 ? (s.slice(0, 1200) + " …") : s);
-      }
-    } catch {}
+  // Mode strict : on n'affiche QUE le nom du jeu à deviner
+  if (typeof DEBUG_TARGET_ONLY !== "undefined" && DEBUG_TARGET_ONLY) {
+    if (tag !== "target") return;
   }
 
+  let line = `DEBUG: ${tag}`;
+  if (obj !== undefined) {
+    try {
+      line += (typeof obj === "string")
+        ? " " + obj
+        : " " + JSON.stringify(obj, replacerNoHuge, 0);
+    } catch {}
+  }
   appendLog("#guess-log", line);
 }
+
 
 
   function replacerNoHuge(_k, v){
@@ -2309,6 +2310,7 @@ function applyTtsLastEverywhere(user, msg){
 
 const targetName = extractTargetNameFromPayload(data);
 if (targetName) appendLogDebug("target", targetName);
+
 
 
           const pg = getPerGamePairFromAny(data);
