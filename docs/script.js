@@ -31,18 +31,26 @@
     el.scrollTop = el.scrollHeight;
   }
 
-  function appendLogDebug(text, obj){
-    if (!DEBUG_VERBOSE) return;
-    let line = `DEBUG: ${text}`;
-    if (obj !== undefined) {
-      try {
-      const payload = unwrapEventPayload(data);
+function appendLogDebug(text, obj){
+  if (!DEBUG_VERBOSE) return;
+
+  let line = `DEBUG: ${text}`;
+
+  if (obj !== undefined) {
+    try {
+      // si c'est déjà une string (ex: nom du jeu), on l'affiche direct
+      if (typeof obj === "string") {
+        line += " " + obj;
+      } else {
         const s = JSON.stringify(obj, replacerNoHuge, 0);
         line += " " + (s.length > 1200 ? (s.slice(0, 1200) + " …") : s);
-      } catch {}
-    }
-    appendLog("#guess-log", line);
+      }
+    } catch {}
   }
+
+  appendLog("#guess-log", line);
+}
+
 
   function replacerNoHuge(_k, v){
     if (typeof v === "string" && v.length > 500) return v.slice(0,500) + "…";
@@ -2299,8 +2307,9 @@ function applyTtsLastEverywhere(user, msg){
                       : Number.isFinite(data.endsAt)      ? Number(data.endsAt) : NaN;
           if (Number.isFinite(endMs)) startRoundTimer(endMs);
 
-          const targetName = extractTargetNameFromPayload(data);
-          if (targetName) appendLogDebug("target", { name: targetName });
+const targetName = extractTargetNameFromPayload(data);
+if (targetName) appendLogDebug("target", targetName);
+
 
           const pg = getPerGamePairFromAny(data);
           renderPerGame(pg.idx, pg.goal);
