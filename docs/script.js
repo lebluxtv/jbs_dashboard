@@ -1935,10 +1935,18 @@ function applyTtsLastEverywhere(user, msg){
     }
     return null;
   }
-  function extractTargetNameFromPayload(d){
-    if (!d) return null;
-    return d.gameDebug?.name || d.target?.name || d.answerName || d.gameName || null;
-  }
+function extractTargetNameFromPayload(d){
+  if (!d) return null;
+  return d.gameDebug?.name
+      || d.game?.name
+      || d.runningState?.gameName
+      || d.runningState?.game?.name
+      || d.target?.name
+      || d.answerName
+      || d.gameName
+      || null;
+}
+
 
   // ===== perGame : support v4/v5 (racine, runningState.perGame, champs legacy) =====
   function getPerGamePairFromAny(data){
