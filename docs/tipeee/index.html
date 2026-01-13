@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tipeee Event Catcher (local)</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header class="header">
+    <div>
+      <h1>Tipeee Event Catcher</h1>
+      <p class="sub">écoute Tipeee Socket.IO et déclenche une Action Streamer.bot (WS)</p>
+    </div>
+
+    <div class="status">
+      <span id="tipeeeDot" class="dot off"></span>
+      <span id="tipeeeText">Tipeee: Déconnecté</span>
+      <span style="width:12px"></span>
+      <span id="sbDot" class="dot off"></span>
+      <span id="sbText">SB: Déconnecté</span>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="card">
+      <h2>Connexion Tipeee</h2>
+
+      <label>api_key (widget)</label>
+      <input id="tipeeeApiKey" type="password" placeholder="api_key du widget (stocké localement)" />
+
+      <label>Slug projet</label>
+      <input id="projectSlug" type="text" placeholder="ex: lebluxtv" />
+
+      <div class="row">
+        <div class="col">
+          <label>Usage</label>
+          <select id="usage">
+            <option value="DASHBOARD" selected>DASHBOARD</option>
+            <option value="ALERT">ALERT</option>
+            <option value="WIDGET">WIDGET (test)</option>
+          </select>
+          <p class="hint">Le dashboard Tipeee envoie généralement <code>usage="DASHBOARD"</code> après connexion.</p>
+        </div>
+
+        <div class="col">
+          <label>Transports</label>
+          <select id="transport">
+            <option value="websocket,polling" selected>websocket + polling</option>
+            <option value="polling">polling only</option>
+            <option value="websocket">websocket only</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="buttons">
+        <button id="btnConnectTipeee" class="primary">Connect Tipeee</button>
+        <button id="btnDisconnectTipeee" class="danger" disabled>Disconnect Tipeee</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <h2>Streamer.bot (WebSocket)</h2>
+
+      <label>WS URL</label>
+      <input id="sbWsUrl" type="text" value="ws://127.0.0.1:8080/" />
+
+      <label>Mot de passe (si activé)</label>
+      <input id="sbWsPassword" type="password" placeholder="vide si pas d’auth" />
+
+      <label>Nom exact de l’action à déclencher</label>
+      <input id="sbActionName" type="text" value="Tipeee Event Received" />
+
+      <div class="buttons">
+        <button id="btnConnectSB" class="primary">Connect SB</button>
+        <button id="btnDisconnectSB" class="danger" disabled>Disconnect SB</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <div class="col">
+          <label>Auto-save (localStorage)</label>
+          <select id="autoSave">
+            <option value="on" selected>ON</option>
+            <option value="off">OFF</option>
+          </select>
+          <p class="hint">ON = tu ne retapes jamais api_key / slug / url / pwd.</p>
+        </div>
+        <div class="col">
+          <label>Mode log</label>
+          <select id="logLevel">
+            <option value="normal" selected>Normal</option>
+            <option value="verbose">Verbose</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Événements reçus</h2>
+      <div class="toolbar">
+        <button id="btnClear">Clear</button>
+        <button id="btnSimulate">Simuler un tip</button>
+        <label class="chk">
+          <input id="chkAutoSelect" type="checkbox" checked />
+          Auto-sélection dernier event
+        </label>
+      </div>
+
+      <div id="eventsList" class="events"></div>
+    </section>
+
+    <section class="card">
+      <h2>Détails</h2>
+
+      <div class="kv">
+        <div><span class="k">Kind</span><span class="v" id="detailKind">—</span></div>
+        <div><span class="k">Username</span><span class="v" id="detailUser">—</span></div>
+        <div><span class="k">Amount</span><span class="v" id="detailAmount">—</span></div>
+        <div><span class="k">Message</span><span class="v" id="detailMsg">—</span></div>
+      </div>
+
+      <h3>JSON brut</h3>
+      <pre id="detailJson" class="json">—</pre>
+    </section>
+  </main>
+
+  <!-- IMPORTANT: Tipeee Socket.IO = EIO=3 => socket.io-client v2.x -->
+  <script src="https://cdn.jsdelivr.net/npm/socket.io-client@2/dist/socket.io.js"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@streamerbot/client/dist/streamerbot-client.js"></script>
+
+  <script src="./app.js"></script>
+</body>
+</html>
