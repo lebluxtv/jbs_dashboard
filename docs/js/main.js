@@ -2084,7 +2084,41 @@ if (targetName) appendLogDebug("target", targetName);
   /******************************************************************
    *                         🧭 Quick Nav + Boot
    ******************************************************************/
-  function bindOverviewQuickNav(){
+  
+  function setLockVisual(){
+    const btn = $("#lock-btn"); if (!btn) return;
+    const hasPwd = !!getStoredPwd();
+    btn.classList.toggle("locked", hasPwd);
+    btn.title = hasPwd
+      ? "Mot de passe défini (clic pour modifier / clic droit pour effacer)"
+      : "Définir le mot de passe Streamer.bot";
+  }
+
+  function bindLockButton(){
+    const btn = $("#lock-btn"); if (!btn || btn._bound) return;
+    btn._bound = true;
+
+    btn.addEventListener("click", (ev)=>{
+      ev.preventDefault();
+      const current = getStoredPwd();
+      const val = window.prompt("Mot de passe Streamer.bot (laisser vide pour effacer) :", current);
+      if (val === null) return;
+      setStoredPwd(val || "");
+      setLockVisual();
+      try { reconnectSB(); } catch { try { connectSB(); } catch {} }
+    });
+
+    btn.addEventListener("contextmenu", (ev)=>{
+      ev.preventDefault();
+      setStoredPwd("");
+      setLockVisual();
+      try { reconnectSB(); } catch { try { connectSB(); } catch {} }
+    });
+
+    setLockVisual();
+  }
+
+  function bindOverviewQuickNav\(\)\{
     $$(".qv-card").forEach(card=>{
       card.addEventListener("click", ()=>{
         const to = card.getAttribute("data-goto");
