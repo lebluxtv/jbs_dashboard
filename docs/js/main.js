@@ -585,6 +585,7 @@ const getSBClient = () => ctx.state.sbClient || window.sbClient || null;
   let GTG_ROUND_ID = null;
 
 
+let GTG_TOTALS = { streamer: 0, viewers: 0 };
   const GTG_ZOOM_PREVIEW_MAP = {
     1: ["x2"],
     2: ["x2.5", "x2"],
