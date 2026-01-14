@@ -582,10 +582,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const sbUrl = ($("sbWsUrl")?.value || "").trim();
   const forceAuto = (getQS("auto") === "1");
   // sbWsUrl a une valeur par défaut; on auto-connect seulement si forceAuto=1 ou si l'user a des settings persos.
-  const sbUrlIsDefault = (sbUrl === "ws://127.0.0.1:8080/");
-  if (forceAuto || (!sbUrlIsDefault && sbUrl) || (qsSbUrl != null)) {
+  if (forceAuto || (sbUrl) || (qsSbUrl != null)) {
     setTimeout(() => {
-      if (!sbConnected) connectSB();
+      if (!sbConnected) {
+      connectSB();
+      // Si le script StreamerbotClient est chargé un poil après, on retente une fois.
+      setTimeout(() => { if (!sbConnected) connectSB(); }, 1200);
+    }
     }, 200);
   }
 
