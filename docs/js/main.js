@@ -584,6 +584,26 @@ const getSBClient = () => ctx.state.sbClient || window.sbClient || null;
    ******************************************************************/
   let GTG_ROUND_ID = null;
 
+
+  const GTG_ZOOM_PREVIEW_MAP = {
+    1: ["x2"],
+    2: ["x2.5", "x2"],
+    3: ["x3.3", "x2.5", "x2"],
+    4: ["x5", "x3.3", "x2.5", "x2"],
+    5: ["x10", "x5", "x3.3", "x2.5", "x2"]
+  };
+
+  function updateZoomPreview(perGameGoal){
+    const el = document.getElementById("gtg-zoom-preview");
+    if (!el) return;
+
+    const v = Number(perGameGoal);
+    const goal = Number.isFinite(v) ? Math.max(1, Math.min(5, Math.trunc(v))) : 1;
+
+    const seq = GTG_ZOOM_PREVIEW_MAP[goal];
+    el.textContent = seq ? ("Zoom auto : " + seq.join(" → ")) : "Zoom auto : —";
+  }
+
   function setGuessHandlers(){
     const debounce = (fn, ms) => { let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
     const debounceCount   = debounce(requestPoolCount, 400);
@@ -2084,41 +2104,7 @@ if (targetName) appendLogDebug("target", targetName);
   /******************************************************************
    *                         🧭 Quick Nav + Boot
    ******************************************************************/
-  
-  function setLockVisual(){
-    const btn = $("#lock-btn"); if (!btn) return;
-    const hasPwd = !!getStoredPwd();
-    btn.classList.toggle("locked", hasPwd);
-    btn.title = hasPwd
-      ? "Mot de passe défini (clic pour modifier / clic droit pour effacer)"
-      : "Définir le mot de passe Streamer.bot";
-  }
-
-  function bindLockButton(){
-    const btn = $("#lock-btn"); if (!btn || btn._bound) return;
-    btn._bound = true;
-
-    btn.addEventListener("click", (ev)=>{
-      ev.preventDefault();
-      const current = getStoredPwd();
-      const val = window.prompt("Mot de passe Streamer.bot (laisser vide pour effacer) :", current);
-      if (val === null) return;
-      setStoredPwd(val || "");
-      setLockVisual();
-      try { reconnectSB(); } catch { try { connectSB(); } catch {} }
-    });
-
-    btn.addEventListener("contextmenu", (ev)=>{
-      ev.preventDefault();
-      setStoredPwd("");
-      setLockVisual();
-      try { reconnectSB(); } catch { try { connectSB(); } catch {} }
-    });
-
-    setLockVisual();
-  }
-
-  function bindOverviewQuickNav() {
+  function bindOverviewQuickNav(){
     $$(".qv-card").forEach(card=>{
       card.addEventListener("click", ()=>{
         const to = card.getAttribute("data-goto");
