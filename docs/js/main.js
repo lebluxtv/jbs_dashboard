@@ -586,6 +586,7 @@ const getSBClient = () => ctx.state.sbClient || window.sbClient || null;
 
 
 let GTG_TOTALS = { streamer: 0, viewers: 0 };
+  let GTG_GOAL = 5; // score cible (fin de partie)
   const GTG_ZOOM_PREVIEW_MAP = {
     1: ["x2"],
     2: ["x2.5", "x2"],
