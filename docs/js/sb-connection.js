@@ -11,9 +11,6 @@
 
   const { appendLog, getQS, getStoredPwd, setStoredPwd } = ctx.utils;
 
-  /******************************************************************
-   *                   🤝 Streamer.bot Actions (CORE SB)
-   ******************************************************************/
   let sbClient = null;
   const ACTION_ID_CACHE = new Map();
 
@@ -52,15 +49,13 @@
       const wire = Object.assign({}, args || {}, { _json: JSON.stringify(args || {}) });
       const actionId = await resolveActionIdByName(actionName);
 
-      // Tentative via client officiel
       try {
         await sbClient.doAction(actionId, wire);
         return;
-      } catch (e) {
+      } catch {
         appendLog("#guess-log", "doAction client a échoué, fallback DoAction brut…");
       }
 
-      // Fallback brut
       const ok = sendRawDoActionById(actionId, wire);
       if (!ok) appendLog("#guess-log", "Fallback DoAction brut a échoué.");
     } catch (e) {
@@ -68,12 +63,8 @@
     }
   }
 
-  /******************************************************************
-   *                      🔗 WS CONNECT / LIFECYCLE (SB)
-   ******************************************************************/
   function setConnectedState(on) {
     ctx.state.isConnected = !!on;
-    // Si ton UI a un setConnected / setWsIndicator dans le script actuel, on l'appelle si dispo
     try { window.setConnected?.(!!on); } catch {}
   }
 
@@ -83,7 +74,6 @@
     connectSB();
   }
 
-  // VERSION "compat" : identique à ta connectSB corrigée, mais encapsulée ici 
   function connectSB() {
     try {
       const StreamerbotCtor =
@@ -98,13 +88,11 @@
       const host = getQS("host") || "127.0.0.1";
       const port = Number(getQS("port") || 8080);
 
-      // Mot de passe : querystring > storage (pas de prompt ici)
       const qsPwd = getQS("pwd");
       if (qsPwd != null) setStoredPwd(qsPwd);
       const storedPwd = (getStoredPwd() || "").trim();
       const password = (qsPwd != null ? (qsPwd || "") : storedPwd);
 
-      // Nettoyage ancienne connexion
       try { window.sbClient?.disconnect?.(); } catch {}
       try { sbClient?.disconnect?.(); } catch {}
 
@@ -119,7 +107,6 @@
         log: false,
 
         onConnect: () => {
-          // expose global client pour compat
           window.sbClient = sbClient;
           window.client = sbClient;
 
@@ -127,9 +114,6 @@
           setConnectedState(true);
 
           appendLog("#guess-log", `Connecté à Streamer.bot (${host}:${port})`);
-
-          // IMPORTANT : le resync “GTG Bootstrap / Scores Get” restera dans ton main plus tard.
-          // Pour l’instant, on ne change rien : on laisse ton script actuel l’appeler après connexion.
         },
 
         onDisconnect: () => {
@@ -142,33 +126,25 @@
         }
       };
 
-      if (password && password.trim() !== "") {
-        clientOpts.password = password.trim();
-      }
+      if (password && password.trim() !== "") clientOpts.password = password.trim();
 
       sbClient = new StreamerbotCtor(clientOpts);
 
-      // expose global
       window.sbClient = sbClient;
       window.client = sbClient;
       ctx.state.sbClient = sbClient;
 
-      // Route brute des events (compat) → handleSBEvent si présent
       try {
         sbClient.on?.("*", ({ event, data }) => {
           try {
-            if (typeof window.handleSBEvent === "function") {
-              window.handleSBEvent(event, data);
-            } else if (typeof ctx.router?.handleSBEvent === "function") {
-              ctx.router.handleSBEvent(event, data);
-            }
+            if (typeof window.handleSBEvent === "function") window.handleSBEvent(event, data);
+            else if (typeof ctx.router?.handleSBEvent === "function") ctx.router.handleSBEvent(event, data);
           } catch (e) {
             appendLog("#guess-log", "handleSBEvent error: " + (e?.message || e));
           }
         });
       } catch {}
 
-      // Debug close reason (comme ton code actuel)
       try {
         const sock = sbClient?.socket || sbClient?.ws;
         if (sock && !sock._debugBound) {
@@ -186,17 +162,8 @@
     }
   }
 
-  /******************************************************************
-   *                     🧩 Exports (compat + namespace)
-   ******************************************************************/
-  ctx.sb = Object.assign(ctx.sb || {}, {
-    connectSB,
-    reconnectSB,
-    safeDoAction,
-    resolveActionIdByName
-  });
+  ctx.sb = Object.assign(ctx.sb || {}, { connectSB, reconnectSB, safeDoAction, resolveActionIdByName });
 
-  // Compat globale (ton script actuel appelle direct)
   window.connectSB = window.connectSB || connectSB;
   window.reconnectSB = window.reconnectSB || reconnectSB;
   window.safeDoAction = window.safeDoAction || safeDoAction;
