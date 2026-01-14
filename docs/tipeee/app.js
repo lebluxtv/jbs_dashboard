@@ -50,13 +50,26 @@ function safeJson(v) {
   catch { return String(v); }
 }
 
+function currencySymbolFromCode(code) {
+  const c = String(code || "").trim().toUpperCase();
+  // Petit mapping (fallback = code)
+  const map = { EUR: "€", USD: "$", GBP: "£", JPY: "¥", CHF: "CHF", CAD: "$", AUD: "$" };
+  return map[c] || (c ? c : "");
+}
+
 function extractQuick(payload) {
   // On supporte plusieurs formes car Tipeee peut encapsuler
   const ev = payload?.event ?? payload;
   const p = ev?.parameters ?? ev?.data ?? {};
+
+  const currencyCode = (p.currency ?? ev?.currency ?? ev?.project?.currency?.code ?? "");
+  const currencySymbol = (ev?.project?.currency?.symbol ?? currencySymbolFromCode(currencyCode));
+
   return {
     username: p.username ?? ev?.username ?? p.user?.username ?? null,
     amount: p.amount ?? ev?.amount ?? p.total ?? p.value ?? null,
+    currencyCode,
+    currencySymbol,
     message: p.message ?? ev?.message ?? p.comment ?? null
   };
 }
@@ -90,7 +103,8 @@ function renderList() {
       </div>
       <div class="meta">
         <b>${q.username ?? "—"}</b>
-        ${q.amount != null ? `• ${q.amount}` : ""}
+        ${q.amount != null ? `• ${q.amount}${q.currencySymbol || ""}` : ""}
+
         ${q.message ? `• ${q.message}` : ""}
       </div>
     `;
@@ -108,7 +122,9 @@ function selectEvent(i) {
   const q = extractQuick(e.payload);
   $("detailKind").textContent = e.kind;
   $("detailUser").textContent = q.username ?? "—";
-  $("detailAmount").textContent = q.amount ?? "—";
+  $("detailAmount").textContent =
+    q.amount != null ? `${q.amount}${q.currencySymbol || ""}` : "—";
+
   $("detailMsg").textContent = q.message ?? "—";
   $("detailJson").textContent = safeJson(e.payload);
 }
@@ -217,7 +233,7 @@ function parseSbWsUrl(url) {
 
 function handleSBEvent(event, data) {
   // Router SB events si besoin. On reste silencieux pour éviter de spam.
-  // console.debug("[SB EVENT]", event, data);
+  console.debug("[SB EVENT]", event, data);
 }
 
 async function resolveActionIdByName(name) {
@@ -506,6 +522,8 @@ function connectTipeee() {
       kind: "new-event",
       username: q.username,
       amount: q.amount,
+      currencySymbol: q.currencySymbol,
+      currencyCode: q.currencyCode,
       message: q.message,
       raw: payload
     });
@@ -515,7 +533,7 @@ function connectTipeee() {
   tipeeeSocket.onAny?.((event, ...args) => {
     if (event === "new-event") return;
     // Tu peux décommenter si tu veux voir ce qui passe:
-    // console.debug("[TIPEEE] onAny:", event, args);
+    console.debug("[TIPEEE] onAny:", event, args);
   });
 }
 
@@ -535,9 +553,49 @@ function disconnectTipeee() {
 document.addEventListener("DOMContentLoaded", () => {
   loadSettings();
 
+  // QueryString overrides (utile sur GitHub Pages : storage différent du local)
+  // - slug / apiKey
+  // - sbUrl / sbPwd
+  // NB: ne log rien de sensible (apiKey/pwd)
+  const qsApiKey = getQS("apiKey");
+  const qsSlug   = getQS("slug");
+  const qsSbUrl  = getQS("sbUrl");
+  const qsSbPwd  = (getQS("sbPwd") ?? getQS("pwd"));
+
+  if (qsApiKey != null && $("tipeeeApiKey")) $("tipeeeApiKey").value = qsApiKey;
+  if (qsSlug   != null && $("projectSlug")) $("projectSlug").value = qsSlug;
+  if (qsSbUrl  != null && $("sbWsUrl")) $("sbWsUrl").value = qsSbUrl;
+  if (qsSbPwd  != null && $("sbWsPassword")) $("sbWsPassword").value = qsSbPwd;
+
+  // Si on a appliqué des overrides, on persiste pour les prochains refresh
+  if (qsApiKey != null || qsSlug != null || qsSbUrl != null || qsSbPwd != null) {
+    saveSettings();
+  }
+
   // init status
   setTipeeeStatus(false, "Déconnecté");
   setSbStatus(false, "Déconnecté");
+
+
+  // Auto-connect (si infos présentes)
+  // SB d'abord, puis Tipeee (pour que safeDoAction ait plus de chances de passer)
+  const sbUrl = ($("sbWsUrl")?.value || "").trim();
+  const forceAuto = (getQS("auto") === "1");
+  // sbWsUrl a une valeur par défaut; on auto-connect seulement si forceAuto=1 ou si l'user a des settings persos.
+  const sbUrlIsDefault = (sbUrl === "ws://127.0.0.1:8080/");
+  if (forceAuto || (!sbUrlIsDefault && sbUrl) || (qsSbUrl != null)) {
+    setTimeout(() => {
+      if (!sbConnected) connectSB();
+    }, 200);
+  }
+
+  const autoApiKey = ($("tipeeeApiKey")?.value || "").trim();
+  const autoSlug   = ($("projectSlug")?.value || "").trim();
+  if ((autoApiKey && autoSlug) || (forceAuto && autoApiKey && autoSlug)) {
+    setTimeout(() => {
+      if (!tipeeeSocket) connectTipeee();
+    }, 400);
+  }
 
   // buttons
   $("btnConnectTipeee")?.addEventListener("click", connectTipeee);
