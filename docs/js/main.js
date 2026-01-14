@@ -2118,7 +2118,7 @@ if (targetName) appendLogDebug("target", targetName);
     setLockVisual();
   }
 
-  function bindOverviewQuickNav\(\)\{
+  function bindOverviewQuickNav() {
     $$(".qv-card").forEach(card=>{
       card.addEventListener("click", ()=>{
         const to = card.getAttribute("data-goto");
