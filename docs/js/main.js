@@ -2153,7 +2153,32 @@ function bindOverviewQuickNav(){
     });
   }
 
-  function boot(){
+  
+
+  // ---------------------------------------------------------------
+  // WS Indicator helpers (restored from original)
+  // ---------------------------------------------------------------
+function setWsIndicator(state){
+    setDot("#ws-dot", state);
+    const t = $("#ws-status");
+    if (t) setText(t, state ? "Connecté à Streamer.bot" : "Déconnecté de Streamer.bot");
+  }
+function setConnected(on){ setWsIndicator(!!on); }
+
+  // ---------------------------------------------------------------
+  // GTG score rendering (restored from original)
+  // ---------------------------------------------------------------
+function renderGlobalScore(totals, goal){
+    const s   = $("#qv-score-streamer") || $("#score-streamer") || $("#score-streamer-val") || $("#gtg-score-streamer");
+    const v   = $("#qv-score-viewers")  || $("#score-viewers")  || $("#score-viewers-val") || $("#gtg-score-viewers");
+    const gEl = $("#qv-goal-score")     || $("#goal-score-badge") || $("#score-goal-val") || $("#gtg-goal-score");
+
+    if (s) setText(s, String(Number.isFinite(totals?.streamer) ? totals.streamer : 0));
+    if (v) setText(v, String(Number.isFinite(totals?.viewers)  ? totals.viewers  : 0));
+    if (gEl) setText(gEl, Number.isFinite(goal) ? String(goal) : "—");
+  }
+
+function boot(){
     bindLockButton();
     bindOverviewQuickNav();
     setGuessHandlers();
