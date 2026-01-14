@@ -587,6 +587,16 @@ const getSBClient = () => ctx.state.sbClient || window.sbClient || null;
 
 let GTG_TOTALS = { streamer: 0, viewers: 0 };
   let GTG_GOAL = 5; // score cible (fin de partie)
+
+function refreshCancelAbility(){
+    const btn = $("#gtg-series-cancel");
+    if (!btn) return;
+    const canCancel = GTG_RUNNING
+      && Number.isFinite(GTG_GOAL)
+      && (GTG_TOTALS.streamer < GTG_GOAL && GTG_TOTALS.viewers < GTG_GOAL);
+    btn.disabled = !canCancel;
+  }
+
   const GTG_ZOOM_PREVIEW_MAP = {
     1: ["x2"],
     2: ["x2.5", "x2"],
