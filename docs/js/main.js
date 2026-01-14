@@ -2104,7 +2104,47 @@ if (targetName) appendLogDebug("target", targetName);
   /******************************************************************
    *                         🧭 Quick Nav + Boot
    ******************************************************************/
-  function bindOverviewQuickNav(){
+  
+  // ----------------------------- 🔒 Lock (WS password) -----------------------------
+  function setLockVisual(){
+    const btn = $("#lock-btn");
+    if (!btn) return;
+    const hasPwd = (getStoredPwd() || "").trim().length > 0;
+    btn.classList.toggle("locked", hasPwd);
+    btn.title = hasPwd
+      ? "Mot de passe Websocket Streamer.bot (défini) — clic pour modifier, clic droit pour effacer"
+      : "Mot de passe Websocket Streamer.bot — clic pour définir";
+  }
+
+  function bindLockButton(){
+    const btn = $("#lock-btn");
+    if (!btn || btn._bound) return;
+    btn._bound = true;
+
+    setLockVisual();
+
+    btn.addEventListener("click", (ev)=>{
+      ev.preventDefault();
+      const current = getStoredPwd();
+      const val = window.prompt("Mot de passe Streamer.bot (laisser vide pour effacer) :", current);
+      if (val === null) return;
+      setStoredPwd(val || "");
+      setLockVisual();
+      // Reconnect avec le nouveau mdp
+      if (typeof window.reconnectSB === "function") window.reconnectSB();
+      else if (window.JBSDashboard?.sb?.reconnectSB) window.JBSDashboard.sb.reconnectSB();
+    });
+
+    btn.addEventListener("contextmenu", (ev)=>{
+      ev.preventDefault();
+      setStoredPwd("");
+      setLockVisual();
+      if (typeof window.reconnectSB === "function") window.reconnectSB();
+      else if (window.JBSDashboard?.sb?.reconnectSB) window.JBSDashboard.sb.reconnectSB();
+    });
+  }
+
+function bindOverviewQuickNav(){
     $$(".qv-card").forEach(card=>{
       card.addEventListener("click", ()=>{
         const to = card.getAttribute("data-goto");
