@@ -1,22 +1,16 @@
 (function () {
   "use strict";
 
-  // Évite d'écraser si déjà chargé
   if (window.JBSDashboard && window.JBSDashboard.__coreLoaded) return;
 
-  /******************************************************************
-   *                    🔧 DOM SHORTCUTS & HELPERS (CORE)
-   ******************************************************************/
   const $  = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
 
-  // Helper texte robuste
   function setText(el, txt) {
     if (!el) return;
     el.textContent = (txt == null) ? "" : String(txt);
   }
 
-  // Constantes “core” (utilisées par plusieurs sections)
   const EVENTS_KEY     = "jbs.events.v1";
   const LAST_SETUP_KEY = "gtg.lastSetup.v1";
   const SB_PWD_KEY     = "sb_ws_password_v1";
@@ -25,9 +19,8 @@
   const isNum = (n) => typeof n === "number" && Number.isFinite(n);
   const makeNonce = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
-  // Debug verbose (session only)
+  const DEBUG_TARGET_ONLY = true;
   let DEBUG_VERBOSE = false;
-  const DEBUG_TARGET_ONLY = true; // conservé tel quel (ton mode "target only") :contentReference[oaicite:1]{index=1}
 
   function replacerNoHuge(_k, v) {
     if (typeof v === "string" && v.length > 500) return v.slice(0, 500) + "…";
@@ -56,7 +49,6 @@
   function appendLogDebug(tag, obj) {
     if (!DEBUG_VERBOSE) return;
 
-    // Mode strict : on n'affiche QUE le nom du jeu à deviner
     if (DEBUG_TARGET_ONLY) {
       if (tag !== "target") return;
     }
@@ -77,9 +69,7 @@
     });
   }
 
-  /******************************************************************
-   *                        🚌 Mini Event Bus
-   ******************************************************************/
+  // Mini event bus
   const _bus = new Map();
   function busOn(evt, fn) {
     if (!evt || typeof fn !== "function") return () => {};
@@ -90,41 +80,23 @@
   function busEmit(evt, payload) {
     const set = _bus.get(evt);
     if (!set || !set.size) return;
-    for (const fn of Array.from(set)) {
-      try { fn(payload); } catch (e) { /* ne casse jamais le dashboard */ }
-    }
+    for (const fn of Array.from(set)) { try { fn(payload); } catch {} }
   }
 
-  /******************************************************************
-   *                 🌍 Namespace global unique : JBSDashboard
-   ******************************************************************/
   window.JBSDashboard = Object.assign(window.JBSDashboard || {}, {
     __coreLoaded: true,
-
-    // state partagé
-    state: Object.assign({
-      sbClient: null,
-      isConnected: false
-    }, (window.JBSDashboard && window.JBSDashboard.state) || {}),
-
-    // constantes
+    state: Object.assign({ sbClient: null, isConnected: false }, (window.JBSDashboard && window.JBSDashboard.state) || {}),
     consts: { EVENTS_KEY, LAST_SETUP_KEY, SB_PWD_KEY, MAX_EVENTS },
-
-    // utils
     utils: { $, $$, setText, setDot, appendLog, appendLogDebug, isNum, makeNonce, getQS, getStoredPwd, setStoredPwd },
-
-    // debug control
     debug: {
       get verbose() { return DEBUG_VERBOSE; },
       set verbose(v) { DEBUG_VERBOSE = !!v; },
       targetOnly: DEBUG_TARGET_ONLY
     },
-
-    // event bus
     bus: { on: busOn, emit: busEmit }
   });
 
-  // Optionnel : exposer $/$$ pour compat temporaire (si ton script les utilise en global)
+  // Compat globals (temporary)
   window.$  = window.$  || $;
   window.$$ = window.$$ || $$;
   window.appendLog = window.appendLog || appendLog;
