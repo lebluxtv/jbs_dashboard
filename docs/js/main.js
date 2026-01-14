@@ -1150,17 +1150,6 @@ syncTtsSwitchFromBackend();
     if (el) setText(el, Number.isFinite(n) ? String(n) : "—");
   }
 
-  
-// Small helper: accept either a DOM element or a jQuery object
-function setText(target, text) {
-  if (!target) return;
-  const el = (target.jquery ? target[0] : target);
-  if (!el) return;
-  el.textContent = (text ?? "");
-}
-
-
-
 function clearTtsPlaceholders(){
   // If there is no activity yet, we don't want placeholder text / fake entries.
   const last = document.getElementById("tts-last-read-text");
