@@ -11,6 +11,9 @@ const DEBUG_TARGET_ONLY = true; // <- quand true, on n'affiche QUE le nom du jeu
   const LAST_SETUP_KEY = "gtg.lastSetup.v1";
   const SB_PWD_KEY     = "sb_ws_password_v1";
   const MAX_EVENTS     = 100;
+const TIPEEE_SLUG_KEY = "tipeee.projectSlug.v1";
+const TIPEEE_API_KEY  = "tipeee.apiKey.v1";
+const TIPEEE_AUTO_KEY = "tipeee.autoConnect.v1";
 
   const isNum = (n)=> typeof n === 'number' && Number.isFinite(n);
   const makeNonce = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
@@ -21,6 +24,14 @@ const DEBUG_TARGET_ONLY = true; // <- quand true, on n'affiche QUE le nom du jeu
   function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
   function setStoredPwd(v){ try { localStorage.setItem(SB_PWD_KEY, v || ""); } catch {} }
   function getQS(name){ try { return new URLSearchParams(location.search).get(name); } catch { return null; } }
+function getStoredTipeeeSlug(){ try { return localStorage.getItem(TIPEEE_SLUG_KEY) || ""; } catch { return ""; } }
+function setStoredTipeeeSlug(v){ try { localStorage.setItem(TIPEEE_SLUG_KEY, v || ""); } catch {} }
+
+function getStoredTipeeeApiKey(){ try { return localStorage.getItem(TIPEEE_API_KEY) || ""; } catch { return ""; } }
+function setStoredTipeeeApiKey(v){ try { localStorage.setItem(TIPEEE_API_KEY, v || ""); } catch {} }
+
+function getStoredTipeeeAuto(){ try { return (localStorage.getItem(TIPEEE_AUTO_KEY) || "0") === "1"; } catch { return false; } }
+function setStoredTipeeeAuto(v){ try { localStorage.setItem(TIPEEE_AUTO_KEY, v ? "1" : "0"); } catch {} }
 
   function appendLog(sel, text){
     const el = $(sel); if (!el) return;
