@@ -33,6 +33,12 @@
       const from = e.from ? ` <span class="muted">from ${e.from}</span>` : "";
       return `<strong>${e.user}</strong> — Raid <span class="muted">${viewers} viewers</span>${from}`;
     }
+    if (e.type === "Tipeee") {
+  const amountTxt = (e.amount != null && e.amount !== "") ? `${e.currencySymbol || ""}${e.amount}` : "";
+  const msg = (e.message || "").trim();
+  return `<strong>${e.user}</strong> — Tipeee ${amountTxt ? `<span class="muted">${amountTxt}</span>` : ""}${msg ? `<br><span class="muted">${msg}</span>` : ""}`;
+}
+
     return `<strong>${e.user}</strong> — ${e.type} • ${e.tier?("Tier "+e.tier):""} • ${e.tierLabel}${e.months>0?` • ${e.months} mois`:""}`;
   }
 
@@ -240,4 +246,202 @@ function logSbSubEventToConsole(evt, payload){
     }
   }
 
-  
+  /* global io */
+
+// ================================
+// 💜 TIPEEE — add-on for Events tab
+// ================================
+let tipeeeSocket = null;
+
+function currencySymbolFromCode(code) {
+  const c = String(code || "").trim().toUpperCase();
+  const map = { EUR: "€", USD: "$", GBP: "£", JPY: "¥", CHF: "CHF", CAD: "$", AUD: "$" };
+  return map[c] || (c ? c : "");
+}
+
+function extractQuickTipeee(payload) {
+  // Tipeee peut encapsuler sous payload.event
+  const ev = payload?.event ?? payload;
+  const p  = ev?.parameters ?? ev?.data ?? {};
+
+  const currencyCode   = (p.currency ?? ev?.currency ?? ev?.project?.currency?.code ?? "");
+  const currencySymbol = (ev?.project?.currency?.symbol ?? currencySymbolFromCode(currencyCode));
+
+  return {
+    username: p.username ?? ev?.username ?? p.user?.username ?? null,
+    amount: p.amount ?? ev?.amount ?? p.total ?? p.value ?? null,
+    currencyCode,
+    currencySymbol,
+    message: p.message ?? ev?.message ?? p.comment ?? null
+  };
+}
+
+function setTipeeeStatusUI(connected, text){
+  const dot = document.querySelector("#tipeee-dot");
+  if (dot) {
+    dot.classList.remove("on","off");
+    dot.classList.add(connected ? "on" : "off");
+  }
+  const t = document.querySelector("#tipeee-status-text");
+  if (t) t.textContent = text || (connected ? "Connecté" : "Déconnecté");
+}
+
+function disconnectTipeee(){
+  try { tipeeeSocket?.close?.(); } catch {}
+  try { tipeeeSocket?.disconnect?.(); } catch {}
+  tipeeeSocket = null;
+
+  setTipeeeStatusUI(false, "Déconnecté");
+
+  const btnC = document.querySelector("#btn-tipeee-connect");
+  const btnD = document.querySelector("#btn-tipeee-disconnect");
+  if (btnC) btnC.disabled = false;
+  if (btnD) btnD.disabled = true;
+
+  appendLog?.("#events-log", "TIPEEE: déconnecté.");
+}
+
+function connectTipeee(){
+  const inpKey  = document.querySelector("#tipeee-api-key");
+  const inpSlug = document.querySelector("#tipeee-project-slug");
+  const cbAuto  = document.querySelector("#tipeee-autoconnect");
+
+  const apiKey = (inpKey?.value || "").trim();
+  const slug   = (inpSlug?.value || "").trim();
+
+  if (!apiKey || !slug){
+    appendLog?.("#events-log", "TIPEEE: apiKey ou slug manquant.");
+    setTipeeeStatusUI(false, "Paramètres manquants");
+    return;
+  }
+
+  // persist immédiat
+  try { setStoredTipeeeApiKey(apiKey); } catch {}
+  try { setStoredTipeeeSlug(slug); } catch {}
+  try { setStoredTipeeeAuto(!!cbAuto?.checked); } catch {}
+
+  if (typeof io !== "function"){
+    appendLog?.("#events-log", "TIPEEE: socket.io-client non chargé (io introuvable).");
+    setTipeeeStatusUI(false, "socket.io manquant");
+    return;
+  }
+
+  // reset si déjà connecté
+  if (tipeeeSocket) disconnectTipeee();
+
+  setTipeeeStatusUI(false, "Connexion…");
+  appendLog?.("#events-log", "TIPEEE: connexion…");
+
+  tipeeeSocket = io("https://sso.tipeee.com", {
+    path: "/socket.io/",
+    transports: ["websocket","polling"],
+    query: { access_token: apiKey }
+  });
+
+  tipeeeSocket.on("connect", () => {
+    setTipeeeStatusUI(true, "Connecté");
+    appendLog?.("#events-log", "TIPEEE: connecté ✅");
+
+    const btnC = document.querySelector("#btn-tipeee-connect");
+    const btnD = document.querySelector("#btn-tipeee-disconnect");
+    if (btnC) btnC.disabled = true;
+    if (btnD) btnD.disabled = false;
+
+    // abonnement "statistic-user"
+    setTimeout(() => {
+      try {
+        tipeeeSocket.emit("statistic-user", {
+          user: { username: slug },
+          usage: "DASHBOARD"
+        });
+      } catch (e) {
+        console.warn("[TIPEEE] statistic-user emit error:", e);
+      }
+    }, 800);
+  });
+
+  tipeeeSocket.on("disconnect", () => {
+    setTipeeeStatusUI(false, "Déconnecté");
+    appendLog?.("#events-log", "TIPEEE: déconnecté.");
+
+    const btnC = document.querySelector("#btn-tipeee-connect");
+    const btnD = document.querySelector("#btn-tipeee-disconnect");
+    if (btnC) btnC.disabled = false;
+    if (btnD) btnD.disabled = true;
+  });
+
+  tipeeeSocket.on("connect_error", (e) => {
+    setTipeeeStatusUI(false, "Erreur");
+    appendLog?.("#events-log", "TIPEEE: erreur de connexion (voir console).");
+    console.warn("[TIPEEE] connect_error:", e);
+  });
+
+  tipeeeSocket.on("new-event", (payload) => {
+    const q = extractQuickTipeee(payload);
+
+    const user = q.username || "Anonyme";
+    const amountTxt = (q.amount != null && q.amount !== "") ? `${q.currencySymbol || ""}${q.amount}` : "";
+    const msg = (q.message || "").trim();
+
+    // Ajout dans la même liste Events
+    const evObj = {
+      id: (typeof makeNonce === "function") ? makeNonce() : String(Date.now()),
+      ts: Date.now(),
+      source: "tipeee",
+      type: "Tipeee",
+      user,
+      amount: q.amount ?? null,
+      currencySymbol: q.currencySymbol || "",
+      currencyCode: q.currencyCode || "",
+      message: msg || null,
+      ack: false
+    };
+
+    try {
+      eventsStore.push(evObj);
+      saveEvents(eventsStore);
+      renderStoredEventsIntoUI();
+    } catch (err) {
+      console.warn("[TIPEEE] push event error:", err);
+    }
+
+    appendLog?.("#events-log", `TIPEEE: ${user}${amountTxt ? " — " + amountTxt : ""}${msg ? " — " + msg : ""}`);
+  });
+}
+
+function initTipeeeUI(){
+  const inpKey  = document.querySelector("#tipeee-api-key");
+  const inpSlug = document.querySelector("#tipeee-project-slug");
+  const cbAuto  = document.querySelector("#tipeee-autoconnect");
+  const btnC    = document.querySelector("#btn-tipeee-connect");
+  const btnD    = document.querySelector("#btn-tipeee-disconnect");
+
+  if (!inpKey || !inpSlug || !btnC || !btnD) return; // UI pas présent
+
+  // hydrate depuis localStorage
+  try { inpKey.value  = getStoredTipeeeApiKey?.() || ""; } catch {}
+  try { inpSlug.value = getStoredTipeeeSlug?.() || ""; } catch {}
+  try { cbAuto.checked = !!getStoredTipeeeAuto?.(); } catch {}
+
+  btnC.addEventListener("click", connectTipeee);
+  btnD.addEventListener("click", disconnectTipeee);
+
+  inpKey.addEventListener("change", ()=>{ try { setStoredTipeeeApiKey(inpKey.value.trim()); } catch {} });
+  inpSlug.addEventListener("change", ()=>{ try { setStoredTipeeeSlug(inpSlug.value.trim()); } catch {} });
+  cbAuto.addEventListener("change", ()=>{ try { setStoredTipeeeAuto(!!cbAuto.checked); } catch {} });
+
+  btnD.disabled = true;
+  setTipeeeStatusUI(false, "Déconnecté");
+
+  // auto-connect
+  const canAuto = cbAuto.checked && inpKey.value.trim() && inpSlug.value.trim();
+  if (canAuto) connectTipeee();
+}
+
+// init au chargement (une fois le DOM prêt)
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initTipeeeUI);
+} else {
+  initTipeeeUI();
+}
+
