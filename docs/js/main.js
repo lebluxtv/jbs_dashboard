@@ -1,22 +1,230 @@
 (function () { 
   "use strict";
 
-/******************************************************************
- * ✅ CORE (loaded via js/core.js + js/sb-connection.js)
- * - DOM helpers, logs, storage keys, debug, bus : window.JBSDashboard.utils/consts/debug/bus
- * - Streamer.bot connect + safeDoAction: provided globally by js/sb-connection.js
- ******************************************************************/
-const ctx = window.JBSDashboard;
-if (!ctx || !ctx.utils) {
-  throw new Error("JBSDashboard core manquant. Charge js/core.js avant js/main.js");
+  // ---------------------------------------------------------------
+  // 🔧 Refactor bridge: core.js + sb-connection.js
+  // ---------------------------------------------------------------
+  const ctx = window.JBSDashboard;
+  // Fallbacks: keep dashboard running even if core isn't loaded (legacy mode)
+  const __u = ctx && ctx.utils ? ctx.utils : null;
+
+  // Prefer utils from core.js when present (keeps behavior identical)
+
+  // Keep original globals if core.js isn't present
+  const setText = __u?.setText || function(el, txt){ if (!el) return; el.textContent = (txt==null) ? "" : String(txt); };
+  const setDot  = __u?.setDot  || function(selector, on){ $$(selector).forEach(el=>{ el.classList.remove("on","off"); el.classList.add(on?"on":"off"); }); };
+
+  const appendLog = __u?.appendLog || function(sel, text){
+    const el = $(sel); if(!el) return;
+    const ts = new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+    const p = document.createElement("p"); p.textContent = `[${ts}] ${text}`;
+    el.appendChild(p); el.scrollTop = el.scrollHeight;
+  };
+
+  const appendLogDebug = __u?.appendLogDebug || function(){};
+
+
+  // WS indicator helpers (were in WS CONNECT section)
+  function setWsIndicator(on){
+    try {
+      setDot("#ws-dot", !!on);
+      const s = document.getElementById("ws-status");
+      if (s) s.textContent = on ? "Connecté à Streamer.bot" : "Déconnecté de Streamer.bot";
+    } catch {}
+  }
+  function setConnected(on){ setWsIndicator(!!on); }
+  window.setWsIndicator = window.setWsIndicator || setWsIndicator;
+  window.setConnected   = window.setConnected   || setConnected;
+
+  const getQS = __u?.getQS || function(name){ try { return new URLSearchParams(location.search).get(name); } catch { return null; } };
+  const getStoredPwd = __u?.getStoredPwd || function(){ try { return localStorage.getItem("sb_ws_password_v1") || ""; } catch { return ""; } };
+  const setStoredPwd = __u?.setStoredPwd || function(v){ try { localStorage.setItem("sb_ws_password_v1", v || ""); } catch {} };
+
+  // Streamer.bot client access (provided by sb-connection.js on connect)
+  function getSB() { return (ctx && ctx.state && ctx.state.sbClient) || window.sbClient || window.client || null; }
+
+  // Expose for legacy calls in this file
+  let sbClient = null;
+  function syncSB() { const c = getSB(); if (c) sbClient = c; return sbClient; }
+  // Keep sbClient in sync (sb-connection updates window.sbClient/ctx.state.sbClient)
+  setInterval(syncSB, 500);
+
+
+  /******************************************************************
+   *                    🔧 DOM SHORTCUTS & HELPERS
+   ******************************************************************/
+  const $  = (s, root=document) => root.querySelector(s);
+  const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
+const DEBUG_TARGET_ONLY = true; // <- quand true, on n'affiche QUE le nom du jeu à deviner
+
+  const EVENTS_KEY     = "jbs.events.v1";
+  const LAST_SETUP_KEY = "gtg.lastSetup.v1";
+  const SB_PWD_KEY     = "sb_ws_password_v1";
+  const MAX_EVENTS     = 100;
+
+  const isNum = (n)=> typeof n === 'number' && Number.isFinite(n);
+  const makeNonce = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+
+  // Debug verbose (session only, no persistence)
+  let DEBUG_VERBOSE = false;
+
+
+function appendLogDebug(tag, obj){
+  if (!DEBUG_VERBOSE) return;
+
+  // Mode strict : on n'affiche QUE le nom du jeu à deviner
+  if (typeof DEBUG_TARGET_ONLY !== "undefined" && DEBUG_TARGET_ONLY) {
+    if (tag !== "target") return;
+  }
+
+  let line = `DEBUG: ${tag}`;
+  if (obj !== undefined) {
+    try {
+      line += (typeof obj === "string")
+        ? " " + obj
+        : " " + JSON.stringify(obj, replacerNoHuge, 0);
+    } catch {}
+  }
+  appendLog("#guess-log", line);
 }
 
-// Local aliases to keep the legacy code mostly unchanged.
-const { $, $$, setText, setDot, appendLog, appendLogDebug, isNum, makeNonce, getQS, getStoredPwd, setStoredPwd } = ctx.utils;
-const { EVENTS_KEY, LAST_SETUP_KEY, SB_PWD_KEY, MAX_EVENTS } = ctx.consts;
 
-// Access current Streamer.bot client (set by js/sb-connection.js)
-const getSBClient = () => ctx.state.sbClient || window.sbClient || null;
+
+  function replacerNoHuge(_k, v){
+    if (typeof v === "string" && v.length > 500) return v.slice(0,500) + "…";
+    return v;
+  }
+
+
+  function setStatusText(txt){
+    $$("#guess-status-text, #gtg-status-text, #guess-status-info, #qv-guess-status").forEach(el => {
+      if (el) setText(el, txt);
+    });
+  }
+
+  function setTimerText(txt){
+    $$("#guess-timer, #gtg-timer").forEach(el => { el.textContent = txt; });
+  }
+
+  function setRoundNote(running){
+    const txt = running ? "Manche lancée" : "Manche terminée";
+    let targets = $$("#guess-round-note, #gtg-round-note, .round-note");
+    if (!targets.length) {
+      const scope = $("#guess-start")?.closest("#filters, .filters, form, .panel, .card, section") || document;
+      const candidates = Array.from(scope.querySelectorAll("small, .muted, .hint, span, div"))
+        .filter(el => el && typeof el.textContent === "string");
+      const m = candidates.find(el => /manche\s+(lancée|terminée)/i.test(el.textContent.trim()));
+      if (m) targets = [m];
+    }
+    targets.forEach(el => { el.textContent = txt; });
+    document.body.dataset.round = running ? "running" : "ended";
+  }
+
+  /* ====== Nouveaux états & helpers pour Score global / Annulation / Gagnant ====== */
+  let GTG_TOTALS = { streamer: 0, viewers: 0 };
+  let GTG_GOAL   = null;
+
+  function renderGlobalScore(totals, goal){
+    const s   = $("#qv-score-streamer") || $("#score-streamer") || $("#score-streamer-val") || $("#gtg-score-streamer");
+    const v   = $("#qv-score-viewers")  || $("#score-viewers")  || $("#score-viewers-val") || $("#gtg-score-viewers");
+    const gEl = $("#qv-goal-score")     || $("#goal-score-badge") || $("#score-goal-val") || $("#gtg-goal-score");
+
+    if (s) setText(s, String(Number.isFinite(totals?.streamer) ? totals.streamer : 0));
+    if (v) setText(v, String(Number.isFinite(totals?.viewers)  ? totals.viewers  : 0));
+    if (gEl) setText(gEl, Number.isFinite(goal) ? String(goal) : "—");
+  }
+
+  function setWinnerLabel(label){
+    const w = $("#guess-winner");
+    if (w) setText(w, label && String(label).trim() ? String(label) : "—");
+  }
+
+  function refreshCancelAbility(){
+    const btn = $("#gtg-series-cancel");
+    if (!btn) return;
+    const canCancel = GTG_RUNNING
+      && Number.isFinite(GTG_GOAL)
+      && (GTG_TOTALS.streamer < GTG_GOAL && GTG_TOTALS.viewers < GTG_GOAL);
+    btn.disabled = !canCancel;
+  }
+
+  // ——— Helpers partie / objectif ———
+  function setGoalScoreUI(goal){
+    const t = $("#gtg-target-score");
+    if (t && Number.isFinite(goal)) t.value = String(goal);
+    const badges = $$(".goal-score, #qv-goal-score, #goal-score-badge, #gtg-goal-score");
+    badges.forEach(b => b.textContent = Number.isFinite(goal) ? String(goal) : "—");
+    GTG_GOAL = Number.isFinite(goal) ? goal : null;
+    renderGlobalScore(GTG_TOTALS, GTG_GOAL);
+    refreshCancelAbility();
+  }
+  function setPartieIdUI(pid){
+    const els = $$("#partie-id, #qv-partie-id");
+    els.forEach(e => { e.textContent = pid || "—"; });
+  }
+
+  // ——— Sous-manche / Manches par jeu ———
+  function renderPerGame(index, goal){
+    const note = $("#gtg-pergame-note");
+    const st   = $("#gtg-pergame-status");
+    const idx  = Number.isFinite(index) ? Math.max(1, Math.min(5, Math.trunc(index))) : null;
+    const cap  = Number.isFinite(goal)  ? Math.max(1, Math.min(5, Math.trunc(goal)))  : null;
+    const text = (idx && cap) ? `${idx} / ${cap}` : "—";
+    if (note) setText(note, `Sous-manche : ${text}`);
+    if (st) setText(st, text);
+  }
+
+
+// ===========================
+// GTG : Zoom auto preview (UI only)
+// ===========================
+const GTG_ZOOM_PREVIEW_MAP = {
+  1: ["x2"],
+  2: ["x2.5", "x2"],
+  3: ["x3.3", "x2.5", "x2"],
+  4: ["x5", "x3.3", "x2.5", "x2"],
+  5: ["x10", "x5", "x3.3", "x2.5", "x2"]
+};
+
+function updateZoomPreview(perGameGoal){
+  const el = document.getElementById("gtg-zoom-preview");
+  if (!el) return;
+
+  const v = Number(perGameGoal);
+  const goal = Number.isFinite(v) ? Math.max(1, Math.min(5, Math.trunc(v))) : 1;
+
+  const seq = GTG_ZOOM_PREVIEW_MAP[goal];
+  el.textContent = seq ? ("Zoom auto : " + seq.join(" → ")) : "Zoom auto : —";
+}
+
+
+  function setLockVisual(){
+    const btn = $("#lock-btn"); if (!btn) return;
+    const hasPwd = !!getStoredPwd();
+    btn.classList.toggle("locked", hasPwd);
+    btn.title = hasPwd ? "Mot de passe défini (clic pour modifier, clic droit pour effacer)" : "Définir le mot de passe Streamer.bot";
+  }
+
+  function bindLockButton(){
+    const btn = $("#lock-btn"); if (!btn || btn._bound) return;
+    btn._bound = true;
+    btn.addEventListener("click", (ev)=>{
+      ev.preventDefault();
+      const current = getStoredPwd();
+      const val = window.prompt("Mot de passe Streamer.bot (laisser vide pour effacer) :", current);
+      if (val === null) return;
+      setStoredPwd(val || "");
+      setLockVisual();
+      reconnectSB();
+    });
+    btn.addEventListener("contextmenu", (ev)=>{
+      ev.preventDefault();
+      setStoredPwd("");
+      setLockVisual();
+      reconnectSB();
+    });
+    setLockVisual();
+  }
 
   /******************************************************************
    *                     📦 EVENTS (Twitch subs)
@@ -579,42 +787,12 @@ const getSBClient = () => ctx.state.sbClient || window.sbClient || null;
     return true;
   }
 
-  /******************************************************************
+  
+  /* [REMOVED] Streamer.bot Actions moved to js/sb-connection.js */
+/******************************************************************
    *                        🎮 Handlers UI GTG
    ******************************************************************/
   let GTG_ROUND_ID = null;
-
-
-let GTG_TOTALS = { streamer: 0, viewers: 0 };
-  let GTG_GOAL = 5; // score cible (fin de partie)
-
-function refreshCancelAbility(){
-    const btn = $("#gtg-series-cancel");
-    if (!btn) return;
-    const canCancel = GTG_RUNNING
-      && Number.isFinite(GTG_GOAL)
-      && (GTG_TOTALS.streamer < GTG_GOAL && GTG_TOTALS.viewers < GTG_GOAL);
-    btn.disabled = !canCancel;
-  }
-
-  const GTG_ZOOM_PREVIEW_MAP = {
-    1: ["x2"],
-    2: ["x2.5", "x2"],
-    3: ["x3.3", "x2.5", "x2"],
-    4: ["x5", "x3.3", "x2.5", "x2"],
-    5: ["x10", "x5", "x3.3", "x2.5", "x2"]
-  };
-
-  function updateZoomPreview(perGameGoal){
-    const el = document.getElementById("gtg-zoom-preview");
-    if (!el) return;
-
-    const v = Number(perGameGoal);
-    const goal = Number.isFinite(v) ? Math.max(1, Math.min(5, Math.trunc(v))) : 1;
-
-    const seq = GTG_ZOOM_PREVIEW_MAP[goal];
-    el.textContent = seq ? ("Zoom auto : " + seq.join(" → ")) : "Zoom auto : —";
-  }
 
   function setGuessHandlers(){
     const debounce = (fn, ms) => { let t=null; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
@@ -834,7 +1012,9 @@ if (perGameGoalInput){
     setTimerText("--:--");
   }
 
-  /******************************************************************
+  
+  /* [REMOVED] WS CONNECT / LIFECYCLE moved to js/sb-connection.js */
+/******************************************************************
    *                     📈 Ratings & Leaderboard
    ******************************************************************/
   let LAST_COUNT_SEND_SIG = null;
@@ -1048,109 +1228,137 @@ function logSbSubEventToConsole(evt, payload){
   }
 
   /******************************************************************
- *                 🎙️ TTS SWITCH + TIMER (SB integration)
- * - switch: action "TTS Auto Message Reader Switch ON OFF" with args {mode:"on"/"off"}
- * - timer : action "TTS Timer Set" with args {timer:<minutes>}
- * Uses safeDoAction() from js/sb-connection.js (ID resolution + fallback wire DoAction).
- ******************************************************************/
-const ttsSwitchInput     = document.getElementById('tts-switch');
-const ttsSwitchLabel     = document.querySelector('.tts-switch-label');
-const ttsSwitchLabelText = document.getElementById('tts-switch-label-text');
-const ttsStatusText      = document.getElementById('tts-status-text');
-const ttsDot             = document.getElementById('tts-dot');
+   *                 🎙️ TTS SWITCH + TIMER (intégration SB)
+   ******************************************************************/
+  // ======== TTS Reader (intégration avec Streamer.bot) ========
+  const ttsSwitchInput      = document.getElementById('tts-switch');
+  const ttsSwitchLabel      = document.getElementById('tts-switch-label');
+  const ttsSwitchLabelText  = ttsSwitchLabel
+    ? ttsSwitchLabel.querySelector('.switch-label-text')
+    : null;
 
-const ttsTimerInput = document.getElementById('tts-timer');
-const ttsTimerLabel = document.getElementById('tts-timer-label');
+  const ttsStatusMain   = document.getElementById('tts-status-main-text');
+  const ttsStatusInline = document.getElementById('tts-status-inline-text');
+  const ttsStatusOverview = document.getElementById('tts-status-text');
 
-let lastSentTimer = null;
+  const ttsTimerInput = document.getElementById('tts-timer');
+  const ttsTimerLabel = document.getElementById('tts-timer-label');
 
-function setTtsStatusUI(enabled) {
-  const val = !!enabled;
-  if (ttsStatusText) ttsStatusText.textContent = val ? "TTS Auto Reader: ON" : "TTS Auto Reader: OFF";
-  if (ttsDot) {
-    ttsDot.classList.toggle("on", val);
-    ttsDot.classList.toggle("off", !val);
+  // ID d'action côté Streamer.bot pour "TTS Timer Set"
+  let TTS_TIMER_ACTION_ID = null;
+  // Dernière valeur envoyée au script pour éviter le spam
+  let lastSentTimer = null;
+
+  // --- Mise à jour du texte + points de statut ---
+  function setTtsStatusUI(enabled) {
+    const val = !!enabled;
+    const txt = val ? 'Actif' : 'Inactif';
+
+    if (ttsStatusMain) setText(ttsStatusMain, txt);
+    if (ttsStatusInline) setText(ttsStatusInline, txt);
+    if (ttsStatusOverview) setText(ttsStatusOverview, txt);
+
+    setDot('.dot-tts', val);
   }
-}
 
-function updateTtsSwitchUI(val){
-  if (ttsSwitchInput) ttsSwitchInput.checked = !!val;
-  if (ttsSwitchLabelText) ttsSwitchLabelText.textContent = val ? 'TTS ON' : 'TTS OFF';
-  if (ttsSwitchLabel) ttsSwitchLabel.style.opacity = val ? '1' : '0.55';
-  setTtsStatusUI(!!val);
-}
+  // --- Mise à jour visuelle du switch ---
+  function updateTtsSwitchUI(enabled) {
+    const val = !!enabled;
 
-async function syncTtsSwitchFromBackend() {
-  const c = getSBClient();
-  if (!c) return;
+    if (ttsSwitchInput)      ttsSwitchInput.checked = val;
+    if (ttsSwitchLabelText) setText(ttsSwitchLabelText, val ? 'TTS ON' : 'TTS OFF');
+    if (ttsSwitchLabel)      ttsSwitchLabel.style.opacity   = val ? '1' : '0.55';
 
-  try {
-    const resp = await c.getGlobal("ttsAutoReaderEnabled");
-    const val = !!(resp && resp.status === "ok" && resp.variable && resp.variable.value);
-    updateTtsSwitchUI(val);
+    // toujours synchroniser les textes + pastilles
+    setTtsStatusUI(val);
+  }
 
-    // optional: sync timer global if present
+  // --- Sync initial depuis la globale "ttsAutoReaderEnabled" ---
+  async function syncTtsSwitchFromBackend() {
+    if (!sbClient) return;
     try {
-      const tr = await c.getGlobal("ttsAutoReaderTimer");
-      const tv = Number(tr?.variable?.value);
-      if (Number.isFinite(tv)) {
-        const clamped = Math.min(10, Math.max(1, Math.round(tv)));
-        if (ttsTimerInput) ttsTimerInput.value = String(clamped);
-        if (ttsTimerLabel) ttsTimerLabel.textContent = clamped + " min";
-        lastSentTimer = clamped;
+      const resp = await sbClient.getGlobal("ttsAutoReaderEnabled");
+      let val = false;
+      if (resp && resp.status === "ok") {
+        val = !!resp.variable?.value;
       }
-    } catch {}
-  } catch (e) {
-    console.error("syncTtsSwitchFromBackend error:", e);
+      updateTtsSwitchUI(val);
+    } catch (e) {
+      console.warn("Erreur récupération ttsAutoReaderEnabled:", e);
+      updateTtsSwitchUI(false);
+    }
   }
-}
 
-async function setTtsAutoReader(enabled) {
-  try {
-    if (typeof window.safeDoAction !== "function") {
-      appendLog("#guess-log", "safeDoAction indisponible: impossible de piloter le TTS Auto Reader.");
+  // --- Envoi ON/OFF vers Streamer.bot ---
+  async function setTtsAutoReader(enabled) {
+    if (!sbClient) return;
+
+    try {
+      const args = { mode: enabled ? "on" : "off" };
+      const wire = Object.assign({}, args, { _json: JSON.stringify(args) });
+      const actionId = await resolveActionIdByName("TTS Auto Message Reader Switch ON OFF");
+
+      try {
+        await sbClient.doAction(actionId, wire);
+        updateTtsSwitchUI(enabled);
+        return;
+      } catch (e) {
+        console.error("Erreur doAction Switch ON/OFF (client):", e);
+        const ok = sendRawDoActionById(actionId, args);
+        if (!ok) throw e;
+        updateTtsSwitchUI(enabled);
+      }
+    } catch (e) {
+      console.error("Erreur Switch ON/OFF:", e);
+      updateTtsSwitchUI(!enabled);
+      alert("Erreur lors du changement d'état du TTS Auto Reader.");
+    }
+  }
+
+  if (ttsSwitchInput) {
+    ttsSwitchInput.addEventListener('change', () => {
+      setTtsAutoReader(ttsSwitchInput.checked);
+    });
+  }
+
+  // --- Envoi du timer (cooldown en minutes) ---
+  function sendTtsTimer(timerValue) {
+    if (!sbClient) return;
+    if (!TTS_TIMER_ACTION_ID) {
+      console.warn("TTS_TIMER_ACTION_ID non initialisé, on ignore.");
       return;
     }
-    await window.safeDoAction("TTS Auto Message Reader Switch ON OFF", { mode: enabled ? "on" : "off" });
-    updateTtsSwitchUI(!!enabled);
-  } catch (e) {
-    console.error("setTtsAutoReader error:", e);
-    alert("Erreur lors du changement d'état du TTS Auto Reader.");
+
+    const v = Number(timerValue);
+    if (!Number.isFinite(v)) return;
+
+    const clamped = Math.min(10, Math.max(1, Math.round(v)));
+    if (clamped === lastSentTimer) return;
+
+    lastSentTimer = clamped;
+
+    const args = { timer: clamped };
+    const wire = Object.assign({}, args, { _json: JSON.stringify(args) });
+
+    sbClient
+      .doAction(TTS_TIMER_ACTION_ID, wire)
+      .catch(e => console.error("Erreur doAction TTS Timer Set :", e));
+
+    if (ttsTimerInput)  ttsTimerInput.value = clamped;
+    if (ttsTimerLabel) setText(ttsTimerLabel, clamped + " min");
   }
-}
 
-function sendTtsTimer(timerValue) {
-  if (typeof window.safeDoAction !== "function") {
-    appendLog("#guess-log", "safeDoAction indisponible: impossible d'envoyer le timer TTS.");
-    return;
+  if (ttsTimerInput) {
+    const applyTimer = () => {
+      const v = ttsTimerInput.value;
+      sendTtsTimer(v);
+    };
+
+    ttsTimerInput.addEventListener('change', applyTimer);
+    ttsTimerInput.addEventListener('blur', applyTimer);
   }
-  const v = Number(timerValue);
-  if (!Number.isFinite(v)) return;
-  const clamped = Math.min(10, Math.max(1, Math.round(v)));
 
-  if (clamped === lastSentTimer) return;
-  lastSentTimer = clamped;
-
-  window.safeDoAction("TTS Timer Set", { timer: clamped });
-
-  if (ttsTimerInput) ttsTimerInput.value = String(clamped);
-  if (ttsTimerLabel) ttsTimerLabel.textContent = clamped + " min";
-}
-
-if (ttsSwitchInput) {
-  ttsSwitchInput.addEventListener('change', () => setTtsAutoReader(ttsSwitchInput.checked));
-}
-
-if (ttsTimerInput) {
-  const applyTimer = () => sendTtsTimer(ttsTimerInput.value);
-  ttsTimerInput.addEventListener('change', applyTimer);
-  ttsTimerInput.addEventListener('blur', applyTimer);
-}
-
-// initial sync (kept consistent with legacy boot behavior)
-syncTtsSwitchFromBackend();
-
-/******************************************************************
+  /******************************************************************
    *                 🎙️ TTS AUTO MESSAGE READER (mini-dashboard)
    ******************************************************************/
   let TTS_AUTO_ENABLED = false;
@@ -1181,6 +1389,17 @@ syncTtsSwitchFromBackend();
     const el = $("#tts-queue-count");
     if (el) setText(el, Number.isFinite(n) ? String(n) : "—");
   }
+
+  
+// Small helper: accept either a DOM element or a jQuery object
+function setText(target, text) {
+  if (!target) return;
+  const el = (target.jquery ? target[0] : target);
+  if (!el) return;
+  el.textContent = (text ?? "");
+}
+
+
 
 function clearTtsPlaceholders(){
   // If there is no activity yet, we don't want placeholder text / fake entries.
@@ -2056,9 +2275,9 @@ if (targetName) appendLogDebug("target", targetName);
 
     updateDebugBtnVisual(debugBtn);
     debugBtn.addEventListener("click", ()=>{
-      ctx.debug.verbose = !ctx.debug.verbose;
+      DEBUG_VERBOSE = !DEBUG_VERBOSE;
       updateDebugBtnVisual(debugBtn);
-      appendLog("#guess-log", `Debug verbose ${ctx.debug.verbose?"activé":"désactivé"}`);
+      appendLog("#guess-log", `Debug verbose ${DEBUG_VERBOSE?"activé":"désactivé"}`);
     });
 
     // Bouton Boot Sequence
@@ -2100,7 +2319,7 @@ if (targetName) appendLogDebug("target", targetName);
   function updateDebugBtnVisual(btn){
     if (!btn) btn = $("#gtg-debug-toggle");
     if (!btn) return;
-    if (ctx.debug.verbose){
+    if (DEBUG_VERBOSE){
       btn.classList.add("active");
       btn.style.background = "var(--danger, #d73a1d)";
       btn.style.color = "#fff";
@@ -2116,47 +2335,7 @@ if (targetName) appendLogDebug("target", targetName);
   /******************************************************************
    *                         🧭 Quick Nav + Boot
    ******************************************************************/
-  
-  // ----------------------------- 🔒 Lock (WS password) -----------------------------
-  function setLockVisual(){
-    const btn = $("#lock-btn");
-    if (!btn) return;
-    const hasPwd = (getStoredPwd() || "").trim().length > 0;
-    btn.classList.toggle("locked", hasPwd);
-    btn.title = hasPwd
-      ? "Mot de passe Websocket Streamer.bot (défini) — clic pour modifier, clic droit pour effacer"
-      : "Mot de passe Websocket Streamer.bot — clic pour définir";
-  }
-
-  function bindLockButton(){
-    const btn = $("#lock-btn");
-    if (!btn || btn._bound) return;
-    btn._bound = true;
-
-    setLockVisual();
-
-    btn.addEventListener("click", (ev)=>{
-      ev.preventDefault();
-      const current = getStoredPwd();
-      const val = window.prompt("Mot de passe Streamer.bot (laisser vide pour effacer) :", current);
-      if (val === null) return;
-      setStoredPwd(val || "");
-      setLockVisual();
-      // Reconnect avec le nouveau mdp
-      if (typeof window.reconnectSB === "function") window.reconnectSB();
-      else if (window.JBSDashboard?.sb?.reconnectSB) window.JBSDashboard.sb.reconnectSB();
-    });
-
-    btn.addEventListener("contextmenu", (ev)=>{
-      ev.preventDefault();
-      setStoredPwd("");
-      setLockVisual();
-      if (typeof window.reconnectSB === "function") window.reconnectSB();
-      else if (window.JBSDashboard?.sb?.reconnectSB) window.JBSDashboard.sb.reconnectSB();
-    });
-  }
-
-function bindOverviewQuickNav(){
+  function bindOverviewQuickNav(){
     $$(".qv-card").forEach(card=>{
       card.addEventListener("click", ()=>{
         const to = card.getAttribute("data-goto");
@@ -2165,32 +2344,7 @@ function bindOverviewQuickNav(){
     });
   }
 
-  
-
-  // ---------------------------------------------------------------
-  // WS Indicator helpers (restored from original)
-  // ---------------------------------------------------------------
-function setWsIndicator(state){
-    setDot("#ws-dot", state);
-    const t = $("#ws-status");
-    if (t) setText(t, state ? "Connecté à Streamer.bot" : "Déconnecté de Streamer.bot");
-  }
-function setConnected(on){ setWsIndicator(!!on); }
-
-  // ---------------------------------------------------------------
-  // GTG score rendering (restored from original)
-  // ---------------------------------------------------------------
-function renderGlobalScore(totals, goal){
-    const s   = $("#qv-score-streamer") || $("#score-streamer") || $("#score-streamer-val") || $("#gtg-score-streamer");
-    const v   = $("#qv-score-viewers")  || $("#score-viewers")  || $("#score-viewers-val") || $("#gtg-score-viewers");
-    const gEl = $("#qv-goal-score")     || $("#goal-score-badge") || $("#score-goal-val") || $("#gtg-goal-score");
-
-    if (s) setText(s, String(Number.isFinite(totals?.streamer) ? totals.streamer : 0));
-    if (v) setText(v, String(Number.isFinite(totals?.viewers)  ? totals.viewers  : 0));
-    if (gEl) setText(gEl, Number.isFinite(goal) ? String(goal) : "—");
-  }
-
-function boot(){
+  function boot(){
     bindLockButton();
     bindOverviewQuickNav();
     setGuessHandlers();
