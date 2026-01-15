@@ -140,6 +140,40 @@
           <span id="events-status-text">Inactif</span>
         </div>
       </div>
+      <!-- Tipeee settings -->
+<div class="card" style="margin-bottom:12px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <h3 style="margin:0;">Tipeee</h3>
+      <div class="status-inline">
+        <span class="dot off" id="tipeee-dot"></span>
+        <span id="tipeee-status-text">Déconnecté</span>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <button class="btn" id="btn-tipeee-connect" type="button">Connect</button>
+      <button class="btn" id="btn-tipeee-disconnect" type="button" disabled>Disconnect</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;opacity:.9;user-select:none;">
+        <input id="tipeee-autoconnect" type="checkbox" />
+        Auto-connect
+      </label>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+    <label style="flex:1;min-width:220px;">
+      <div class="muted" style="font-size:12px;margin-bottom:4px;">Project slug</div>
+      <input id="tipeee-project-slug" type="text" placeholder="ex: jeanbaptisteshow" />
+    </label>
+
+    <label style="flex:2;min-width:260px;">
+      <div class="muted" style="font-size:12px;margin-bottom:4px;">API Key</div>
+      <input id="tipeee-api-key" type="password" placeholder="access_token / api_key" />
+    </label>
+  </div>
+</div>
+
       <div class="grid">
         <div class="card stretch">
           <h3>Subs</h3>
