@@ -10,28 +10,48 @@ const DEBUG_TARGET_ONLY = true; // <- quand true, on n'affiche QUE le nom du jeu
   const EVENTS_KEY     = "jbs.events.v1";
   const LAST_SETUP_KEY = "gtg.lastSetup.v1";
   const SB_PWD_KEY     = "sb_ws_password_v1";
+  // Tipeee (Events tab) local persistence
+  const TIPEEE_APIKEY_KEY = "jbs.tipeee.apiKey.v1";
+  const TIPEEE_SLUG_KEY   = "jbs.tipeee.slug.v1";
+  const TIPEEE_AUTO_KEY   = "jbs.tipeee.autoconnect.v1";
   const MAX_EVENTS     = 100;
-const TIPEEE_SLUG_KEY = "tipeee.projectSlug.v1";
-const TIPEEE_API_KEY  = "tipeee.apiKey.v1";
-const TIPEEE_AUTO_KEY = "tipeee.autoConnect.v1";
 
   const isNum = (n)=> typeof n === 'number' && Number.isFinite(n);
   const makeNonce = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+
+  // Small DOM helper used across modules
+  // - accepts a selector string or an element
+  // - never throws if target is missing
+  function setText(target, text){
+    let el = null;
+    if (typeof target === "string") el = $(target);
+    else el = target;
+    if (!el) return;
+    el.textContent = (text == null) ? "" : String(text);
+  }
 
   // Debug verbose (session only, no persistence)
   let DEBUG_VERBOSE = false;
 
   function getStoredPwd(){ try { return localStorage.getItem(SB_PWD_KEY) || ""; } catch { return ""; } }
   function setStoredPwd(v){ try { localStorage.setItem(SB_PWD_KEY, v || ""); } catch {} }
+
+  // ---- Tipeee settings (localStorage)
+  function getStoredTipeeeApiKey(){ try { return localStorage.getItem(TIPEEE_APIKEY_KEY) || ""; } catch { return ""; } }
+  function setStoredTipeeeApiKey(v){ try { localStorage.setItem(TIPEEE_APIKEY_KEY, String(v || "")); } catch {} }
+
+  function getStoredTipeeeSlug(){ try { return localStorage.getItem(TIPEEE_SLUG_KEY) || ""; } catch { return ""; } }
+  function setStoredTipeeeSlug(v){ try { localStorage.setItem(TIPEEE_SLUG_KEY, String(v || "")); } catch {} }
+
+  function getStoredTipeeeAuto(){
+    try { return (localStorage.getItem(TIPEEE_AUTO_KEY) || "0") === "1"; }
+    catch { return false; }
+  }
+  function setStoredTipeeeAuto(v){
+    try { localStorage.setItem(TIPEEE_AUTO_KEY, v ? "1" : "0"); }
+    catch {}
+  }
   function getQS(name){ try { return new URLSearchParams(location.search).get(name); } catch { return null; } }
-function getStoredTipeeeSlug(){ try { return localStorage.getItem(TIPEEE_SLUG_KEY) || ""; } catch { return ""; } }
-function setStoredTipeeeSlug(v){ try { localStorage.setItem(TIPEEE_SLUG_KEY, v || ""); } catch {} }
-
-function getStoredTipeeeApiKey(){ try { return localStorage.getItem(TIPEEE_API_KEY) || ""; } catch { return ""; } }
-function setStoredTipeeeApiKey(v){ try { localStorage.setItem(TIPEEE_API_KEY, v || ""); } catch {} }
-
-function getStoredTipeeeAuto(){ try { return (localStorage.getItem(TIPEEE_AUTO_KEY) || "0") === "1"; } catch { return false; } }
-function setStoredTipeeeAuto(v){ try { localStorage.setItem(TIPEEE_AUTO_KEY, v ? "1" : "0"); } catch {} }
 
   function appendLog(sel, text){
     const el = $(sel); if (!el) return;
