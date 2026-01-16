@@ -445,3 +445,121 @@ if (document.readyState === "loading") {
   initTipeeeUI();
 }
 
+
+
+// ============================================================================
+// UI tweaks requested:
+// 1) Move Tipeee connection card BELOW the events reception area (Subs list)
+// 2) Add a "Purger les events" button below the Journal with confirmation
+// ----------------------------------------------------------------------------
+// This is implemented defensively (DOM moves), so minimal/no HTML edits needed.
+// ============================================================================
+
+function __findClosestCard(el){
+  while (el && el !== document.body) {
+    if (el.classList && el.classList.contains("card")) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+function __findCardByHeaderText(text){
+  const headers = Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,legend,.card-title,.title"));
+  const match = headers.find(h => (h.textContent || "").trim().toLowerCase() === text.toLowerCase());
+  return match ? __findClosestCard(match) : null;
+}
+
+function __moveTipeeeCardBelowSubs(){
+  const tipeeeDot = document.querySelector("#tipeee-dot");
+  if (!tipeeeDot) return;
+
+  const tipeeeCard = __findClosestCard(tipeeeDot);
+  if (!tipeeeCard) return;
+
+  // Try to find the "Subs" card (your reception list)
+  let subsCard = __findCardByHeaderText("Subs");
+  if (!subsCard) {
+    // fallback: find a card that contains a header with "Subs" substring
+    const any = Array.from(document.querySelectorAll(".card"))
+      .find(c => (c.textContent || "").toLowerCase().includes("\nsubs") || (c.textContent || "").trim().toLowerCase().startsWith("subs"));
+    subsCard = any || null;
+  }
+  if (!subsCard) return;
+
+  // If already below, do nothing
+  if (subsCard.nextElementSibling === tipeeeCard) return;
+
+  subsCard.parentNode.insertBefore(tipeeeCard, subsCard.nextElementSibling);
+}
+
+function __ensurePurgeButton(){
+  // Find the Journal card (log box)
+  let journalCard = __findCardByHeaderText("Journal");
+  if (!journalCard) {
+    // fallback: the log container in your UI is usually .log or .logbox
+    const logEl = document.querySelector(".log, .logbox, #events-log, #log, #journal, #journal-log");
+    journalCard = logEl ? __findClosestCard(logEl) : null;
+  }
+  if (!journalCard) return;
+
+  if (document.querySelector("#btn-events-purge")) return;
+
+  const wrap = document.createElement("div");
+  wrap.style.display = "flex";
+  wrap.style.justifyContent = "flex-end";
+  wrap.style.marginTop = "10px";
+
+  const btn = document.createElement("button");
+  btn.id = "btn-events-purge";
+  btn.type = "button";
+  btn.className = "btn";
+  btn.textContent = "Purger les events";
+  btn.title = "Supprime les events stockés et efface la liste affichée";
+
+  btn.addEventListener("click", () => {
+    const ok = window.confirm("Purger tous les events affichés ?\\n\\nCette action est irréversible.");
+    if (!ok) return;
+
+    try {
+      // Clear the persisted store used by the dashboard
+      if (typeof EVENTS_KEY !== "undefined" && EVENTS_KEY) {
+        localStorage.removeItem(EVENTS_KEY);
+      } else {
+        // fallback (known key in your core.js)
+        localStorage.removeItem("jbs.events.v1");
+      }
+    } catch (e) {
+      console.warn("[Events purge] localStorage remove failed:", e);
+    }
+
+    // Best effort: if your main events module exposes a refresh, call it
+    try {
+      if (typeof renderStoredEventsIntoUI === "function") renderStoredEventsIntoUI();
+    } catch {}
+    try {
+      if (typeof refreshSubsFromStored === "function") refreshSubsFromStored();
+    } catch {}
+
+    // Hard fallback: reload to ensure UI resets cleanly
+    setTimeout(() => location.reload(), 50);
+  });
+
+  wrap.appendChild(btn);
+  journalCard.appendChild(wrap);
+}
+
+function __applyEventsUiTweaks(){
+  __moveTipeeeCardBelowSubs();
+  __ensurePurgeButton();
+}
+
+// Run after DOM is ready, and re-run once after a short delay to handle late UI rendering.
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    __applyEventsUiTweaks();
+    setTimeout(__applyEventsUiTweaks, 300);
+  });
+} else {
+  __applyEventsUiTweaks();
+  setTimeout(__applyEventsUiTweaks, 300);
+}
