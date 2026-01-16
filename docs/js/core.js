@@ -225,4 +225,39 @@ function updateZoomPreview(perGameGoal){
     setLockVisual();
   }
 
-  
+
+// --- RAW PAYLOAD LOGGING (can be noisy) -------------------------------------
+function safeJsonStringify(obj, space = 2, maxLen = 25000){
+  // Handles circular refs and truncates to keep UI responsive
+  const seen = new WeakSet();
+  let s = "";
+  try {
+    s = JSON.stringify(obj, (k, v) => {
+      // Best-effort redaction of obvious secrets (still logs "everything else")
+      if (typeof k === "string" && /(token|api[_-]?key|secret|password)/i.test(k)) return "[REDACTED]";
+      if (v && typeof v === "object") {
+        if (seen.has(v)) return "[Circular]";
+        seen.add(v);
+      }
+      return v;
+    }, space);
+  } catch (e) {
+    try { s = String(obj); } catch { s = "[Unstringifiable]"; }
+  }
+  if (typeof s === "string" && s.length > maxLen) {
+    s = s.slice(0, maxLen) + "\n…[TRUNCATED]…";
+  }
+  return s;
+}
+
+// --- RAW PAYLOAD DEBUG -> CONSOLE -------------------------------------------
+// Keeps Journal readable: events are summarized in UI, full payloads go to DevTools.
+function logPayloadToConsole(label, payload){
+  try {
+    if (console.groupCollapsed) console.groupCollapsed(label);
+    console.log(payload);
+    if (console.groupEnd) console.groupEnd();
+  } catch (e) {
+    try { console.log(label, payload); } catch {}
+  }
+}
