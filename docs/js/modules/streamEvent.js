@@ -337,6 +337,23 @@ function connectTipeee(){
     transports: ["websocket","polling"],
     query: { access_token: apiKey }
   });
+// ---- TIPEEE SNIFFER (debug) ----
+try {
+  tipeeeSocket.onAny?.((event, ...args) => {
+    console.log("[TIPEEE onAny]", event, args);
+  });
+
+  tipeeeSocket.io?.on?.("packet", (p) => {
+    console.log("[TIPEEE RAW packet]", p);
+  });
+
+  tipeeeSocket.on?.("connect_error", (e) => console.log("[TIPEEE connect_error]", e));
+  tipeeeSocket.on?.("error", (e) => console.log("[TIPEEE error]", e));
+  tipeeeSocket.on?.("disconnect", (r) => console.log("[TIPEEE disconnect]", r));
+} catch (e) {
+  console.warn("[TIPEEE sniffer] failed:", e);
+}
+// -------------------------------
 
   tipeeeSocket.on("connect", () => {
     setTipeeeStatusUI(true, "Connecté");
