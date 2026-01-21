@@ -122,6 +122,36 @@ function bestTextColorForBg(hex){
     const cBlack = contrast(L, 0);
     return (cBlack >= cWhite) ? "#000" : "#fff";
   } catch { return "#fff"; }
+
+function clamp01(x){ x = Number(x); return Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : 0; }
+function hexToRgb(hex){
+  const m = /^#([0-9a-f]{6})$/i.exec(String(hex||"").trim());
+  if (!m) return null;
+  const n = parseInt(m[1],16);
+  return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
+}
+function rgbToHex(r,g,b){
+  const to2 = v => (Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,"0"));
+  return `#${to2(r)}${to2(g)}${to2(b)}`;
+}
+// Mix an accent with black to create a dark tinted background (blackRatio=0..1)
+function mixWithBlack(hex, blackRatio){
+  const c = hexToRgb(hex);
+  if (!c) return "#000";
+  const t = 1 - clamp01(blackRatio);
+  return rgbToHex(c.r*t, c.g*t, c.b*t);
+}
+function relLuminanceHex(hex){
+  const c = hexToRgb(hex);
+  if (!c) return 0;
+  const srgb = [c.r,c.g,c.b].map(v=>{ v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4); });
+  return 0.2126*srgb[0]+0.7152*srgb[1]+0.0722*srgb[2];
+}
+function contrastRatioHex(a,b){
+  const L1 = relLuminanceHex(a), L2 = relLuminanceHex(b);
+  return (Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05);
+}
+
 }
 
 function accentColorForEvent(e){
@@ -160,17 +190,35 @@ function makeItem(htmlText, onToggle, ack=false, id=null, accent=null){
 
 // Accent coloring: colored until clicked; once acked, keep only a 1px colored border
 if (accent){
-  li.style.border = `1px solid ${accent}`;
+  // New DA:
+  // - keep accent as TEXT color
+  // - use a very dark tinted background (accent mixed with black)
+  // - when acked (clicked): revert to black background + grey text (no border highlight)
+  const bgTint = mixWithBlack(accent, 0.86);
+
+  const muted = ()=> a.querySelectorAll(".muted");
+
   if (!ack){
-    li.style.backgroundColor = accent;
-    const tc = bestTextColorForBg(accent);
-    li.style.color = tc;
+    li.style.backgroundColor = bgTint;
+    li.style.border = "1px solid transparent";
+    li.style.color = accent;
     a.style.color = "inherit";
-    // Ensure muted spans remain readable on colored background
-    const muted = a.querySelectorAll(".muted");
-    muted.forEach(el => { el.style.color = "inherit"; el.style.opacity = "0.9"; });
+    muted().forEach(el => { el.style.color = "inherit"; el.style.opacity = "0.92"; });
+
+    // If contrast ends up too low (rare), fall back to readable text and keep the accent as a left marker.
+    if (contrastRatioHex(accent, bgTint) < 4.5){
+      const tc = bestTextColorForBg(bgTint);
+      li.style.color = tc;
+      muted().forEach(el => { el.style.color = "inherit"; el.style.opacity = "0.92"; });
+      li.style.borderLeft = `4px solid ${accent}`;
+    }
   } else {
-    li.style.backgroundColor = "transparent";
+    li.style.backgroundColor = "#000";
+    li.style.border = "1px solid transparent";
+    li.style.borderLeft = "";
+    li.style.color = "#777";
+    a.style.color = "inherit";
+    muted().forEach(el => { el.style.color = "inherit"; el.style.opacity = "0.85"; });
   }
 }
     if (ack) li.classList.add("acked");
