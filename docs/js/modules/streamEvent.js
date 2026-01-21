@@ -84,7 +84,8 @@ function eventLine(e){
 
       const tierRaw = (e.sub_tier ?? e.subTier ?? e.tier ?? e.tierLabel ?? "");
       const tierStr = String(tierRaw ?? "");
-      const isPrime = !!(e.is_prime ?? e.isPrime) || tierStr.toLowerCase().includes("prime");
+      const primeRaw = (e.is_prime ?? e.isPrime);
+      const isPrime = (primeRaw === true || primeRaw === 1 || primeRaw === "true" || primeRaw === "1") || tierStr.toLowerCase().includes("prime");
 
       // Map Twitch numeric tiers (1000/2000/3000) to Tier 1/2/3
       let tierLabel = "";
@@ -151,7 +152,11 @@ function accentColorForEvent(e){
     if (tier === "Tier 2") return "#51A2FF";
     if (tier === "Tier 3") return "#2B7FFF";
     // fallback: if is_prime true but tierLabel missing
-    if (e.is_prime || e.isPrime) return "#05DF72";
+    {
+      const primeRaw = (e.is_prime ?? e.isPrime);
+      const isPrime = (primeRaw === true || primeRaw === 1 || primeRaw === "true" || primeRaw === "1");
+      if (isPrime) return "#05DF72";
+    }
   }
   return null;
 }
