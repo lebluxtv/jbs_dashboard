@@ -35,7 +35,17 @@
   let eventsStore = loadEvents();
   let qvUnreadEvents = eventsStore.filter(e => !e.ack).length;
 
-  function eventLine(e){
+  
+  function escapeHtml(s){
+    return String(s ?? "")
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#39;");
+  }
+
+function eventLine(e){
     if (e.type === "GiftBomb") {
       const n = isNum(e.giftCount) ? e.giftCount : (Array.isArray(e.recipients) ? e.recipients.length : 0);
       const recShort = Array.isArray(e.recipients)
@@ -67,6 +77,34 @@
   return `<strong>${e.user}</strong> — Tipeee ${amountTxt ? `<span class="muted">${amountTxt}</span>` : ""}${msg ? `<br><span class="muted">${msg}</span>` : ""}`;
 }
 
+    // ✅ Better formatting for Twitch sub events (Tier 1/2/3 vs Prime)
+    if (e.type === "Sub" || e.type === "ReSub" || e.type === "CommunitySub" || e.type === "CommunitySubGift" || e.type === "MassSubGift" || e.type === "MassGift") {
+      const m = Number(e.months ?? e.duration_months ?? e.cumulativeMonths ?? 0);
+      const months = Number.isFinite(m) ? Math.trunc(m) : 0;
+
+      const tierRaw = (e.sub_tier ?? e.subTier ?? e.tier ?? e.tierLabel ?? "");
+      const tierStr = String(tierRaw ?? "");
+      const isPrime = !!(e.is_prime ?? e.isPrime) || tierStr.toLowerCase().includes("prime");
+
+      // Map Twitch numeric tiers (1000/2000/3000) to Tier 1/2/3
+      let tierLabel = "";
+      if (isPrime) tierLabel = "Prime";
+      else {
+        const low = tierStr.toLowerCase();
+        if (low.includes("1000") || low.includes("tier 1") || low.includes("tier1")) tierLabel = "Tier 1";
+        else if (low.includes("2000") || low.includes("tier 2") || low.includes("tier2")) tierLabel = "Tier 2";
+        else if (low.includes("3000") || low.includes("tier 3") || low.includes("tier3")) tierLabel = "Tier 3";
+        else if (tierStr) tierLabel = tierStr;
+      }
+
+      const tierTxt = tierLabel ? ` • ${tierLabel}` : "";
+      const monthsTxt = months > 0 ? ` • ${months} mois` : "";
+      const label = (e.type === "ReSub") ? "ReSub" : (e.type === "Sub" ? "Sub" : e.type);
+      const msgRaw = (e.message ?? e.text ?? e.systemMessage ?? e.system_message ?? e.msg ?? "").toString().trim();
+const msgLine = msgRaw ? `<br><span class="muted">${escapeHtml(msgRaw)}</span>` : "";
+return `<strong>${e.user}</strong> — ${label}<span class="muted">${tierTxt}${monthsTxt}</span>${msgLine}`;
+    }
+
     return `<strong>${e.user}</strong> — ${e.type} • ${e.tier?("Tier "+e.tier):""} • ${e.tierLabel}${e.months>0?` • ${e.months} mois`:""}`;
   }
 
@@ -80,7 +118,45 @@
     if (bHead) setText(bHead, String(qvUnreadEvents));
   }
 
-  function makeItem(htmlText, onToggle, ack=false, id=null){
+  
+function bestTextColorForBg(hex){
+  try {
+    const h = String(hex||"").trim();
+    const m = /^#([0-9a-f]{6})$/i.exec(h);
+    if (!m) return "#fff";
+    const n = parseInt(m[1],16);
+    const r = (n>>16)&255, g=(n>>8)&255, b=n&255;
+    const srgb = [r,g,b].map(v=>{ v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4); });
+    const L = 0.2126*srgb[0]+0.7152*srgb[1]+0.0722*srgb[2];
+    const contrast = (L1,L2)=> (Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05);
+    const cWhite = contrast(1, L);
+    const cBlack = contrast(L, 0);
+    return (cBlack >= cWhite) ? "#000" : "#fff";
+  } catch { return "#fff"; }
+}
+
+function accentColorForEvent(e){
+  if (!e || !e.type) return null;
+  const t = String(e.type);
+  if (t === "Tipeee") return "#FFA1AD";
+  if (t === "Cheer")  return "#FE9A37";
+  if (t === "Raid")   return "#FB2C36";
+
+  // Subs: Prime / Tier 1/2/3
+  if (t === "Sub" || t === "ReSub" || t === "GiftSub" || t === "GiftBomb" ||
+      t === "CommunitySub" || t === "CommunitySubGift" || t === "MassSubGift" || t === "MassGift") {
+    const tier = tierLabelFromAny(e.tierLabel ?? e.sub_tier ?? e.subTier ?? e.subTier ?? e.subTierRaw ?? e.subTierLabel ?? e.tier ?? "");
+    if (tier === "Prime") return "#05DF72";
+    if (tier === "Tier 1") return "#74D4FF";
+    if (tier === "Tier 2") return "#51A2FF";
+    if (tier === "Tier 3") return "#2B7FFF";
+    // fallback: if is_prime true but tierLabel missing
+    if (e.is_prime || e.isPrime) return "#05DF72";
+  }
+  return null;
+}
+
+function makeItem(htmlText, onToggle, ack=false, id=null, accent=null){
     const li = document.createElement("li");
     li.className = "event";
     const a = document.createElement("a");
@@ -88,26 +164,42 @@
     a.innerHTML = htmlText;
     a.addEventListener("click", (ev)=>{ ev.preventDefault(); ev.stopPropagation(); try { onToggle?.(); } catch {} });
     li.appendChild(a);
+
+// Accent coloring: colored until clicked; once acked, keep only a 1px colored border
+if (accent){
+  li.style.border = `1px solid ${accent}`;
+  if (!ack){
+    li.style.backgroundColor = accent;
+    const tc = bestTextColorForBg(accent);
+    li.style.color = tc;
+    a.style.color = "inherit";
+    // Ensure muted spans remain readable on colored background
+    const muted = a.querySelectorAll(".muted");
+    muted.forEach(el => { el.style.color = "inherit"; el.style.opacity = "0.9"; });
+  } else {
+    li.style.backgroundColor = "transparent";
+  }
+}
     if (ack) li.classList.add("acked");
     if (id != null) li.dataset.id = String(id);
     return li;
   }
 
-  function appendListItem(listEl, htmlText, onToggle, ack=false, id=null){
+  function appendListItem(listEl, htmlText, onToggle, ack=false, id=null, accent=null){
     if (!listEl) return;
     if (listEl.firstElementChild && listEl.firstElementChild.classList.contains("muted"))
       listEl.removeChild(listEl.firstElementChild);
-    const li = makeItem(htmlText, onToggle, ack, id);
+    const li = makeItem(htmlText, onToggle, ack, id, accent);
     listEl.appendChild(li);
     const limit = listEl.classList.contains("list--short") ? 6 : 60;
     while (listEl.children.length > limit) listEl.removeChild(listEl.firstChild);
   }
 
-  function prependListItem(listEl, htmlText, onToggle, ack=false, id=null){
+  function prependListItem(listEl, htmlText, onToggle, ack=false, id=null, accent=null){
     if (!listEl) return;
     if (listEl.firstElementChild && listEl.firstElementChild.classList.contains("muted"))
       listEl.removeChild(listEl.firstElementChild);
-    const li = makeItem(htmlText, onToggle, ack, id);
+    const li = makeItem(htmlText, onToggle, ack, id, accent);
     listEl.insertBefore(li, listEl.firstChild);
     const limit = listEl.classList.contains("list--short") ? 6 : 60;
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
@@ -131,8 +223,8 @@
       if (e && e.type === "Follow") continue;
       const html = eventLine(e);
       const toggle = ()=>{ e.ack = !e.ack; saveEvents(eventsStore); renderStoredEventsIntoUI(); };
-      if (qv)   prependListItem(qv, html, toggle, e.ack, e.id);
-      if (full) prependListItem(full, html, toggle, e.ack, e.id);
+      if (qv)   prependListItem(qv, html, toggle, e.ack, e.id, accentColorForEvent(e));
+      if (full) prependListItem(full, html, toggle, e.ack, e.id, accentColorForEvent(e));
     }
     qvUnreadEvents = eventsStore.filter(e => !e.ack).length;
     syncEventsStatusUI();
