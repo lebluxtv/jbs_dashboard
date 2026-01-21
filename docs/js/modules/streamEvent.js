@@ -1,7 +1,35 @@
 /******************************************************************
    *                     📦 EVENTS (Twitch subs)
    ******************************************************************/
-  function loadEvents(){ try { return JSON.parse(localStorage.getItem(EVENTS_KEY) || "[]") || []; } catch { return []; } }
+  function loadEvents(){
+    // Loads persisted events list, but:
+    // - removes Follow from the clickable list (Subs area)
+    // - keeps a pending log so Follow still appears in the Journal
+    try {
+      const raw = JSON.parse(localStorage.getItem(EVENTS_KEY) || "[]") || [];
+      const list = Array.isArray(raw) ? raw : [];
+
+      // Extract follows (log-only)
+      const follows = list.filter(e => e && e.type === "Follow");
+      const filtered = list.filter(e => !(e && e.type === "Follow"));
+
+      // Persist the cleaned list (so old follows disappear from UI forever)
+      try { localStorage.setItem(EVENTS_KEY, JSON.stringify((filtered || []).slice(-MAX_EVENTS))); } catch {}
+
+      // Stash follow logs to print once UI/log is available
+      if (follows.length) {
+        window.__jbsPendingFollowLogs = (window.__jbsPendingFollowLogs || []);
+        for (const f of follows) {
+          const u = (f && f.user) ? f.user : "—";
+          window.__jbsPendingFollowLogs.push(`FOLLOW: ${u}`);
+        }
+      }
+
+      return filtered;
+    } catch {
+      return [];
+    }
+  }
   function saveEvents(list){ try { localStorage.setItem(EVENTS_KEY, JSON.stringify((list || []).slice(-MAX_EVENTS))); } catch {} }
 
   let eventsStore = loadEvents();
@@ -99,6 +127,8 @@
     }
     for (let i=0;i<eventsStore.length;i++){
       const e = eventsStore[i];
+      // Follow is log-only (never appears in the clickable list)
+      if (e && e.type === "Follow") continue;
       const html = eventLine(e);
       const toggle = ()=>{ e.ack = !e.ack; saveEvents(eventsStore); renderStoredEventsIntoUI(); };
       if (qv)   prependListItem(qv, html, toggle, e.ack, e.id);
@@ -108,6 +138,16 @@
     syncEventsStatusUI();
   }
   renderStoredEventsIntoUI();
+
+  // Flush any Follow events removed from the list (log-only)
+  (function flushPendingFollowLogs(){
+    try {
+      const arr = window.__jbsPendingFollowLogs;
+      if (!Array.isArray(arr) || !arr.length) return;
+      for (const line of arr) appendLog?.("#events-log", line);
+      window.__jbsPendingFollowLogs = [];
+    } catch {}
+  })();
 
   
 
