@@ -260,14 +260,47 @@ function extractTargetNameFromPayload(d){
         if (SUB_EVENT_TYPES.has(event.type)){
         logSbSubEventToConsole(event, data);
 
+        // Helper: collect message text (Twitch resub often provides `text` or `parts[].text`)
+        const buildSubMessage = (d)=>{
+          try{
+            const msg = (d?.message ?? "").toString().trim();
+            if (msg) return msg;
+            const txt = (d?.text ?? "").toString().trim();
+            if (txt) return txt;
+            const sm  = (d?.systemMessage ?? d?.system_message ?? "").toString().trim();
+            if (sm) return sm;
+            if (Array.isArray(d?.parts)){
+              const joined = d.parts.map(p => (p && p.text != null) ? String(p.text) : "").join("").trim();
+              if (joined) return joined;
+            }
+          } catch {}
+          return "";
+        };
+
         if (event.type === "GiftBomb"){
           const d = data || {};
           const gifter     = extractUserName(d.user || d);
           const recipients = extractRecipientNames(d.recipients);
           const giftCount  = Number.isFinite(Number(d.total)) ? Number(d.total) : (Array.isArray(d.recipients) ? d.recipients.length : 0);
-          const tierLabel  = tierLabelFromAny(d.sub_tier ?? d.tier ?? d.plan ?? d.subPlan);
 
-          eventsStore.push({ id: Date.now(), type:"GiftBomb", user: gifter, tierLabel, months:0, ack:false, recipients, giftCount });
+          const subTierRaw = (d.sub_tier ?? d.subTier ?? d.subTierRaw ?? d.sub_tier_raw ?? d.tier ?? d.plan ?? d.subPlan ?? null);
+          const isPrimeRaw = (d.is_prime ?? d.isPrime ?? null);
+
+          const tierLabel  = tierLabelFromAny(subTierRaw ?? ((isPrimeRaw === true || isPrimeRaw === 1 || isPrimeRaw === "true" || isPrimeRaw === "1") ? "prime" : ""));
+
+          eventsStore.push({
+            id: Date.now(),
+            type:"GiftBomb",
+            user: gifter,
+            tierLabel,
+            sub_tier: subTierRaw,
+            is_prime: isPrimeRaw,
+            months:0,
+            ack:false,
+            recipients,
+            giftCount,
+            message: buildSubMessage(d)
+          });
           saveEvents(eventsStore);
           renderStoredEventsIntoUI();
           appendLog("#events-log", `GiftBomb — ${gifter} (${tierLabel}${giftCount?`, ${giftCount} gifts`:""}) → ${recipients.join(", ")||"—"}`);
@@ -278,24 +311,67 @@ function extractTargetNameFromPayload(d){
           const d = data || {};
           const gifter    = extractUserName(d.user || d);
           const recipient = extractRecipientName(d.recipient);
-          const tierLabel = tierLabelFromAny(d.subTier ?? d.tier ?? d.plan ?? d.subPlan);
 
-          eventsStore.push({ id: Date.now(), type:"GiftSub", user: gifter, tierLabel, months:0, ack:false, recipient });
+          const subTierRaw = (d.sub_tier ?? d.subTier ?? d.subTierRaw ?? d.sub_tier_raw ?? d.tier ?? d.plan ?? d.subPlan ?? null);
+          const isPrimeRaw = (d.is_prime ?? d.isPrime ?? null);
+
+          const tierLabel = tierLabelFromAny(subTierRaw ?? ((isPrimeRaw === true || isPrimeRaw === 1 || isPrimeRaw === "true" || isPrimeRaw === "1") ? "prime" : ""));
+
+          eventsStore.push({
+            id: Date.now(),
+            type:"GiftSub",
+            user: gifter,
+            tierLabel,
+            sub_tier: subTierRaw,
+            is_prime: isPrimeRaw,
+            months:0,
+            ack:false,
+            recipient,
+            message: buildSubMessage(d)
+          });
           saveEvents(eventsStore);
           renderStoredEventsIntoUI();
           appendLog("#events-log", `GiftSub — ${gifter}${tierLabel?` (${tierLabel})`:""} → ${recipient||"—"}`);
           return;
         }
 
+        // Default: Sub / ReSub / CommunitySub / MassGift / etc.
         const d = data || {};
-        const user      = extractUserName(d);
-        const tierLabel = tierLabelFromAny(d.tier ?? d.plan ?? d.subPlan ?? d.subTier ?? "Prime");
-        const months    = extractMonths(d);
+        const user   = extractUserName(d.user || d);
 
-        eventsStore.push({ id: Date.now(), type: event.type, user, tierLabel, months: months || 0, ack:false });
+        // IMPORTANT:
+        // - Never default to "Prime"
+        // - Prefer sub_tier + is_prime coming from Streamer.bot payload
+        const subTierRaw = (d.sub_tier ?? d.subTier ?? d.subTierRaw ?? d.sub_tier_raw ?? d.subTierId ?? d.sub_tier_id ?? null);
+        const isPrimeRaw = (d.is_prime ?? d.isPrime ?? null);
+
+        const tierLabel = tierLabelFromAny(
+          subTierRaw
+          ?? d.tier ?? d.plan ?? d.subPlan ?? d.subTier
+          ?? ((isPrimeRaw === true || isPrimeRaw === 1 || isPrimeRaw === "true" || isPrimeRaw === "1") ? "prime" : "")
+          ?? ""
+        );
+
+        const months = extractMonths(d) || 0;
+        const msg = buildSubMessage(d);
+
+        eventsStore.push({
+          id: Date.now(),
+          type: event.type,
+          user,
+          tierLabel,
+          sub_tier: subTierRaw,
+          is_prime: isPrimeRaw,
+          months,
+          // also keep raw fields for richer UI formatting
+          systemMessage: d.systemMessage ?? d.system_message ?? null,
+          text: d.text ?? null,
+          message: d.message ?? null,
+          ack:false
+        });
         saveEvents(eventsStore);
         renderStoredEventsIntoUI();
-        appendLog("#events-log", `${event.type} — ${user} (${tierLabel}${months>0?`, ${months} mois`:""})`);
+        appendLog("#events-log", `${event.type} — ${user} (${tierLabel}${months>0?`, ${months} mois`:""})${msg?` : ${msg}`:""}`);
         return;
       }
       }
