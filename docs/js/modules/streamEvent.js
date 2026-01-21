@@ -82,21 +82,9 @@ function eventLine(e){
       const m = Number(e.months ?? e.duration_months ?? e.cumulativeMonths ?? 0);
       const months = Number.isFinite(m) ? Math.trunc(m) : 0;
 
-      const tierRaw = (e.sub_tier ?? e.subTier ?? e.tier ?? e.tierLabel ?? "");
-      const tierStr = String(tierRaw ?? "");
-      const primeRaw = (e.is_prime ?? e.isPrime);
-      const isPrime = (primeRaw === true || primeRaw === 1 || primeRaw === "true" || primeRaw === "1") || tierStr.toLowerCase().includes("prime");
+      const norm = normalizeSubTier(e);
+      const tierLabel = norm.tierLabel;
 
-      // Map Twitch numeric tiers (1000/2000/3000) to Tier 1/2/3
-      let tierLabel = "";
-      if (isPrime) tierLabel = "Prime";
-      else {
-        const low = tierStr.toLowerCase();
-        if (low.includes("1000") || low.includes("tier 1") || low.includes("tier1")) tierLabel = "Tier 1";
-        else if (low.includes("2000") || low.includes("tier 2") || low.includes("tier2")) tierLabel = "Tier 2";
-        else if (low.includes("3000") || low.includes("tier 3") || low.includes("tier3")) tierLabel = "Tier 3";
-        else if (tierStr) tierLabel = tierStr;
-      }
 
       const tierTxt = tierLabel ? ` • ${tierLabel}` : "";
       const monthsTxt = months > 0 ? ` • ${months} mois` : "";
@@ -146,7 +134,7 @@ function accentColorForEvent(e){
   // Subs: Prime / Tier 1/2/3
   if (t === "Sub" || t === "ReSub" || t === "GiftSub" || t === "GiftBomb" ||
       t === "CommunitySub" || t === "CommunitySubGift" || t === "MassSubGift" || t === "MassGift") {
-    const tier = tierLabelFromAny(e.tierLabel ?? e.sub_tier ?? e.subTier ?? e.subTier ?? e.subTierRaw ?? e.subTierLabel ?? e.tier ?? "");
+    const tier = normalizeSubTier(e).tierLabel;
     if (tier === "Prime") return "#05DF72";
     if (tier === "Tier 1") return "#74D4FF";
     if (tier === "Tier 2") return "#51A2FF";
@@ -288,6 +276,37 @@ if (accent){
     if (s.includes("3000") || s.includes("tier 3") || s.includes("tier3")) return "Tier 3";
     return String(v || "");
   }
+
+  // Normalize Twitch subscription tier reliably.
+  // Some pipelines may incorrectly set tierLabel="Prime" while is_prime is false and sub_tier is missing.
+  // We recover Tier 1/2/3 from sub_tier/subTier when present, otherwise from systemMessage/text.
+  function normalizeSubTier(e){
+    const tierRaw = (e?.sub_tier ?? e?.subTier ?? e?.tier ?? e?.tierLabel ?? "");
+    const tierStr = String(tierRaw ?? "");
+    const primeRaw = (e?.is_prime ?? e?.isPrime);
+
+    const primeStrict = (primeRaw === true || primeRaw === 1 || primeRaw === "true" || primeRaw === "1");
+    if (primeStrict) return { tierLabel: "Prime", isPrime: true };
+
+    // Try explicit tier fields
+    const low = tierStr.toLowerCase();
+    if (low.includes("1000") || low.includes("tier 1") || low.includes("tier1")) return { tierLabel: "Tier 1", isPrime: false };
+    if (low.includes("2000") || low.includes("tier 2") || low.includes("tier2")) return { tierLabel: "Tier 2", isPrime: false };
+    if (low.includes("3000") || low.includes("tier 3") || low.includes("tier3")) return { tierLabel: "Tier 3", isPrime: false };
+
+    // Recover from message if available (e.g., "subscribed at tier 3.")
+    const msg = String(e?.systemMessage ?? e?.system_message ?? e?.message ?? e?.text ?? e?.msg ?? "").toLowerCase();
+    const m = /tier\s*([123])/.exec(msg);
+    if (m){
+      return { tierLabel: `Tier ${m[1]}`, isPrime: false };
+    }
+
+    // Only treat as Prime if the tier string itself says prime AND we couldn't find a numeric tier
+    if (low.includes("prime")) return { tierLabel: "Prime", isPrime: true };
+
+    return { tierLabel: tierStr || "", isPrime: false };
+  }
+
   function extractMonths(d){
     const m = Number(d?.cumulativeMonths ?? d?.months ?? d?.streak ?? 0);
     return Number.isFinite(m) ? m : 0;
