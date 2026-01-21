@@ -135,12 +135,15 @@ function rgbToHex(r,g,b){
   return `#${to2(r)}${to2(g)}${to2(b)}`;
 }
 // Mix an accent with black to create a dark tinted background (blackRatio=0..1)
-function mixWithBlack(hex, blackRatio){
+// NOTE: declare with 'var' to be safely hoisted even if this file is loaded in unusual orders.
+var mixWithBlack = function(hex, blackRatio){
   const c = hexToRgb(hex);
   if (!c) return "#000";
   const t = 1 - clamp01(blackRatio);
   return rgbToHex(c.r*t, c.g*t, c.b*t);
-}
+};
+// Expose for debugging (harmless if not in a browser)
+try { if (typeof window !== "undefined") window.mixWithBlack = mixWithBlack; } catch {}
 function relLuminanceHex(hex){
   const c = hexToRgb(hex);
   if (!c) return 0;
