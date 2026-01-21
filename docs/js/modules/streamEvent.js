@@ -122,6 +122,7 @@ function bestTextColorForBg(hex){
     const cBlack = contrast(L, 0);
     return (cBlack >= cWhite) ? "#000" : "#fff";
   } catch { return "#fff"; }
+}
 
 function clamp01(x){ x = Number(x); return Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : 0; }
 function hexToRgb(hex){
@@ -153,8 +154,6 @@ function relLuminanceHex(hex){
 function contrastRatioHex(a,b){
   const L1 = relLuminanceHex(a), L2 = relLuminanceHex(b);
   return (Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05);
-}
-
 }
 
 function accentColorForEvent(e){
