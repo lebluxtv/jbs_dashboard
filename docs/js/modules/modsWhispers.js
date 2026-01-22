@@ -1,200 +1,128 @@
+\
+/******************************************************************
+ *                     🕵️ Mods Whispers Module
+ *  - Receives payloads from Streamer.bot via event-router
+ *  - Updates Overview card + "Mods Whispers" tab
+ ******************************************************************/
 (function(){
-  "use strict";
+  const $  = window.$  || ((s, root=document) => root.querySelector(s));
+  const $$ = window.$$ || ((s, root=document) => Array.from(root.querySelectorAll(s)));
 
-  // -------------------------------------------------------------
-  // Mods Whispers module (JBS Dashboard)
-  // - Receives Streamer.bot payloads (Whispers trigger) routed by event-router.js
-  // - Displays last message + small history (Overview + dedicated tab)
-  // -------------------------------------------------------------
+  const MAX_ITEMS = 12;
+  const ACTIVE_MS = 30_000;
 
-  const MAX_ITEMS = 20;
-  const ACTIVE_TIMEOUT_MS = 30_000;
-
+  let lastTs = 0;
   let activeTimer = null;
   let count = 0;
-  const items = [];
 
-  const $  = (s, root=document) => root.querySelector(s);
-  const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
-
-  function safeText(el, txt){
+  function setText(el, txt){
     if (!el) return;
-    el.textContent = (txt == null) ? "" : String(txt);
+    el.textContent = (txt ?? "").toString();
   }
 
-  function setDots(on){
-    $$(".dot-mods").forEach(el=>{
-      el.classList.remove("on","off");
-      el.classList.add(on ? "on" : "off");
-    });
-  }
-
-  function setStatus(txt){
-    ["mods-status-text", "mods-status-main-text"].forEach(id=>{
-      const el = document.getElementById(id);
-      if (el) safeText(el, txt);
-    });
-  }
-
-  function setCounters(){
-    const qv = document.getElementById("qv-mods-counter");
-    const main = document.getElementById("mods-counter");
-    const val = String(count);
-
-    if (qv){
-      safeText(qv, val);
-      qv.style.display = count > 0 ? "inline-flex" : "none";
-    }
-    if (main){
-      safeText(main, val);
-      main.style.display = count > 0 ? "inline-flex" : "none";
-    }
-  }
-
-  function appendLogLine(text){
-    const log = document.getElementById("mods-whispers-log");
-    if (!log) return;
-
-    const ts = new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
-    const p = document.createElement("p");
-    p.textContent = `[${ts}] ${text}`;
-    log.appendChild(p);
-    log.scrollTop = log.scrollHeight;
-  }
-
-  function clearEmptyLi(ul){
-    if (!ul) return;
-    const li = ul.querySelector("li");
-    if (li && li.classList.contains("muted") && /aucun/i.test(li.textContent || "")){
-      ul.innerHTML = "";
-    }
-  }
-
-  function renderLists(){
-    const qvList = document.getElementById("qv-mods-list");
-    const mainList = document.getElementById("mods-whispers-list");
-
-    if (qvList){
-      qvList.innerHTML = "";
-      for (const it of items){
-        const li = document.createElement("li");
-        li.textContent = `${it.user} : ${it.message}`;
-        qvList.appendChild(li);
-      }
+  function setActive(on){
+    // dots
+    if (typeof window.setDot === "function") {
+      window.setDot(".dot-mods", !!on);
+    } else {
+      $$(".dot-mods").forEach(el => {
+        el.classList.remove("on","off");
+        el.classList.add(on ? "on" : "off");
+      });
     }
 
-    if (mainList){
-      mainList.innerHTML = "";
-      for (const it of items){
-        const li = document.createElement("li");
-        li.textContent = `${it.user} : ${it.message}`;
-        mainList.appendChild(li);
-      }
-      if (!items.length){
-        const li = document.createElement("li");
-        li.className = "muted";
-        li.textContent = "Aucun message";
-        mainList.appendChild(li);
-      }
-    }
+    // status labels (overview + tab)
+    setText($("#mods-status-text"), on ? "Actif" : "Inactif");
+    setText($("#mods-status-text-panel"), on ? "Actif" : "Inactif");
   }
 
-  function setLastEverywhere(user, msg){
-    safeText(document.getElementById("overview-mods-last-user"), user || "—");
-    safeText(document.getElementById("overview-mods-last-msg"), msg || "Aucun message");
-    safeText(document.getElementById("mods-last-user"), user || "—");
-    safeText(document.getElementById("mods-last-msg"), msg || "Aucun message");
-  }
-
-  function startActivePulse(){
-    setDots(true);
-    setStatus("Actif");
+  function bumpActive(){
+    lastTs = Date.now();
+    setActive(true);
     if (activeTimer) clearTimeout(activeTimer);
-    activeTimer = setTimeout(()=>{
-      setDots(false);
-      setStatus("Inactif");
-      activeTimer = null;
-    }, ACTIVE_TIMEOUT_MS);
+    activeTimer = setTimeout(() => {
+      // only go inactive if no newer events came in
+      if (Date.now() - lastTs >= ACTIVE_MS) setActive(false);
+    }, ACTIVE_MS + 50);
   }
 
-  function extractBool(payload, keys){
-    for (const k of keys){
-      if (!k) continue;
-      const v = payload?.[k];
-      if (v === true || v === 1 || v === "1" || v === "true") return true;
-      if (v === false || v === 0 || v === "0" || v === "false") return false;
-    }
-    return null;
+  function renderCounter(){
+    const els = [$("#qv-mods-counter"), $("#mods-counter")].filter(Boolean);
+    els.forEach(el => {
+      el.style.display = count > 0 ? "inline-flex" : "none";
+      setText(el, String(count));
+    });
   }
 
-  function pickString(payload, keys){
-    for (const k of keys){
-      const v = payload?.[k];
-      if (typeof v === "string" && v.trim()) return v.trim();
-    }
-    return "";
+  function liLine(from, msg, ts){
+    const li = document.createElement("li");
+    li.className = "event-item";
+    const when = ts ? new Date(ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", second:"2-digit"}) : "";
+    // keep it simple & safe (no HTML injection)
+    li.textContent = `${when ? "["+when+"] " : ""}${from} — ${msg}`;
+    return li;
   }
 
-  function isAllowed(payload){
-    // You said you’ll set flags yourself: we accept several common ones
-    const direct = extractBool(payload, ["allow", "allowed", "isAllowed", "isModMessage", "isModeratorMessage"]);
-    if (direct === true) return true;
-
-    const isBroadcaster = extractBool(payload, ["isBroadcaster", "isStreamer", "broadcaster"]);
-    const isLeBlux      = extractBool(payload, ["isLeBluxTv", "isLeBlux", "isOwner"]);
-    const isMod         = extractBool(payload, ["isMod", "isModerator", "moderator"]);
-
-    // Also accept nested flags object
-    const f = payload?.flags && typeof payload.flags === "object" ? payload.flags : null;
-    const nested = (f ? (
-      extractBool(f, ["allow", "allowed", "isBroadcaster", "isLeBluxTv", "isLeBlux", "isMod", "isModerator"])
-    ) : null);
-
-    return (isBroadcaster === true) || (isLeBlux === true) || (isMod === true) || (nested === true);
+  function prependList(listEl, node){
+    if (!listEl) return;
+    listEl.prepend(node);
+    while (listEl.children.length > MAX_ITEMS) listEl.removeChild(listEl.lastElementChild);
   }
 
-  // -------------------------------------------------------------
-  // Public entry point (called by event-router.js)
-  // -------------------------------------------------------------
+  function setLast(from, msg){
+    setText($("#overview-mods-last-user"), from || "—");
+    setText($("#overview-mods-last-msg"), msg || "Aucun message");
+    setText($("#mods-last-user"), from || "—");
+    setText($("#mods-last-msg"), msg || "Aucun message");
+  }
+
+  function normalizeFlags(payload){
+    // accept multiple flag shapes; streamer.bot side may change names
+    const f = (payload && payload.flags && typeof payload.flags === "object") ? payload.flags : {};
+    const isMod = !!(payload.isModerator ?? payload.isMod ?? f.isModerator ?? f.isMod);
+    const from = (payload.from ?? payload.user ?? payload.userName ?? payload.username ?? payload.author ?? "").toString();
+    const allow = !!(payload.allow ?? payload.allowed ?? f.allow ?? f.allowed);
+    return { isMod, from, allow };
+  }
+
+  // Exposed entry-point called by event-router.js
   window.handleModsWhispersWidgetEvent = function(payload){
     try{
       if (!payload || typeof payload !== "object") return;
 
-      if (!isAllowed(payload)) return;
+      const msg = (payload.message ?? payload.text ?? payload.rawInput ?? "").toString();
+      if (!msg.trim()) return;
 
-      const user = pickString(payload, ["user", "from", "username", "userName", "displayName", "author"]) || "—";
-      const msg  = pickString(payload, ["message", "text", "content", "whisper", "body"]);
+      const { isMod, from, allow } = normalizeFlags(payload);
 
-      if (!msg) return;
+      // If SB already filtered, we still accept everything.
+      // But if a flag "allow/allowed" exists and is false -> drop.
+      if ((payload.allow !== undefined || payload.allowed !== undefined || (payload.flags && (payload.flags.allow !== undefined || payload.flags.allowed !== undefined))) && !allow){
+        return;
+      }
 
-      // state
+      // optional: if you want client-side reinforcement, uncomment:
+      // if (!isMod && from.toLowerCase() !== "lebluxtv") return;
+
+      bumpActive();
+
       count++;
-      items.unshift({ user, message: msg });
-      if (items.length > MAX_ITEMS) items.length = MAX_ITEMS;
+      renderCounter();
+      setLast(from || "—", msg);
 
-      // UI
-      startActivePulse();
-      setCounters();
-      setLastEverywhere(user, msg);
-      renderLists();
+      const ts = payload.timestamp ?? Date.now();
+      prependList($("#qv-mods-list"), liLine(from || "—", msg, ts));
+      prependList($("#mods-whispers-list"), liLine(from || "—", msg, ts));
 
-      appendLogLine(`Whisper — ${user} : ${msg}`);
-    } catch (e){
-      try {
-        // best-effort debug log if your global helper exists
-        if (typeof appendLogDebug === "function") appendLogDebug("modsWhispers.error", { message: e?.message || String(e) });
-      } catch {}
+      if (typeof window.appendLog === "function") {
+        window.appendLog("#mods-whispers-log", `Whisper — ${from || "—"} : ${msg}`);
+      }
+    } catch(e){
+      // stay silent; dashboard must not crash
+      if (typeof console !== "undefined") console.warn("[modsWhispers] error", e);
     }
   };
 
-  // Init default UI state (in case tab is opened before any message)
-  document.addEventListener("DOMContentLoaded", ()=>{
-    try{
-      setDots(false);
-      setStatus("Inactif");
-      setCounters();
-      renderLists();
-    } catch {}
-  });
-
+  // init inactive state
+  setActive(false);
 })();
