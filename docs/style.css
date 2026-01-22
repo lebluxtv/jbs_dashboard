@@ -532,43 +532,30 @@ body.gtg-running #filters button{
 }
 
 
-/* ===================================================== */
-/*                 MODS WHISPERS – UI                    */
-/* ===================================================== */
+/* =========================
+   Mods Whispers (Overview + Tab)
+   ========================= */
 
-.mods-grid{
-  display:grid;
-  grid-template-columns:2fr 3fr;
-  gap:14px;
+/* 4 cards per row on wide screens (instead of 3) */
+@media (min-width: 1100px){
+  .overview-grid .qv-card{ grid-column: span 3; }
 }
-
-.qv-mods-last-user{
-  font-size:16px;
-  line-height:1.2;
-  font-weight:700;
+@media (max-width: 1099px){
+  .overview-grid .qv-card{ grid-column: span 6; }
 }
-.qv-mods-last-msg{
-  font-size:16px;
-  line-height:1.2;
-  font-weight:600;
+@media (max-width: 640px){
+  .overview-grid .qv-card{ grid-column: span 12; }
 }
 
-.mods-last{
-  border:1px dashed #2a2a2d;
-  border-radius:8px;
-  padding:10px;
-  background:#121214;
-}
-.mods-last-user{
-  font-weight:800;
-  margin-bottom:6px;
-}
-.mods-last-msg{
-  font-weight:600;
-  line-height:1.3;
-}
+.dot-mods{ background:#8a6cff; box-shadow:0 0 10px rgba(138,108,255,.35); }
 
-/* Plus dense dans la liste (même esprit que tes ajustements chat/tts) */
-#mods-whispers-list li{
-  padding:6px 0;
-}
+.qv-mods-last{ margin-bottom:10px; }
+.qv-mods-last-user{ font-size:16px; font-weight:700; opacity:.95; }
+.qv-mods-last-msg{ font-size:14px; opacity:.9; white-space:pre-wrap; overflow-wrap:anywhere; }
+
+.mods-grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:16px; }
+.mods-grid .panel-card{ grid-column: span 4; }
+@media (max-width: 1100px){ .mods-grid .panel-card{ grid-column: span 12; } }
+
+.mods-last-user{ font-size:18px; font-weight:800; margin-bottom:6px; }
+.mods-last-msg{ font-size:15px; white-space:pre-wrap; overflow-wrap:anywhere; }
