@@ -112,6 +112,25 @@
           <div class="qv-foot">Messages lus</div>
         </article>
 
+<article class="qv-card qv-card-mods" data-goto="mods">
+  <div class="qv-head">
+    <h2>Moderator's message</h2>
+    <div class="status-inline">
+      <span class="dot dot-mods off"></span>
+      <span id="mods-status-text">Inactif</span>
+      <span id="qv-mods-counter" class="badge" style="display:none">0</span>
+    </div>
+  </div>
+  <div class="qv-body">
+    <div class="qv-mods-last">
+      <div id="overview-mods-last-user" class="qv-mods-last-user">—</div>
+      <div id="overview-mods-last-msg" class="qv-mods-last-msg">Aucun message</div>
+    </div>
+    <ul id="qv-mods-list" class="qv-list"></ul>
+  </div>
+  <div class="qv-foot">Mods whispers</div>
+</article>
+
         <article class="qv-card" data-goto="guess">
           <div class="qv-head">
             <h2>Guess The Game</h2>
@@ -266,7 +285,52 @@
     </section>
 
     <!-- Guess The Game -->
-    <section id="tab-guess" class="tab-panel" style="display:block">
+    
+<!-- Mods Whispers -->
+<section id="tab-mods" class="tab-panel" style="display:none">
+  <div class="panel-head">
+    <h2>Mods Whispers</h2>
+    <div class="status-inline">
+      <span class="dot dot-mods off"></span>
+      <span id="mods-status-text-panel">Inactif</span>
+      <span id="mods-counter" class="badge" style="display:none">0</span>
+    </div>
+  </div>
+
+  <div class="panel-grid mods-grid">
+    <article class="panel-card">
+      <div class="card-head">
+        <h3>Dernier message</h3>
+      </div>
+      <div class="card-body">
+        <div class="mods-last">
+          <div id="mods-last-user" class="mods-last-user">—</div>
+          <div id="mods-last-msg" class="mods-last-msg">Aucun message</div>
+        </div>
+      </div>
+    </article>
+
+    <article class="panel-card">
+      <div class="card-head">
+        <h3>Historique</h3>
+      </div>
+      <div class="card-body">
+        <ul id="mods-whispers-list" class="events-list"></ul>
+      </div>
+    </article>
+
+    <article class="panel-card">
+      <div class="card-head">
+        <h3>Log</h3>
+      </div>
+      <div class="card-body">
+        <div id="mods-whispers-log" class="logbox"></div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section id="tab-guess" class="tab-panel" style="display:block">
       <div class="panel-head">
         <h2>Guess The Game</h2>
         <div class="status-inline">
@@ -469,6 +533,7 @@
   <script src="js/modules/streamEvent.js"></script>
 <script src="js/modules/ttsEvent.js"></script>
 <script src="js/modules/gtgModule.js"></script>
+<script src="js/modules/modsWhispers.js"></script>
 <script src="js/main.js"></script>
 
   
