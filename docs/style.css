@@ -530,3 +530,45 @@ body.gtg-running #filters button{
     grid-template-columns:1fr;
   }
 }
+
+
+/* ===================================================== */
+/*                 MODS WHISPERS – UI                    */
+/* ===================================================== */
+
+.mods-grid{
+  display:grid;
+  grid-template-columns:2fr 3fr;
+  gap:14px;
+}
+
+.qv-mods-last-user{
+  font-size:16px;
+  line-height:1.2;
+  font-weight:700;
+}
+.qv-mods-last-msg{
+  font-size:16px;
+  line-height:1.2;
+  font-weight:600;
+}
+
+.mods-last{
+  border:1px dashed #2a2a2d;
+  border-radius:8px;
+  padding:10px;
+  background:#121214;
+}
+.mods-last-user{
+  font-weight:800;
+  margin-bottom:6px;
+}
+.mods-last-msg{
+  font-weight:600;
+  line-height:1.3;
+}
+
+/* Plus dense dans la liste (même esprit que tes ajustements chat/tts) */
+#mods-whispers-list li{
+  padding:6px 0;
+}
