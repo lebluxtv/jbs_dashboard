@@ -1,3 +1,4 @@
+\
 /******************************************************************
  *                     🕵️ Mods Whispers Module
  *  - Receives payloads from Streamer.bot via event-router
@@ -33,6 +34,7 @@
     // status labels (overview + tab)
     setText($("#mods-status-text"), on ? "Actif" : "Inactif");
     setText($("#mods-status-text-panel"), on ? "Actif" : "Inactif");
+    setText($("#mods-status-inline-text"), on ? "Actif" : "Inactif");
   }
 
   function bumpActive(){
@@ -46,7 +48,7 @@
   }
 
   function renderCounter(){
-    const els = [$("#qv-mods-counter"), $("#mods-counter")].filter(Boolean);
+    const els = [$("#qv-mods-counter"), $("#mods-counter"), $("#mods-counter-inline")].filter(Boolean);
     els.forEach(el => {
       el.style.display = count > 0 ? "inline-flex" : "none";
       setText(el, String(count));
@@ -62,8 +64,14 @@
     return li;
   }
 
+  function clearEmpty(listEl){
+    if (!listEl) return;
+    Array.from(listEl.querySelectorAll('.tts-empty')).forEach(n => n.remove());
+  }
+
   function prependList(listEl, node){
     if (!listEl) return;
+    clearEmpty(listEl);
     listEl.prepend(node);
     while (listEl.children.length > MAX_ITEMS) listEl.removeChild(listEl.lastElementChild);
   }
