@@ -297,36 +297,38 @@
     </div>
   </div>
 
-  <div class="panel-grid mods-grid">
-    <article class="panel-card">
-      <div class="card-head">
-        <h3>Dernier message</h3>
-      </div>
-      <div class="card-body">
-        <div class="mods-last">
-          <div id="mods-last-user" class="mods-last-user">—</div>
-          <div id="mods-last-msg" class="mods-last-msg">Aucun message</div>
+  <div class="mods-grid">
+    <!-- Colonne gauche : messages reçus -->
+    <div class="card">
+      <div class="tts-card-header">
+        <h3>Messages reçus</h3>
+        <div class="tts-status-row">
+          <span class="dot dot-mods off"></span>
+          <span id="mods-status-inline-text">Inactif</span>
+          <span id="mods-counter-inline" class="tts-counter-pill" style="display:none">0</span>
         </div>
       </div>
-    </article>
 
-    <article class="panel-card">
-      <div class="card-head">
-        <h3>Historique</h3>
+      <div class="mods-last-read">
+        <div class="mods-last-read-title">Dernier message</div>
+        <div id="mods-last-user" class="mods-last-read-user">—</div>
+        <div id="mods-last-msg" class="mods-last-read-main">Aucun message</div>
       </div>
-      <div class="card-body">
-        <ul id="mods-whispers-list" class="events-list"></ul>
-      </div>
-    </article>
 
-    <article class="panel-card">
-      <div class="card-head">
-        <h3>Log</h3>
+      <h3 style="margin:10px 0 6px 0;font-size:14px;">Historique</h3>
+      <ul id="mods-whispers-list">
+        <li class="tts-empty">Aucun message reçu pour l’instant</li>
+      </ul>
+    </div>
+
+    <!-- Colonne droite : journal -->
+    <div class="card">
+      <div class="tts-card-header">
+        <h3>Journal</h3>
       </div>
-      <div class="card-body">
-        <div id="mods-whispers-log" class="logbox"></div>
-      </div>
-    </article>
+
+      <div id="mods-whispers-log" class="log" aria-live="polite"></div>
+    </div>
   </div>
 </section>
 
