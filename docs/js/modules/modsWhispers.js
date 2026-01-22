@@ -1,4 +1,3 @@
-\
 /******************************************************************
  *                     🕵️ Mods Whispers Module
  *  - Receives payloads from Streamer.bot via event-router
