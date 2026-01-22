@@ -212,6 +212,23 @@ function extractTargetNameFromPayload(d){
         }
       }
 
+
+        // ===== Mods whispers widget (via General.Custom / Broadcast.Custom) =====
+        if (widgetName === "modswhispers"
+          || widgetName === "mods_whispers"
+          || widgetName === "mods-whispers"
+          || widgetName === "modswhisper"
+          || widgetName === "modwhispers"
+          || widgetName === "mod-whispers") {
+          // Delegated to module js/modules/modsWhispers.js
+          if (typeof handleModsWhispersWidgetEvent === "function") {
+            handleModsWhispersWidgetEvent(payload);
+          } else {
+            appendLogDebug("modsWhispers.missingHandler", payload);
+          }
+          return;
+        }
+
       if (event?.source === "Twitch"){
 
         // ===== Cheer (bits) =====
