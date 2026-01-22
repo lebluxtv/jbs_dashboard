@@ -205,29 +205,21 @@ function extractTargetNameFromPayload(d){
           return;
         }
 
+
+// ===== Mods Whispers widget =====
+if (widgetName === "modswhispers" || widgetName === "mods_whispers" || widgetName === "mods-whispers") {
+  if (typeof window.handleModsWhispersWidgetEvent === "function") {
+    window.handleModsWhispersWidgetEvent(payload);
+  }
+  return;
+}
+
         // tts-catcher : utile côté dashboard TTS (chat buffer). Ici on ne l'utilise pas, mais on garde le payload en debug.
         if (widgetName === "tts-catcher") {
           appendLogDebug("tts-catcher.raw", data);
           return;
         }
       }
-
-
-        // ===== Mods whispers widget (via General.Custom / Broadcast.Custom) =====
-        if (widgetName === "modswhispers"
-          || widgetName === "mods_whispers"
-          || widgetName === "mods-whispers"
-          || widgetName === "modswhisper"
-          || widgetName === "modwhispers"
-          || widgetName === "mod-whispers") {
-          // Delegated to module js/modules/modsWhispers.js
-          if (typeof handleModsWhispersWidgetEvent === "function") {
-            handleModsWhispersWidgetEvent(payload);
-          } else {
-            appendLogDebug("modsWhispers.missingHandler", payload);
-          }
-          return;
-        }
 
       if (event?.source === "Twitch"){
 
