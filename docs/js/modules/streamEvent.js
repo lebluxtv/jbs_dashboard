@@ -729,27 +729,26 @@ function __findCardByHeaderText(text){
   return match ? __findClosestCard(match) : null;
 }
 
-function __moveTipeeeCardBelowSubs(){
+function __moveTipeeeCardBetweenActivityAndJournal(){
   const tipeeeDot = document.querySelector("#tipeee-dot");
   if (!tipeeeDot) return;
 
   const tipeeeCard = __findClosestCard(tipeeeDot);
   if (!tipeeeCard) return;
 
-  // Try to find the "Subs" card (your reception list)
-  let subsCard = __findCardByHeaderText("Subs");
-  if (!subsCard) {
-    // fallback: find a card that contains a header with "Subs" substring
-    const any = Array.from(document.querySelectorAll(".card"))
-      .find(c => (c.textContent || "").toLowerCase().includes("\nsubs") || (c.textContent || "").trim().toLowerCase().startsWith("subs"));
-    subsCard = any || null;
-  }
-  if (!subsCard) return;
+  // We want: Activity card -> Tipeee card -> Journal card
+  // Activity card is the one titled "Activité"
+  const activityCard = __findCardByHeaderText("Activité");
+  const journalCard  = __findCardByHeaderText("Journal");
 
-  // If already below, do nothing
-  if (subsCard.nextElementSibling === tipeeeCard) return;
+  // If we can't find both cards, do nothing (avoid moving in unexpected layouts)
+  if (!activityCard || !journalCard) return;
 
-  subsCard.parentNode.insertBefore(tipeeeCard, subsCard.nextElementSibling);
+  // If already placed between them, do nothing
+  if (activityCard.nextElementSibling === tipeeeCard && tipeeeCard.nextElementSibling === journalCard) return;
+
+  // Ensure we insert the Tipeee card right before the Journal card (i.e., after Activity)
+  journalCard.parentNode.insertBefore(tipeeeCard, journalCard);
 }
 
 function __ensurePurgeButton(){
@@ -809,7 +808,7 @@ function __ensurePurgeButton(){
 }
 
 function __applyEventsUiTweaks(){
-  __moveTipeeeCardBelowSubs();
+  __moveTipeeeCardBetweenActivityAndJournal();
   __ensurePurgeButton();
 }
 
