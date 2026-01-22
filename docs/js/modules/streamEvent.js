@@ -45,6 +45,35 @@
       .replace(/'/g,"&#39;");
   }
 
+// Find the "Actif/Inactif" label that sits next to the dot in the Events header
+function findEventsStatusLabel(dotEl){
+  if (!dotEl) return null;
+
+  // explicit ids (if present in HTML)
+  const direct =
+    document.querySelector("#events-status-text") ||
+    document.querySelector("#events-state-text") ||
+    document.querySelector("#events-active-text");
+  if (direct) return direct;
+
+  // heuristic: search siblings / parents for a short label containing Actif/Inactif
+  let p = dotEl;
+  for (let depth = 0; depth < 4 && p; depth++, p = p.parentElement){
+    const nodes = p.querySelectorAll("span,div,small,strong");
+    for (const n of nodes){
+      const t = (n.textContent || "").trim();
+      if (!t) continue;
+      if (/^(Actif|Inactif)$/i.test(t)) return n;
+      if (t.length <= 12 && /Actif|Inactif/i.test(t)) return n;
+    }
+  }
+  // fallback: next element sibling
+  const sib = dotEl.nextElementSibling;
+  if (sib && (sib.tagName === "SPAN" || sib.tagName === "DIV" || sib.tagName === "SMALL")) return sib;
+  return null;
+}
+
+
 function eventLine(e){
     if (e.type === "GiftBomb") {
       const n = isNum(e.giftCount) ? e.giftCount : (Array.isArray(e.recipients) ? e.recipients.length : 0);
@@ -99,6 +128,14 @@ return `<strong>${e.user}</strong> — ${label}<span class="muted">${tierTxt}${m
 
   function syncEventsStatusUI(){
     setDot(".dot-events", qvUnreadEvents > 0);
+
+    // Sync Actif/Inactif label with the dot state
+    try {
+      const dot = document.querySelector(".dot-events");
+      const label = findEventsStatusLabel(dot);
+      if (label) label.textContent = (qvUnreadEvents > 0) ? "Actif" : "Inactif";
+    } catch {}
+
     const bQV = $("#qv-events-count");
     if (bQV) { bQV.textContent = String(qvUnreadEvents); bQV.style.display = qvUnreadEvents > 0 ? "" : "none"; }
     const bTab  = $(".badge-events");
