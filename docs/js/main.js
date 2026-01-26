@@ -3,7 +3,7 @@
    ******************************************************************/
   function installDebugToggleButton(){
     // Évite les doublons si le boot ou le debug existent déjà
-    if ($("#gtg-debug-toggle") || $("#gtg-boot-sequence")) return;
+    if ($("#gtg-debug-toggle") || $("#gtg-boot-sequence") || $("#gtg-boot-sequence-speed")) return;
 
     // Bouton Debug
     const debugBtn = document.createElement("button");
@@ -34,6 +34,19 @@
       safeDoAction("GTG Boot From Terminal", { stepNumber: 1 });
     });
 
+    // Bouton Boot Sequence (Speed)
+    const bootSpeedBtn = document.createElement("button");
+    bootSpeedBtn.id = "gtg-boot-sequence-speed";
+    bootSpeedBtn.type = "button";
+    bootSpeedBtn.title = "Lancer la séquence de boot GTG en mode rapide (fast=1)";
+    bootSpeedBtn.textContent = "Boot Speed";
+    bootSpeedBtn.className = "btn btn--ghost";
+    bootSpeedBtn.style.marginLeft = "8px";
+
+    bootSpeedBtn.addEventListener("click", ()=>{
+      safeDoAction("GTG Boot From Terminal", { stepNumber: 1, fast: 1 });
+    });
+
     // Point d’ancrage commun
     const anchor =
       $("#gtg-reset-scores") ||
@@ -46,13 +59,16 @@
       if (anchor.id === "gtg-reset-scores" || anchor.id === "guess-end"){
         // ordre: anchor -> Boot -> Debug
         anchor.insertAdjacentElement("afterend", bootBtn);
-        bootBtn.insertAdjacentElement("afterend", debugBtn);
+        bootBtn.insertAdjacentElement("afterend", bootSpeedBtn);
+        bootSpeedBtn.insertAdjacentElement("afterend", debugBtn);
       } else {
         anchor.appendChild(bootBtn);
+        anchor.appendChild(bootSpeedBtn);
         anchor.appendChild(debugBtn);
       }
     } else {
       document.body.appendChild(bootBtn);
+      document.body.appendChild(bootSpeedBtn);
       document.body.appendChild(debugBtn);
     }
   }
