@@ -123,6 +123,21 @@
       if (typeof window.appendLog === "function") {
         window.appendLog("#mods-whispers-log", `Whisper — ${from || "—"} : ${msg}`);
       }
+
+      // Also push into Events Checker (Overview "Events" + Events tab) with a distinct type/format
+      try {
+        if (typeof eventsStore !== "undefined" && Array.isArray(eventsStore) &&
+            typeof saveEvents === "function" && typeof renderStoredEventsIntoUI === "function") {
+          eventsStore.push({ id: Date.now(), type: "ModWhisper", user: (from || "—"), message: msg, ack: false });
+          saveEvents(eventsStore);
+          renderStoredEventsIntoUI();
+
+          if (typeof window.appendLog === "function") {
+            window.appendLog("#events-log", `Mod Whisper — ${from || "—"} : ${msg}`);
+          }
+        }
+      } catch (_) {}
+
     } catch(e){
       // stay silent; dashboard must not crash
       if (typeof console !== "undefined") console.warn("[modsWhispers] error", e);
