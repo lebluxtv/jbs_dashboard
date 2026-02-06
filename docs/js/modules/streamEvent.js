@@ -88,12 +88,6 @@ function eventLine(e){
       return `<strong>${e.user}</strong> — Gifted sub${tierTxt}${toTxt}`;
     }
 
-    if (e.type === "ModWhisper") {
-      const msg = (e.message || "").toString().trim();
-      const msgLine = msg ? `<br><span class="muted">${escapeHtml(msg)}</span>` : "";
-      return `<strong>${escapeHtml(e.user||"—")}</strong> — <span class="muted">Mod Whisper</span>${msgLine}`;
-    }
-
     if (e.type === "Cheer") {
       const bits = isNum(e.bits) ? e.bits : 0;
       return `<strong>${e.user}</strong> — Cheer <span class="muted">${bits} bits</span>`;
@@ -205,7 +199,6 @@ function accentColorForEvent(e){
   if (t === "Tipeee") return "#FFA1AD";
   if (t === "Cheer")  return "#FE9A37";
   if (t === "Raid")   return "#FB2C36";
-  if (t === "ModWhisper") return "#B1FF4D";
 
   // Subs: Prime / Tier 1/2/3
   if (t === "Sub" || t === "ReSub" || t === "GiftSub" || t === "GiftBomb" ||
@@ -225,14 +218,7 @@ function accentColorForEvent(e){
   return null;
 }
 
-function classForEvent(e){
-  if (!e || !e.type) return null;
-  const t = String(e.type);
-  if (t === "ModWhisper") return "modwhisper";
-  return null;
-}
-
-function makeItem(htmlText, onToggle, ack=false, id=null, accent=null, extraClass=null){
+function makeItem(htmlText, onToggle, ack=false, id=null, accent=null){
     const li = document.createElement("li");
     li.className = "event";
     const a = document.createElement("a");
@@ -240,7 +226,6 @@ function makeItem(htmlText, onToggle, ack=false, id=null, accent=null, extraClas
     a.innerHTML = htmlText;
     a.addEventListener("click", (ev)=>{ ev.preventDefault(); ev.stopPropagation(); try { onToggle?.(); } catch {} });
     li.appendChild(a);
-    if (extraClass) li.classList.add(extraClass);
 
 // Accent coloring: colored until clicked; once acked, keep only a 1px colored border
 if (accent){
@@ -280,21 +265,21 @@ if (accent){
     return li;
   }
 
-  function appendListItem(listEl, htmlText, onToggle, ack=false, id=null, accent=null, extraClass=null){
+  function appendListItem(listEl, htmlText, onToggle, ack=false, id=null, accent=null){
     if (!listEl) return;
     if (listEl.firstElementChild && listEl.firstElementChild.classList.contains("muted"))
       listEl.removeChild(listEl.firstElementChild);
-    const li = makeItem(htmlText, onToggle, ack, id, accent, extraClass);
+    const li = makeItem(htmlText, onToggle, ack, id, accent);
     listEl.appendChild(li);
     const limit = listEl.classList.contains("list--short") ? 6 : 60;
     while (listEl.children.length > limit) listEl.removeChild(listEl.firstChild);
   }
 
-  function prependListItem(listEl, htmlText, onToggle, ack=false, id=null, accent=null, extraClass=null){
+  function prependListItem(listEl, htmlText, onToggle, ack=false, id=null, accent=null){
     if (!listEl) return;
     if (listEl.firstElementChild && listEl.firstElementChild.classList.contains("muted"))
       listEl.removeChild(listEl.firstElementChild);
-    const li = makeItem(htmlText, onToggle, ack, id, accent, extraClass);
+    const li = makeItem(htmlText, onToggle, ack, id, accent);
     listEl.insertBefore(li, listEl.firstChild);
     const limit = listEl.classList.contains("list--short") ? 6 : 60;
     while (listEl.children.length > limit) listEl.removeChild(listEl.lastChild);
@@ -318,8 +303,8 @@ if (accent){
       if (e && e.type === "Follow") continue;
       const html = eventLine(e);
       const toggle = ()=>{ e.ack = !e.ack; saveEvents(eventsStore); renderStoredEventsIntoUI(); };
-      if (qv)   prependListItem(qv, html, toggle, e.ack, e.id, accentColorForEvent(e), classForEvent(e));
-      if (full) prependListItem(full, html, toggle, e.ack, e.id, accentColorForEvent(e), classForEvent(e));
+      if (qv)   prependListItem(qv, html, toggle, e.ack, e.id, accentColorForEvent(e));
+      if (full) prependListItem(full, html, toggle, e.ack, e.id, accentColorForEvent(e));
     }
     qvUnreadEvents = eventsStore.filter(e => !e.ack).length;
     syncEventsStatusUI();
