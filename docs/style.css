@@ -613,22 +613,25 @@ body.gtg-running #filters button{
   font-size:12px;
 }
 #mods-whispers-list li:last-child{ border-bottom:none; }
-/* =============================
-   Mod Whisper (distinct from real events)
-   - Appears in Events lists with a scanning wave until acknowledged
-   - When clicked (acked): behaves like other events (no wave, normal acked styling)
-   ============================= */
-.qv-list li.modwhisper{
-  position:relative;
-  overflow:hidden;
-  font-family:var(--mono);
-  letter-spacing:.2px;
 
-  /* subtle distinct baseline (still compatible with your existing accent logic in JS) */
-  border-left:4px solid #B1FF4D;
+
+/* =============================
+   Mod Whisper (Events)
+   Distinct from real subs/dons.
+   - Only applies to events with class .modwhisper
+   - Scanning wave until acknowledged (clicked)
+   ============================= */
+li.event.modwhisper a{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  letter-spacing: .2px;
 }
 
-.qv-list li.modwhisper:not(.acked)::before{
+li.event.modwhisper{
+  position: relative;
+  overflow: hidden;
+}
+
+li.event.modwhisper:not(.acked)::before{
   content:"";
   position:absolute;
   inset:0;
@@ -636,13 +639,17 @@ body.gtg-running #filters button{
   background: linear-gradient(90deg,
     rgba(0,0,0,0) 0%,
     rgba(177,255,77,0.00) 22%,
-    rgba(177,255,77,0.26) 50%,
+    rgba(177,255,77,0.25) 50%,
     rgba(77,255,214,0.18) 62%,
     rgba(0,0,0,0) 100%
   );
   transform: translateX(-120%);
   animation: modwhisperSweep 1.6s linear infinite;
-  opacity:.95;
+  opacity: .9;
+}
+
+li.event.modwhisper:not(.acked){
+  border-left: 3px solid rgba(177,255,77,0.65);
 }
 
 @keyframes modwhisperSweep{
@@ -650,3 +657,5 @@ body.gtg-running #filters button{
   to   { transform: translateX(120%); }
 }
 
+.modwhisper-user{ font-weight: 700; }
+.modwhisper-msg{ opacity: .95; }
