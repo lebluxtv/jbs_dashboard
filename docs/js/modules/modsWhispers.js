@@ -124,11 +124,21 @@
         window.appendLog("#mods-whispers-log", `Whisper — ${from || "—"} : ${msg}`);
       }
 
-      // Also push into Events Checker (Overview "Events" + Events tab) with a distinct type/format
+      // ✅ Mirror this Mods Whisper into Events Checker (type: ModWhisper)
       try {
-        if (typeof eventsStore !== "undefined" && Array.isArray(eventsStore) &&
-            typeof saveEvents === "function" && typeof renderStoredEventsIntoUI === "function") {
-          eventsStore.push({ id: Date.now(), type: "ModWhisper", user: (from || "—"), message: msg, ack: false });
+        if (typeof eventsStore !== "undefined" &&
+            Array.isArray(eventsStore) &&
+            typeof saveEvents === "function" &&
+            typeof renderStoredEventsIntoUI === "function") {
+
+          eventsStore.push({
+            id: Date.now(),
+            type: "ModWhisper",
+            user: (from || "—"),
+            message: msg,
+            ack: false
+          });
+
           saveEvents(eventsStore);
           renderStoredEventsIntoUI();
 
@@ -136,7 +146,9 @@
             window.appendLog("#events-log", `Mod Whisper — ${from || "—"} : ${msg}`);
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        console.warn("[modsWhispers] mirror to events failed", e);
+      }
 
     } catch(e){
       // stay silent; dashboard must not crash
