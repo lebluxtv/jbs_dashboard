@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>JB Corp Tower — Local 3 fichiers</title>
+    <link rel="stylesheet" href="./jbcorp_tower.css" />
+  </head>
+
+  <body>
+    <div id="hud">
+      <div class="title">JB CORP TOWER</div>
+      <div class="sub" id="ver">Chargement…</div>
+      <div class="hint">Souris: orbite · Molette: zoom · Clic droit: pan</div>
+    </div>
+
+    <div id="err"></div>
+    <canvas id="c"></canvas>
+
+    <!-- Scripts classiques (pas de module) -->
+    <script src="https://unpkg.com/three@0.161.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.161.0/examples/js/controls/OrbitControls.js"></script>
+
+    <!-- Ton JS (SANS import) -->
+    <script src="./jbcorp_tower.js"></script>
+  </body>
+</html>
