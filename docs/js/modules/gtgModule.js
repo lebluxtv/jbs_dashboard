@@ -552,6 +552,8 @@ if (perGameGoalInput){
       if (!confirm("Remettre tous les scores à zéro ?")) return;
       safeDoAction("GTG Scores Reset", {});
     $("#gtg-transfer-s2v")?.addEventListener("click", ()=>{
+      appendLog("#guess-log", "[UI] Transfert click: Streamer -> Viewers");
+      try { console.log("[UI] Transfert click: Streamer -> Viewers"); } catch {}
       const from = "streamer";
       const to   = "viewers";
       if (!GTG_PARTIE_ACTIVE){
@@ -567,6 +569,8 @@ if (perGameGoalInput){
     });
 
     $("#gtg-transfer-v2s")?.addEventListener("click", ()=>{
+      appendLog("#guess-log", "[UI] Transfert click: Viewers -> Streamer");
+      try { console.log("[UI] Transfert click: Viewers -> Streamer"); } catch {}
       const from = "viewers";
       const to   = "streamer";
       if (!GTG_PARTIE_ACTIVE){
@@ -581,6 +585,7 @@ if (perGameGoalInput){
       safeDoAction("GTG Scores Transfer", { from, to });
     });
 
+    });
 
     // Annulation protégée + interdite si objectif atteint
     seriesCancelBtn?.addEventListener("click", ()=>{
