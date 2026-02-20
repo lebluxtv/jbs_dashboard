@@ -693,3 +693,17 @@ li.event.modwhisper:not(.acked){
   background:#000;
 }
 
+
+
+/* === GTG : Transfert de point (dashboard) === */
+.gtg-transfer-row{
+  display:flex;
+  gap:10px;
+  margin-top:10px;
+  flex-wrap:wrap;
+}
+
+.btn.transfer{
+  border-color: rgba(255,204,0,0.35);
+  background: rgba(255,204,0,0.10);
+}
