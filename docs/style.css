@@ -660,6 +660,13 @@ li.event.modwhisper:not(.acked){
 .modwhisper-user{ font-weight: 700; }
 .modwhisper-msg{ opacity: .95; }
 
+
+/* === GTG : Status Manche (patch) === */
+.gtg-status-line{
+  font-family: var(--mono);
+  font-size: 14px;
+  margin: 2px 0 6px 0;
+}
 /* === GTG : Manche progression (patch) === */
 .manche-progress{
   display:flex;
