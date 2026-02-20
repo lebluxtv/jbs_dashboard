@@ -5,16 +5,6 @@
    ******************************************************************/
   const $  = (s, root=document) => root.querySelector(s);
   const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
-
-  // ===== GTG: état de partie (match) vs état de manche (timer) =====
-  // - GTG_PARTIE_ACTIVE : une partie est en cours (entre manches inclus)
-  // - GTG_RUNNING       : une manche est en cours (timer actif)
-  let GTG_PARTIE_ACTIVE = false;
-
-  function setPartieActive(isActive){
-    GTG_PARTIE_ACTIVE = !!isActive;
-    try { refreshCancelAbility(); } catch {}
-  }
 const DEBUG_TARGET_ONLY = true; // <- quand true, on n'affiche QUE le nom du jeu à deviner
 
   const EVENTS_KEY     = "jbs.events.v1";
@@ -133,6 +123,13 @@ function appendLogDebug(tag, obj){
   let GTG_TOTALS = { streamer: 0, viewers: 0 };
   let GTG_GOAL   = null;
 
+  let GTG_PARTIE_ACTIVE = false;
+
+  function setPartieActive(active){
+    GTG_PARTIE_ACTIVE = !!active;
+    refreshCancelAbility();
+  }
+
   function renderGlobalScore(totals, goal){
     const s   = $("#qv-score-streamer") || $("#score-streamer") || $("#score-streamer-val") || $("#gtg-score-streamer");
     const v   = $("#qv-score-viewers")  || $("#score-viewers")  || $("#score-viewers-val") || $("#gtg-score-viewers");
@@ -151,7 +148,7 @@ function appendLogDebug(tag, obj){
   function refreshCancelAbility(){
     const btn = $("#gtg-series-cancel");
     if (!btn) return;
-    const canCancel = GTG_PARTIE_ACTIVE
+    const canCancel = (GTG_PARTIE_ACTIVE || GTG_RUNNING)
       && Number.isFinite(GTG_GOAL)
       && (GTG_TOTALS.streamer < GTG_GOAL && GTG_TOTALS.viewers < GTG_GOAL);
     btn.disabled = !canCancel;
@@ -172,16 +169,38 @@ function appendLogDebug(tag, obj){
     els.forEach(e => { e.textContent = pid || "—"; });
   }
 
-  // ——— Sous-manche / Manches par jeu ———
+  // ——— Manche / Manches par jeu ———
   function renderPerGame(index, goal){
-    const note = $("#gtg-pergame-note");
-    const st   = $("#gtg-pergame-status");
-    const idx  = Number.isFinite(index) ? Math.max(1, Math.min(5, Math.trunc(index))) : null;
-    const cap  = Number.isFinite(goal)  ? Math.max(1, Math.min(5, Math.trunc(goal)))  : null;
-    const text = (idx && cap) ? `${idx} / ${cap}` : "—";
-    if (note) setText(note, `Sous-manche : ${text}`);
-    if (st) setText(st, text);
+  const el = document.getElementById("gtg-status");
+  if (!el) return;
+
+  const idx = Number.isFinite(index) ? index + 1 : 0;
+  const cap = Number.isFinite(goal) ? goal : 0;
+
+  el.textContent = `Manche : ${idx} / ${cap}`;
+
+  renderMancheProgress(index, goal);
+}
+
+function renderMancheProgress(index, goal){
+  const wrap = document.getElementById("gtg-manche-progress");
+  if (!wrap) return;
+
+  wrap.innerHTML = "";
+
+  if (!Number.isFinite(goal) || goal <= 0) return;
+
+  for (let i=0;i<goal;i++){
+    const box = document.createElement("div");
+    box.className = "manche-box";
+
+    if (i < index) box.classList.add("manche-past");
+    else if (i === index) box.classList.add("manche-current");
+    else box.classList.add("manche-future");
+
+    wrap.appendChild(box);
   }
+}
 
 
 // ===========================
