@@ -551,6 +551,36 @@ if (perGameGoalInput){
     $("#gtg-reset-scores")?.addEventListener("click", ()=>{
       if (!confirm("Remettre tous les scores à zéro ?")) return;
       safeDoAction("GTG Scores Reset", {});
+    $("#gtg-transfer-s2v")?.addEventListener("click", ()=>{
+      const from = "streamer";
+      const to   = "viewers";
+      if (!GTG_PARTIE_ACTIVE){
+        appendLog("#guess-log", "Transfert refusé : aucune partie active.");
+        return;
+      }
+      if (!GTG_TOTALS || (Number(GTG_TOTALS.streamer) || 0) <= 0){
+        appendLog("#guess-log", "Transfert impossible : Streamer = 0.");
+        return;
+      }
+      if (!confirm("Transférer 1 point du Streamer vers les Viewers ?")) return;
+      safeDoAction("GTG Scores Transfer", { from, to });
+    });
+
+    $("#gtg-transfer-v2s")?.addEventListener("click", ()=>{
+      const from = "viewers";
+      const to   = "streamer";
+      if (!GTG_PARTIE_ACTIVE){
+        appendLog("#guess-log", "Transfert refusé : aucune partie active.");
+        return;
+      }
+      if (!GTG_TOTALS || (Number(GTG_TOTALS.viewers) || 0) <= 0){
+        appendLog("#guess-log", "Transfert impossible : Viewers = 0.");
+        return;
+      }
+      if (!confirm("Transférer 1 point des Viewers vers le Streamer ?")) return;
+      safeDoAction("GTG Scores Transfer", { from, to });
+    });
+
     });
 
     // Annulation protégée + interdite si objectif atteint
