@@ -551,6 +551,8 @@ if (perGameGoalInput){
     $("#gtg-reset-scores")?.addEventListener("click", ()=>{
       if (!confirm("Remettre tous les scores à zéro ?")) return;
       safeDoAction("GTG Scores Reset", {});
+    });
+
     $("#gtg-transfer-s2v")?.addEventListener("click", ()=>{
       appendLog("#guess-log", "[UI] Transfert click: Streamer -> Viewers");
       try { console.log("[UI] Transfert click: Streamer -> Viewers"); } catch {}
