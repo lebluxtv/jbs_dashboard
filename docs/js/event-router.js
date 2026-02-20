@@ -401,14 +401,19 @@ if (widgetName === "modswhispers" || widgetName === "mods_whispers" || widgetNam
           const pg = getPerGamePairFromAny(data);
           renderPerGame(pg.idx, pg.goal);
 
-          if (data.state === "Running"){
-            setRunning(true);
-          } else if (data.state === "Ended" || data.state === "Idle"){
+          // IMPORTANT: "partieUpdate" décrit l'état de la PARTIE (active/idle), pas l'état d'une manche.
+          // Une partie peut rester active entre deux manches (donc sans timer). On ne doit PAS verrouiller l'UI de manche ici.
+          const partieActive = (data.partieActive === true) || (String(data.state || "").toLowerCase() === "running");
+          try { setPartieActive(partieActive); } catch {}
+
+          // Si la partie n'est pas active, on force l'UI en pause + purge timer/round.
+          if (!partieActive || data.state === "Ended" || data.state === "Idle"){
             setRunning(false);
             stopRoundTimer();
             GTG_ROUND_ID = null;
           }
-          appendLogDebug("partieUpdate", { partieId: data.partieId, goalScore: data.goalScore, state: data.state, perGame: pg });
+
+          appendLogDebug("partieUpdate", { partieId: data.partieId, goalScore: data.goalScore, state: data.state, partieActive, perGame: pg });
           return;
         }
 
@@ -483,6 +488,7 @@ if (widgetName === "modswhispers" || widgetName === "mods_whispers" || widgetNam
           appendLogDebug("partieEnd.payload", data);
 
           // ===== Reset état local =====
+          try { setPartieActive(false); } catch {}
           setRunning(false);
           stopRoundTimer();
           GTG_ROUND_ID = null;
