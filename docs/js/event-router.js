@@ -420,6 +420,7 @@ if (widgetName === "modswhispers" || widgetName === "mods_whispers" || widgetNam
         if (data.type === "partieEnd"){
           // ===== Winner / statut partie =====
           const rawWinner = (data.winner ?? "").toString().toLowerCase();
+          const isCancelled = (rawWinner === "cancelled" || rawWinner === "canceled");
                     let winnerLabel = "—";
           let logWinner   = "";
 
@@ -482,7 +483,6 @@ if (widgetName === "modswhispers" || widgetName === "mods_whispers" || widgetNam
           refreshCancelAbility();
 
           // ===== Log détaillé =====
-          const isCancelled = (rawWinner === "cancelled" || rawWinner === "canceled");
           const baseMsg     = isCancelled ? "Partie annulée." : "Partie terminée.";
           const extraWinner = logWinner ? ` Gagnant: ${logWinner}.` : "";
           const extraScore  =
