@@ -123,6 +123,13 @@ function appendLogDebug(tag, obj){
   let GTG_TOTALS = { streamer: 0, viewers: 0 };
   let GTG_GOAL   = null;
 
+  let GTG_PARTIE_ACTIVE = false;
+
+  function setPartieActive(active){
+    GTG_PARTIE_ACTIVE = !!active;
+    refreshCancelAbility();
+  }
+
   function renderGlobalScore(totals, goal){
     const s   = $("#qv-score-streamer") || $("#score-streamer") || $("#score-streamer-val") || $("#gtg-score-streamer");
     const v   = $("#qv-score-viewers")  || $("#score-viewers")  || $("#score-viewers-val") || $("#gtg-score-viewers");
@@ -141,7 +148,7 @@ function appendLogDebug(tag, obj){
   function refreshCancelAbility(){
     const btn = $("#gtg-series-cancel");
     if (!btn) return;
-    const canCancel = GTG_RUNNING
+    const canCancel = (GTG_PARTIE_ACTIVE || GTG_RUNNING)
       && Number.isFinite(GTG_GOAL)
       && (GTG_TOTALS.streamer < GTG_GOAL && GTG_TOTALS.viewers < GTG_GOAL);
     btn.disabled = !canCancel;
