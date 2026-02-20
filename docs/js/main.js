@@ -126,13 +126,28 @@ connectSB();
     updateTtsSwitchUI(false);
 
     // ===== Watchdog : si on croit être en cours mais qu'aucun timer n'est actif, on débloque localement =====
-    setInterval(()=>{
-      if (GTG_RUNNING && GTG_TIMER_ID == null) {
-        appendLog("#guess-log", "Watchdog: aucune manche détectée (pas de timer) → reset état local.");
-        setRunning(false);
-        GTG_ROUND_ID = null;
+    setInterval(() => {
+    // Watchdog anti état "round running" sans timer (ex: events manquants / état zombie côté SB).
+    // 1) Tentative de resync via "GTG Scores Get"
+    // 2) Si toujours aucun timer au tick suivant => reset local (pour déverrouiller l'UI)
+    if (GTG_RUNNING && GTG_TIMER_ID == null){
+      if (!window.__GTG_WD_RESYNC_TRIED){
+        window.__GTG_WD_RESYNC_TRIED = true;
+        appendLog("#guess-log", "Watchdog: manche 'running' sans timer → resync via GTG Scores Get…");
+        safeDoAction("GTG Scores Get", {});
+        return;
       }
-    }, 5000);
-  }
+
+      appendLog("#guess-log", "Watchdog: aucune manche détectée (pas de timer) → reset état local.");
+      setRunning(false);
+      GTG_ROUND_ID = null;
+      window.__GTG_WD_RESYNC_TRIED = false;
+      return;
+    }
+
+    // retour à la normale => on réarme
+    window.__GTG_WD_RESYNC_TRIED = false;
+  }, 5000);
+}
 
   window.addEventListener("DOMContentLoaded", boot);
