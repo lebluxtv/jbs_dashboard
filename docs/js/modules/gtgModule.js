@@ -61,6 +61,7 @@
     setStatusText(GTG_RUNNING ? "En cours" : "En pause");
     setRoundNote(GTG_RUNNING);
     refreshCancelAbility();
+      updateEndButtonLabelFromStatus();
   }
 
   function installFilterChangeGuard(){
@@ -458,7 +459,7 @@
         }
       });
 
-// PATCH: Zoom auto preview (updates under "Nb de manches par jeu")
+// PATCH: Zoom auto preview (updates under "Manches par round (screenshots)")
 if (perGameGoalInput){
   const refresh = ()=>{
     const v = Number(perGameGoalInput.value);
@@ -519,8 +520,6 @@ if (perGameGoalInput){
         setTimeout(()=>{ if (!GTG_RUNNING) guessStartBtn.disabled = false; }, 1500);
       }
 
-      appendLog("#guess-log", "Lancer → envoi GTG Start…");
-
       safeDoAction("GTG Start", {
         nonce,
         includeGenreId: clean.includeGenreId,
@@ -537,13 +536,6 @@ if (perGameGoalInput){
         perGameRoundCountGoal: clean.perGameRoundCountGoal,
         zoomLevel: clean.zoomLevel                     // 🔴 envoyé à GTG Start
       });
-
-      // Petite resync (utile si la demande est ignorée côté Streamer.bot ou si l'état est zombie)
-      if (GTG_START_RESYNC_TO) clearTimeout(GTG_START_RESYNC_TO);
-      GTG_START_RESYNC_TO = setTimeout(() => {
-        safeDoAction("GTG Scores Get", {});
-      }, 600);
-
 
       appendLogDebug("GTG Start args", { durationSec, durationMs, perGameRoundCountGoal: clean.perGameRoundCountGoal, zoomLevel: clean.zoomLevel });
     });
@@ -563,9 +555,9 @@ if (perGameGoalInput){
 
     // Annulation protégée + interdite si objectif atteint
     seriesCancelBtn?.addEventListener("click", ()=>{
-      const canCancel = GTG_PARTIE_ACTIVE
-      && Number.isFinite(GTG_GOAL)
-      && (GTG_TOTALS.streamer < GTG_GOAL && GTG_TOTALS.viewers < GTG_GOAL);
+      const canCancel = (GTG_PARTIE_ACTIVE || GTG_RUNNING)
+        && Number.isFinite(GTG_GOAL)
+        && (GTG_TOTALS.streamer < GTG_GOAL && GTG_TOTALS.viewers < GTG_GOAL);
 
       if (!canCancel){
         appendLog("#guess-log", "Annulation refusée : score cible déjà atteinte ou partie inactive.");
@@ -619,7 +611,6 @@ if (perGameGoalInput){
    *                           ⏱ Timer
    ******************************************************************/
   let GTG_TIMER_ID   = null;
-let GTG_START_RESYNC_TO = null;
   let GTG_TIMER_END  = 0;
   let GTG_TIMER_SENT = false;
 
@@ -755,3 +746,46 @@ let GTG_START_RESYNC_TO = null;
   }
 
   
+
+// ——— Bouton "Terminer" dynamique (UI only) ———
+function updateEndButtonLabelFromStatus(){
+  const endBtn = document.getElementById("guess-end");
+  if (!endBtn) return;
+
+  // Default label when not running / unknown
+  let label = "Terminer";
+
+  if (GTG_RUNNING){
+    const st = document.getElementById("gtg-status");
+    const txt = st ? (st.textContent || "") : "";
+    const m = txt.match(/Manche\s*:\s*(\d+)\s*\/\s*(\d+)/i);
+    if (m){
+      const idx = Number(m[1]); // 1-based
+      const cap = Number(m[2]);
+      if (Number.isFinite(idx) && Number.isFinite(cap) && cap > 0){
+        label = (idx < cap) ? "Next screen" : "Fin du round";
+      }
+    }
+  }
+
+  if (endBtn.textContent !== label) endBtn.textContent = label;
+}
+
+function installEndButtonAutoLabel(){
+  if (document._gtgEndBtnLabelInstalled) return;
+  document._gtgEndBtnLabelInstalled = true;
+
+  const st = document.getElementById("gtg-status");
+  if (st && window.MutationObserver){
+    const mo = new MutationObserver(() => updateEndButtonLabelFromStatus());
+    mo.observe(st, { childList: true, subtree: true, characterData: true });
+  }
+
+  // First pass
+  updateEndButtonLabelFromStatus();
+}
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", installEndButtonAutoLabel, { once:true });
+  } else {
+    installEndButtonAutoLabel();
+  }
