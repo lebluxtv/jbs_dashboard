@@ -581,7 +581,6 @@ if (perGameGoalInput){
       safeDoAction("GTG Scores Transfer", { from, to });
     });
 
-    });
 
     // Annulation protégée + interdite si objectif atteint
     seriesCancelBtn?.addEventListener("click", ()=>{
