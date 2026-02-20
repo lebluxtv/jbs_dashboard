@@ -519,6 +519,8 @@ if (perGameGoalInput){
         setTimeout(()=>{ if (!GTG_RUNNING) guessStartBtn.disabled = false; }, 1500);
       }
 
+      appendLog("#guess-log", "Lancer → envoi GTG Start…");
+
       safeDoAction("GTG Start", {
         nonce,
         includeGenreId: clean.includeGenreId,
@@ -535,6 +537,13 @@ if (perGameGoalInput){
         perGameRoundCountGoal: clean.perGameRoundCountGoal,
         zoomLevel: clean.zoomLevel                     // 🔴 envoyé à GTG Start
       });
+
+      // Petite resync (utile si la demande est ignorée côté Streamer.bot ou si l'état est zombie)
+      if (GTG_START_RESYNC_TO) clearTimeout(GTG_START_RESYNC_TO);
+      GTG_START_RESYNC_TO = setTimeout(() => {
+        safeDoAction("GTG Scores Get", {});
+      }, 600);
+
 
       appendLogDebug("GTG Start args", { durationSec, durationMs, perGameRoundCountGoal: clean.perGameRoundCountGoal, zoomLevel: clean.zoomLevel });
     });
@@ -554,9 +563,9 @@ if (perGameGoalInput){
 
     // Annulation protégée + interdite si objectif atteint
     seriesCancelBtn?.addEventListener("click", ()=>{
-      const canCancel = (GTG_PARTIE_ACTIVE || GTG_RUNNING)
-        && Number.isFinite(GTG_GOAL)
-        && (GTG_TOTALS.streamer < GTG_GOAL && GTG_TOTALS.viewers < GTG_GOAL);
+      const canCancel = GTG_PARTIE_ACTIVE
+      && Number.isFinite(GTG_GOAL)
+      && (GTG_TOTALS.streamer < GTG_GOAL && GTG_TOTALS.viewers < GTG_GOAL);
 
       if (!canCancel){
         appendLog("#guess-log", "Annulation refusée : score cible déjà atteinte ou partie inactive.");
@@ -610,6 +619,7 @@ if (perGameGoalInput){
    *                           ⏱ Timer
    ******************************************************************/
   let GTG_TIMER_ID   = null;
+let GTG_START_RESYNC_TO = null;
   let GTG_TIMER_END  = 0;
   let GTG_TIMER_SENT = false;
 
