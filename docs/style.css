@@ -659,3 +659,30 @@ li.event.modwhisper:not(.acked){
 
 .modwhisper-user{ font-weight: 700; }
 .modwhisper-msg{ opacity: .95; }
+
+/* === GTG : Manche progression (patch) === */
+.manche-progress{
+  display:flex;
+  gap:6px;
+  margin-top:6px;
+}
+
+.manche-box{
+  width:16px;
+  height:16px;
+  border-radius:3px;
+  background:#000;
+}
+
+.manche-current{
+  background:#1db954;
+}
+
+.manche-past{
+  background:#aaa;
+}
+
+.manche-future{
+  background:#000;
+}
+
