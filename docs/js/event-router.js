@@ -401,19 +401,24 @@ if (widgetName === "modswhispers" || widgetName === "mods_whispers" || widgetNam
           const pg = getPerGamePairFromAny(data);
           renderPerGame(pg.idx, pg.goal);
 
-          // IMPORTANT: "partieUpdate" décrit l'état de la PARTIE (active/idle), pas l'état d'une manche.
-          // Une partie peut rester active entre deux manches (donc sans timer). On ne doit PAS verrouiller l'UI de manche ici.
-          const partieActive = (data.partieActive === true) || (String(data.state || "").toLowerCase() === "running");
+          // IMPORTANT :
+          // - "partieUpdate" décrit l'état global de la PARTIE (match), pas forcément une MANCHE active.
+          // - Entre 2 manches, Streamer.bot envoie souvent state=Running (partie active) sans timer.
+          //   => on ne doit PAS mettre GTG_RUNNING=true ici, sinon l'UI se verrouille et le watchdog déclenche.
+          const state = String(data.state || "");
+          const partieActive = (typeof data.partieActive === "boolean")
+            ? data.partieActive
+            : (state.toLowerCase() === "running");
+
           try { setPartieActive(partieActive); } catch {}
 
-          // Si la partie n'est pas active, on force l'UI en pause + purge timer/round.
-          if (!partieActive || data.state === "Ended" || data.state === "Idle"){
+          // Si la partie s'arrête, on force l'arrêt de la manche locale.
+          if (!partieActive || state === "Ended" || state === "Idle"){
             setRunning(false);
-            stopRoundTimer();
             GTG_ROUND_ID = null;
           }
 
-          appendLogDebug("partieUpdate", { partieId: data.partieId, goalScore: data.goalScore, state: data.state, partieActive, perGame: pg });
+          appendLogDebug("partieUpdate", { partieId: data.partieId, goalScore: data.goalScore, state, partieActive, perGame: pg });
           return;
         }
 
@@ -488,7 +493,6 @@ if (widgetName === "modswhispers" || widgetName === "mods_whispers" || widgetNam
           appendLogDebug("partieEnd.payload", data);
 
           // ===== Reset état local =====
-          try { setPartieActive(false); } catch {}
           setRunning(false);
           stopRoundTimer();
           GTG_ROUND_ID = null;
