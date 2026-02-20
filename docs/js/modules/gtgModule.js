@@ -554,7 +554,7 @@ if (perGameGoalInput){
 
     // Annulation protégée + interdite si objectif atteint
     seriesCancelBtn?.addEventListener("click", ()=>{
-      const canCancel = GTG_RUNNING
+      const canCancel = (GTG_PARTIE_ACTIVE || GTG_RUNNING)
         && Number.isFinite(GTG_GOAL)
         && (GTG_TOTALS.streamer < GTG_GOAL && GTG_TOTALS.viewers < GTG_GOAL);
 
