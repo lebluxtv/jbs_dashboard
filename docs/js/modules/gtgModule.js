@@ -207,7 +207,7 @@
         return;
       }
       const cmd = GTG_VAR_VISIBLE ? "hide" : "show";
-      safeDoAction("GTG VAR UI", { uiCmd: cmd, uiOnly: true, uiOrigin: "dashboard_var_button" });
+      safeDoAction("GTG VAR UI", { uiCmd: cmd });
       // UI optimistic (OBS order is async)
       GTG_VAR_VISIBLE = !GTG_VAR_VISIBLE;
       updateVarButton();
@@ -370,7 +370,7 @@
         return;
       }
       const cmd = GTG_VAR_VISIBLE ? "hide" : "show";
-      safeDoAction("GTG VAR UI", { uiCmd: cmd, uiOnly: true, uiOrigin: "dashboard_var_button" });
+      safeDoAction("GTG VAR UI", { uiCmd: cmd });
       // UI optimistic (OBS order is async)
       GTG_VAR_VISIBLE = !GTG_VAR_VISIBLE;
       updateVarButton();
@@ -591,7 +591,7 @@ if (perGameGoalInput){
         return;
       }
       const cmd = GTG_VAR_VISIBLE ? "hide" : "show";
-      safeDoAction("GTG VAR UI", { uiCmd: cmd, uiOnly: true, uiOrigin: "dashboard_var_button" });
+      safeDoAction("GTG VAR UI", { uiCmd: cmd });
       // UI optimistic (OBS order is async)
       GTG_VAR_VISIBLE = !GTG_VAR_VISIBLE;
       updateVarButton();
@@ -736,7 +736,7 @@ if (perGameGoalInput){
         return;
       }
       const cmd = GTG_VAR_VISIBLE ? "hide" : "show";
-      safeDoAction("GTG VAR UI", { uiCmd: cmd, uiOnly: true, uiOrigin: "dashboard_var_button" });
+      safeDoAction("GTG VAR UI", { uiCmd: cmd });
       // UI optimistic (OBS order is async)
       GTG_VAR_VISIBLE = !GTG_VAR_VISIBLE;
       updateVarButton();
