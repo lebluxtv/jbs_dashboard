@@ -962,7 +962,18 @@ function installEndButtonAutoLabel(){
       } else if (t === "hold"){
         GTG_START_HOLD = !!payload?.holdStart;
       } else if (t === "ready"){
-        GTG_VAR_READY = !!payload?.ready;
+        const nextReady = !!payload?.ready;
+        const reason = (payload?.reason || "").toString().toLowerCase();
+
+        // Race fix: après une victoire streamer, GTG VAR peut envoyer ready=true,
+        // puis GTG End finalize envoyer ready=false (reason=end_finalize) un peu plus tard.
+        // On garde le bouton VAR disponible jusqu'au prochain reset de round.
+        if (!nextReady && GTG_VAR_READY && reason === "end_finalize") {
+          try { console.warn("[GTG VAR][WS] ignore ready=false from end_finalize (sticky until reset)", payload); } catch {}
+        } else {
+          GTG_VAR_READY = nextReady;
+        }
+
         if (payload?.holdStart === false) GTG_START_HOLD = false;
       } else if (t === "visible"){
         GTG_VAR_VISIBLE = !!payload?.visible;
