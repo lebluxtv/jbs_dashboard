@@ -174,15 +174,24 @@ function appendLogDebug(tag, obj){
   const el = document.getElementById("gtg-status");
   if (!el) return;
 
-  const idx = Number.isFinite(index) ? index + 1 : 0;
-  const cap = Number.isFinite(goal) ? goal : 0;
+  // IMPORTANT: le backend (Streamer.bot) envoie un index 1..N.
+  // L'ancien code traitait l'index comme 0-based et ajoutait +1, ce qui créait:
+  // - démarrage visuel à 2/… au lancement
+  // - dépassement 5/4 (etc.) quand index==goal
+  const cap = Number.isFinite(goal) ? Math.max(0, Math.trunc(goal)) : 0;
+  let idx1 = Number.isFinite(index) ? Math.trunc(index) : 0;
+  if (cap > 0) idx1 = Math.min(Math.max(idx1, 1), cap); // clamp 1..cap
 
-  el.textContent = `Manche : ${idx} / ${cap}`;
+  if (cap > 0 && idx1 > 0) {
+    el.textContent = `Manche : ${idx1} / ${cap}`;
+  } else {
+    el.textContent = `Manche : — / —`;
+  }
 
-  renderMancheProgress(index, goal);
+  renderMancheProgress(idx1, cap);
 }
 
-function renderMancheProgress(index, goal){
+function renderMancheProgress(index1Based, goal){
   const wrap = document.getElementById("gtg-manche-progress");
   if (!wrap) return;
 
@@ -190,12 +199,14 @@ function renderMancheProgress(index, goal){
 
   if (!Number.isFinite(goal) || goal <= 0) return;
 
+  const cur0 = (Number.isFinite(index1Based) && index1Based > 0) ? (index1Based - 1) : -1;
+
   for (let i=0;i<goal;i++){
     const box = document.createElement("div");
     box.className = "manche-box";
 
-    if (i < index) box.classList.add("manche-past");
-    else if (i === index) box.classList.add("manche-current");
+    if (cur0 >= 0 && i < cur0) box.classList.add("manche-past");
+    else if (i === cur0) box.classList.add("manche-current");
     else box.classList.add("manche-future");
 
     wrap.appendChild(box);
