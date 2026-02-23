@@ -206,6 +206,15 @@ function extractTargetNameFromPayload(d){
         }
 
 
+
+// ===== GTG VAR widget =====
+if (widgetName === "gtg_var" || widgetName === "gtg-var" || widgetName === "gtgvar") {
+  if (typeof window.handleGtgVarWidgetEvent === "function") {
+    window.handleGtgVarWidgetEvent(payload);
+  }
+  return;
+}
+
 // ===== Mods Whispers widget =====
 if (widgetName === "modswhispers" || widgetName === "mods_whispers" || widgetName === "mods-whispers") {
   if (typeof window.handleModsWhispersWidgetEvent === "function") {
