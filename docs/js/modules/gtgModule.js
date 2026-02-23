@@ -52,7 +52,7 @@
     setFiltersLocked(GTG_RUNNING);
     const startBtn = $("#guess-start");
     const endBtn   = $("#guess-end");
-    if (startBtn) startBtn.disabled = GTG_RUNNING;
+    if (startBtn) startBtn.disabled = (GTG_RUNNING || GTG_START_HOLD);
     if (endBtn)   endBtn.disabled   = !GTG_RUNNING;
     const seriesCancel = $("#gtg-series-cancel");
     if (seriesCancel) seriesCancel.disabled = !GTG_RUNNING;
@@ -101,6 +101,7 @@
   const guessStartBtn           = $("#guess-start");
   const guessEndBtn             = $("#guess-end");
   const seriesCancelBtn         = $("#gtg-series-cancel");
+  const gtgVarShowBtn           = $("#gtg-var-show");
   const guessMsgEl              = $("#guess-msg");
 
   // —— seconds-mode pour la durée ——  
@@ -127,6 +128,11 @@
   const guessMsg = (t)=>{ if (guessMsgEl) setText(guessMsgEl, t || ""); };
 
   const GTG_EXCLUDED = new Set();
+  // ===== GTG VAR state (dashboard-driven) =====
+  let GTG_VAR_READY = false;
+  let GTG_VAR_VISIBLE = false;
+  let GTG_START_HOLD = false;
+
 
   function renderExcludeChips(){
     if (!guessExcludeChips) return;
@@ -145,7 +151,22 @@
       chip.textContent = (g?.name || `#${id}`);
       chip.addEventListener("click", ()=>{
         GTG_EXCLUDED.delete(String(id));
-        renderExcludeChips();
+        // ===== GTG VAR button (dashboard -> Streamer.bot -> OBS) =====
+
+    gtgVarShowBtn?.addEventListener("click", ()=>{
+      if (!GTG_VAR_READY){
+        guessMsg("VAR non prête.");
+        return;
+      }
+      const cmd = GTG_VAR_VISIBLE ? "hide" : "show";
+      safeDoAction("GTG VAR", { uiCmd: cmd });
+      // UI optimistic (OBS order is async)
+      GTG_VAR_VISIBLE = !GTG_VAR_VISIBLE;
+      updateVarButton();
+    });
+
+    updateVarButton();
+    renderExcludeChips();
         saveLastSetup({ excludeGenreIds: Array.from(GTG_EXCLUDED) });
         requestPoolCount();
       });
@@ -286,6 +307,28 @@
         if (GTG_GENRES.some(g => String(g.id) === String(id))) GTG_EXCLUDED.add(String(id));
       }
     }
+    // ===== GTG VAR button (dashboard -> Streamer.bot -> OBS) =====
+    function updateVarButton(){
+      if (!gtgVarShowBtn) return;
+      gtgVarShowBtn.disabled = !(GTG_VAR_READY);
+      gtgVarShowBtn.classList.toggle("btn-ok", !!GTG_VAR_VISIBLE);
+      gtgVarShowBtn.textContent = GTG_VAR_VISIBLE ? "Masquer VAR" : "Afficher VAR";
+      gtgVarShowBtn.title = GTG_VAR_READY ? "Afficher/masquer la VAR" : "VAR non prête";
+    }
+
+    gtgVarShowBtn?.addEventListener("click", ()=>{
+      if (!GTG_VAR_READY){
+        guessMsg("VAR non prête.");
+        return;
+      }
+      const cmd = GTG_VAR_VISIBLE ? "hide" : "show";
+      safeDoAction("GTG VAR", { uiCmd: cmd });
+      // UI optimistic (OBS order is async)
+      GTG_VAR_VISIBLE = !GTG_VAR_VISIBLE;
+      updateVarButton();
+    });
+
+    updateVarButton();
     renderExcludeChips();
 
     if (isNum(s.yearFrom)) guessYearFromInput.value = String(s.yearFrom);
@@ -485,7 +528,29 @@ if (perGameGoalInput){
       const id = idFromGenreInputText(guessExcludeInput?.value || "");
       if (id){
         GTG_EXCLUDED.add(String(id));
-        renderExcludeChips();
+        // ===== GTG VAR button (dashboard -> Streamer.bot -> OBS) =====
+    function updateVarButton(){
+      if (!gtgVarShowBtn) return;
+      gtgVarShowBtn.disabled = !(GTG_VAR_READY);
+      gtgVarShowBtn.classList.toggle("btn-ok", !!GTG_VAR_VISIBLE);
+      gtgVarShowBtn.textContent = GTG_VAR_VISIBLE ? "Masquer VAR" : "Afficher VAR";
+      gtgVarShowBtn.title = GTG_VAR_READY ? "Afficher/masquer la VAR" : "VAR non prête";
+    }
+
+    gtgVarShowBtn?.addEventListener("click", ()=>{
+      if (!GTG_VAR_READY){
+        guessMsg("VAR non prête.");
+        return;
+      }
+      const cmd = GTG_VAR_VISIBLE ? "hide" : "show";
+      safeDoAction("GTG VAR", { uiCmd: cmd });
+      // UI optimistic (OBS order is async)
+      GTG_VAR_VISIBLE = !GTG_VAR_VISIBLE;
+      updateVarButton();
+    });
+
+    updateVarButton();
+    renderExcludeChips();
         saveLastSetup({ excludeGenreIds: Array.from(GTG_EXCLUDED) });
         requestPoolCount();
       }
@@ -493,6 +558,7 @@ if (perGameGoalInput){
     });
 
     guessStartBtn?.addEventListener("click", ()=>{
+      if (GTG_START_HOLD){ guessMsg("VAR en préparation…"); return; }
       const { ok, errs, clean } = validateFilters(collectFilters());
       if (!ok){ guessMsg("Filtres invalides: " + errs.join(" ; ")); return; }
 
@@ -607,6 +673,28 @@ if (perGameGoalInput){
       });
     });
 
+    // ===== GTG VAR button (dashboard -> Streamer.bot -> OBS) =====
+    function updateVarButton(){
+      if (!gtgVarShowBtn) return;
+      gtgVarShowBtn.disabled = !(GTG_VAR_READY);
+      gtgVarShowBtn.classList.toggle("btn-ok", !!GTG_VAR_VISIBLE);
+      gtgVarShowBtn.textContent = GTG_VAR_VISIBLE ? "Masquer VAR" : "Afficher VAR";
+      gtgVarShowBtn.title = GTG_VAR_READY ? "Afficher/masquer la VAR" : "VAR non prête";
+    }
+
+    gtgVarShowBtn?.addEventListener("click", ()=>{
+      if (!GTG_VAR_READY){
+        guessMsg("VAR non prête.");
+        return;
+      }
+      const cmd = GTG_VAR_VISIBLE ? "hide" : "show";
+      safeDoAction("GTG VAR", { uiCmd: cmd });
+      // UI optimistic (OBS order is async)
+      GTG_VAR_VISIBLE = !GTG_VAR_VISIBLE;
+      updateVarButton();
+    });
+
+    updateVarButton();
     renderExcludeChips();
   }
 
@@ -824,3 +912,27 @@ function installEndButtonAutoLabel(){
   } else {
     installEndButtonAutoLabel();
   }
+
+  // ===== Public handler (event-router) =====
+  window.handleGtgVarWidgetEvent = function(payload){
+    try {
+      const t = (payload?.type || payload?.cmd || "").toString().toLowerCase();
+      if (t === "reset"){
+        GTG_VAR_READY = false;
+        GTG_VAR_VISIBLE = false;
+        GTG_START_HOLD = false;
+      } else if (t === "hold"){
+        GTG_START_HOLD = !!payload?.holdStart;
+      } else if (t === "ready"){
+        GTG_VAR_READY = !!payload?.ready;
+        if (payload?.holdStart === false) GTG_START_HOLD = false;
+      } else if (t === "visible"){
+        GTG_VAR_VISIBLE = !!payload?.visible;
+      }
+      // Re-apply UI lock state
+      const startBtn = $("#guess-start");
+      if (startBtn) startBtn.disabled = (GTG_RUNNING || GTG_START_HOLD);
+      // Update VAR button if present
+      try { updateVarButton(); } catch {}
+    } catch (e) {}
+  };
