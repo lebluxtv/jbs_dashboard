@@ -133,6 +133,43 @@
   let GTG_VAR_VISIBLE = false;
   let GTG_START_HOLD = false;
 
+  function updateVarButtonGlobal(){
+    if (!gtgVarShowBtn) return;
+    gtgVarShowBtn.disabled = !(GTG_VAR_READY);
+    gtgVarShowBtn.classList.toggle("btn-ok", !!GTG_VAR_VISIBLE);
+    gtgVarShowBtn.textContent = GTG_VAR_VISIBLE ? "Masquer VAR" : "Afficher VAR";
+    gtgVarShowBtn.title = GTG_VAR_READY ? "Afficher/masquer la VAR" : "VAR non prête";
+  }
+  window.__gtgUpdateVarButtonUi = updateVarButtonGlobal;
+
+  function installVarButtonSingleHandler(){
+    if (!gtgVarShowBtn) return;
+    if (gtgVarShowBtn.dataset.gtgVarSingleHandler === "1") return;
+    gtgVarShowBtn.dataset.gtgVarSingleHandler = "1";
+
+    // Capture-phase guard: neutralise les handlers dupliqués attachés plus bas dans le fichier.
+    gtgVarShowBtn.addEventListener("click", (e)=>{
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      if (!GTG_VAR_READY){
+        guessMsg("VAR non prête.");
+        updateVarButtonGlobal();
+        return;
+      }
+
+      const cmd = GTG_VAR_VISIBLE ? "hide" : "show";
+      safeDoAction("GTG VAR", { uiCmd: cmd });
+
+      // UI optimistic (OBS order is async)
+      GTG_VAR_VISIBLE = !GTG_VAR_VISIBLE;
+      updateVarButtonGlobal();
+    }, true);
+
+    updateVarButtonGlobal();
+  }
+  installVarButtonSingleHandler();
+
 
   function renderExcludeChips(){
     if (!guessExcludeChips) return;
@@ -917,6 +954,7 @@ function installEndButtonAutoLabel(){
   window.handleGtgVarWidgetEvent = function(payload){
     try {
       const t = (payload?.type || payload?.cmd || "").toString().toLowerCase();
+      try { console.log("[GTG VAR][WS]", t, payload); } catch {}
       if (t === "reset"){
         GTG_VAR_READY = false;
         GTG_VAR_VISIBLE = false;
@@ -933,6 +971,6 @@ function installEndButtonAutoLabel(){
       const startBtn = $("#guess-start");
       if (startBtn) startBtn.disabled = (GTG_RUNNING || GTG_START_HOLD);
       // Update VAR button if present
-      try { updateVarButton(); } catch {}
+      try { (window.__gtgUpdateVarButtonUi || updateVarButtonGlobal)(); } catch {}
     } catch (e) {}
   };
