@@ -196,25 +196,11 @@
       const g = GTG_GENRES.find(x => String(x.id) === String(id));
       const chip = document.createElement("button");
       chip.className = "chip chip-excl";
+      chip.type = "button";
       chip.textContent = (g?.name || `#${id}`);
       chip.addEventListener("click", ()=>{
         GTG_EXCLUDED.delete(String(id));
-        // ===== GTG VAR button (dashboard -> Streamer.bot -> OBS) =====
-
-    gtgVarShowBtn?.addEventListener("click", ()=>{
-      if (!GTG_VAR_READY){
-        guessMsg("VAR non prête.");
-        return;
-      }
-      const cmd = GTG_VAR_VISIBLE ? "hide" : "show";
-      safeDoAction("GTG VAR UI", { uiCmd: cmd });
-      // UI optimistic (OBS order is async)
-      GTG_VAR_VISIBLE = !GTG_VAR_VISIBLE;
-      updateVarButton();
-    });
-
-    updateVarButton();
-    renderExcludeChips();
+        renderExcludeChips();
         saveLastSetup({ excludeGenreIds: Array.from(GTG_EXCLUDED) });
         requestPoolCount();
       });
@@ -576,29 +562,7 @@ if (perGameGoalInput){
       const id = idFromGenreInputText(guessExcludeInput?.value || "");
       if (id){
         GTG_EXCLUDED.add(String(id));
-        // ===== GTG VAR button (dashboard -> Streamer.bot -> OBS) =====
-    function updateVarButton(){
-      if (!gtgVarShowBtn) return;
-      gtgVarShowBtn.disabled = !(GTG_VAR_READY);
-      gtgVarShowBtn.classList.toggle("btn-ok", !!GTG_VAR_VISIBLE);
-      gtgVarShowBtn.textContent = GTG_VAR_VISIBLE ? "Masquer VAR" : "Afficher VAR";
-      gtgVarShowBtn.title = GTG_VAR_READY ? "Afficher/masquer la VAR" : "VAR non prête";
-    }
-
-    gtgVarShowBtn?.addEventListener("click", ()=>{
-      if (!GTG_VAR_READY){
-        guessMsg("VAR non prête.");
-        return;
-      }
-      const cmd = GTG_VAR_VISIBLE ? "hide" : "show";
-      safeDoAction("GTG VAR UI", { uiCmd: cmd });
-      // UI optimistic (OBS order is async)
-      GTG_VAR_VISIBLE = !GTG_VAR_VISIBLE;
-      updateVarButton();
-    });
-
-    updateVarButton();
-    renderExcludeChips();
+        renderExcludeChips();
         saveLastSetup({ excludeGenreIds: Array.from(GTG_EXCLUDED) });
         requestPoolCount();
       }
