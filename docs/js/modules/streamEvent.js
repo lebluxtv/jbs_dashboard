@@ -97,7 +97,9 @@ function eventLine(e){
 
     if (e.type === "Cheer") {
       const bits = isNum(e.bits) ? e.bits : 0;
-      return `<strong>${e.user}</strong> — Cheer <span class="muted">${bits} bits</span>`;
+      const msg = (e.message ?? e.text ?? e.msg ?? "").toString().trim();
+      const msgLine = msg ? `<br><span class="muted">${escapeHtml(msg)}</span>` : "";
+      return `<strong>${e.user}</strong> — Cheer <span class="muted">${bits} bits</span>${msgLine}`;
     }
     if (e.type === "Follow") {
       return `<strong>${e.user}</strong> — Follow`;
@@ -418,8 +420,72 @@ if (accent){
   }
 
   function extractBits(d){
-    const b = Number(d?.bits ?? d?.amount ?? d?.count ?? d?.bitsUsed ?? d?.bitsAmount ?? d?.cheerAmount ?? d?.message?.bits);
-    return Number.isFinite(b) ? Math.trunc(b) : 0;
+    const direct = Number(d?.bits ?? d?.amount ?? d?.count ?? d?.bitsUsed ?? d?.bitsAmount ?? d?.cheerAmount ?? d?.message?.bits);
+    if (Number.isFinite(direct)) return Math.trunc(direct);
+
+    // Twitch chat cheer payloads can expose bits through message fragments instead of a top-level field.
+    const fragments = Array.isArray(d?.fragments) ? d.fragments
+      : Array.isArray(d?.message?.fragments) ? d.message.fragments
+      : Array.isArray(d?.message?.parts) ? d.message.parts
+      : Array.isArray(d?.parts) ? d.parts
+      : [];
+    for (const f of fragments){
+      const b = Number(f?.bits ?? f?.cheermote?.bits ?? f?.cheer?.bits ?? f?.cheerAmount);
+      if (Number.isFinite(b)) return Math.trunc(b);
+    }
+    return 0;
+  }
+
+  function textFromMessageLike(v){
+    try{
+      if (v == null) return "";
+      if (typeof v === "string" || typeof v === "number") return String(v).trim();
+      if (Array.isArray(v)) return v.map(textFromMessageLike).join("").trim();
+      if (typeof v !== "object") return "";
+
+      const direct = (v.text ?? v.message ?? v.content ?? v.body ?? v.rawInput ?? v.input ?? v.value ?? "").toString().trim();
+      if (direct && direct !== "[object Object]") return direct;
+
+      const fragments = Array.isArray(v.fragments) ? v.fragments
+        : Array.isArray(v.parts) ? v.parts
+        : Array.isArray(v.emotes) ? v.emotes
+        : [];
+      if (fragments.length){
+        const joined = fragments.map(part => textFromMessageLike(part?.text ?? part?.message ?? part)).join("").trim();
+        if (joined) return joined;
+      }
+    } catch {}
+    return "";
+  }
+
+  function extractCheerMessage(d){
+    try{
+      const candidates = [
+        d?.message,
+        d?.text,
+        d?.msg,
+        d?.rawInput,
+        d?.input,
+        d?.comment,
+        d?.chatMessage,
+        d?.messageText,
+        d?.message_text,
+        d?.body,
+        d?.content,
+        d?.event?.message,
+        d?.data?.message,
+        d?.payload?.message
+      ];
+      for (const c of candidates){
+        const txt = textFromMessageLike(c).trim();
+        if (txt) return txt;
+      }
+
+      // EventSub-style payloads may keep the text in root fragments/parts.
+      const fromParts = textFromMessageLike(d?.fragments ?? d?.parts).trim();
+      if (fromParts) return fromParts;
+    } catch {}
+    return "";
   }
   function extractRaidViewers(d){
     const v = Number(d?.viewers ?? d?.viewerCount ?? d?.raidViewers ?? d?.raidCount ?? d?.amount ?? d?.count);
@@ -486,7 +552,12 @@ if (accent){
         amount: d?.amount,
         viewers: d?.viewers,
         viewerCount: d?.viewerCount,
-        count: d?.count
+        count: d?.count,
+        message: d?.message,
+        text: d?.text,
+        rawInput: d?.rawInput,
+        fragments: d?.fragments ?? d?.message?.fragments,
+        parts: d?.parts ?? d?.message?.parts
       };
       console.log("candidates:", candidates);
       console.groupEnd();
