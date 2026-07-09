@@ -204,6 +204,15 @@ function updateZoomPreview(perGameGoal){
   let eventsStore = loadEvents();
   let qvUnreadEvents = eventsStore.filter(e => !e.ack).length;
 
+  function escapeHtml(s){
+    return String(s ?? "")
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#39;");
+  }
+
   function eventLine(e){
     if (e.type === "GiftBomb") {
       const n = isNum(e.giftCount) ? e.giftCount : (Array.isArray(e.recipients) ? e.recipients.length : 0);
@@ -220,7 +229,9 @@ function updateZoomPreview(perGameGoal){
 
     if (e.type === "Cheer") {
       const bits = isNum(e.bits) ? e.bits : 0;
-      return `<strong>${e.user}</strong> — Cheer <span class="muted">${bits} bits</span>`;
+      const msg = (e.message ?? e.text ?? e.msg ?? "").toString().trim();
+      const msgLine = msg ? `<br><span class="muted">${escapeHtml(msg)}</span>` : "";
+      return `<strong>${e.user}</strong> — Cheer <span class="muted">${bits} bits</span>${msgLine}`;
     }
     if (e.type === "Follow") {
       return `<strong>${e.user}</strong> — Follow`;
@@ -1288,8 +1299,72 @@ if (perGameGoalInput){
   }
 
   function extractBits(d){
-    const b = Number(d?.bits ?? d?.amount ?? d?.count ?? d?.bitsUsed ?? d?.bitsAmount ?? d?.cheerAmount ?? d?.message?.bits);
-    return Number.isFinite(b) ? Math.trunc(b) : 0;
+    const direct = Number(d?.bits ?? d?.amount ?? d?.count ?? d?.bitsUsed ?? d?.bitsAmount ?? d?.cheerAmount ?? d?.message?.bits);
+    if (Number.isFinite(direct)) return Math.trunc(direct);
+
+    // Twitch chat cheer payloads can expose bits through message fragments instead of a top-level field.
+    const fragments = Array.isArray(d?.fragments) ? d.fragments
+      : Array.isArray(d?.message?.fragments) ? d.message.fragments
+      : Array.isArray(d?.message?.parts) ? d.message.parts
+      : Array.isArray(d?.parts) ? d.parts
+      : [];
+    for (const f of fragments){
+      const b = Number(f?.bits ?? f?.cheermote?.bits ?? f?.cheer?.bits ?? f?.cheerAmount);
+      if (Number.isFinite(b)) return Math.trunc(b);
+    }
+    return 0;
+  }
+
+  function textFromMessageLike(v){
+    try{
+      if (v == null) return "";
+      if (typeof v === "string" || typeof v === "number") return String(v).trim();
+      if (Array.isArray(v)) return v.map(textFromMessageLike).join("").trim();
+      if (typeof v !== "object") return "";
+
+      const direct = (v.text ?? v.message ?? v.content ?? v.body ?? v.rawInput ?? v.input ?? v.value ?? "").toString().trim();
+      if (direct && direct !== "[object Object]") return direct;
+
+      const fragments = Array.isArray(v.fragments) ? v.fragments
+        : Array.isArray(v.parts) ? v.parts
+        : Array.isArray(v.emotes) ? v.emotes
+        : [];
+      if (fragments.length){
+        const joined = fragments.map(part => textFromMessageLike(part?.text ?? part?.message ?? part)).join("").trim();
+        if (joined) return joined;
+      }
+    } catch {}
+    return "";
+  }
+
+  function extractCheerMessage(d){
+    try{
+      const candidates = [
+        d?.message,
+        d?.text,
+        d?.msg,
+        d?.rawInput,
+        d?.input,
+        d?.comment,
+        d?.chatMessage,
+        d?.messageText,
+        d?.message_text,
+        d?.body,
+        d?.content,
+        d?.event?.message,
+        d?.data?.message,
+        d?.payload?.message
+      ];
+      for (const c of candidates){
+        const txt = textFromMessageLike(c).trim();
+        if (txt) return txt;
+      }
+
+      // EventSub-style payloads may keep the text in root fragments/parts.
+      const fromParts = textFromMessageLike(d?.fragments ?? d?.parts).trim();
+      if (fromParts) return fromParts;
+    } catch {}
+    return "";
   }
   function extractRaidViewers(d){
     const v = Number(d?.viewers ?? d?.viewerCount ?? d?.raidViewers ?? d?.raidCount ?? d?.amount ?? d?.count);
@@ -1356,7 +1431,12 @@ if (perGameGoalInput){
         amount: d?.amount,
         viewers: d?.viewers,
         viewerCount: d?.viewerCount,
-        count: d?.count
+        count: d?.count,
+        message: d?.message,
+        text: d?.text,
+        rawInput: d?.rawInput,
+        fragments: d?.fragments ?? d?.message?.fragments,
+        parts: d?.parts ?? d?.message?.parts
       };
       console.log("candidates:", candidates);
       console.groupEnd();
@@ -1874,6 +1954,74 @@ function updateOverviewTtsLast(user, msg){
   return false;
 }
 
+
+function mergePayloadWithRaw(payload, raw){
+  try{
+    if (payload && typeof payload === "object" && raw && typeof raw === "object" && payload !== raw) {
+      return Object.assign({}, raw, payload);
+    }
+    if (payload && typeof payload === "object") return payload;
+  } catch {}
+  return raw || {};
+}
+
+function recordCheerEvent(d, opts){
+  opts = opts || {};
+  const user = extractUserName(d?.user || d);
+  const bits = extractBits(d);
+  const message = extractCheerMessage(d);
+
+  // Chat fallback: don't create a pseudo-cheer without both bits and text.
+  if (opts.allowCreateWithoutMessage === false && (!bits || !message)) return null;
+
+  const now = Date.now();
+  const dedupeMs = Number.isFinite(Number(opts.dedupeMs)) ? Number(opts.dedupeMs) : 15000;
+  const norm = (v)=> String(v || "").trim().toLowerCase();
+
+  let existing = null;
+  try{
+    if (Array.isArray(eventsStore)){
+      for (let i = eventsStore.length - 1; i >= 0; i--){
+        const e = eventsStore[i];
+        if (!e || e.type !== "Cheer") continue;
+        const age = now - Number(e.id || 0);
+        if (!Number.isFinite(age) || age < 0 || age > dedupeMs) continue;
+
+        const userKnown = user && user !== "—" && e.user && e.user !== "—";
+        const sameUser = userKnown ? norm(e.user) === norm(user) : true;
+        const sameBits = (bits > 0 && Number(e.bits) > 0) ? Number(e.bits) === bits : true;
+        if (sameUser && sameBits){ existing = e; break; }
+      }
+    }
+  } catch {}
+
+  if (existing){
+    if ((!existing.user || existing.user === "—") && user) existing.user = user;
+    if (bits > 0) existing.bits = bits;
+    if (message && !existing.message) existing.message = message;
+    if (d?.text != null && existing.text == null) existing.text = d.text;
+    if (d?.message != null && existing.rawMessage == null) existing.rawMessage = d.message;
+    saveEvents(eventsStore);
+    renderStoredEventsIntoUI();
+    return { event: existing, user: existing.user || user, bits: Number(existing.bits) || bits, message: existing.message || message || "", created: false, updated: true };
+  }
+
+  const ev = {
+    id: now,
+    type:"Cheer",
+    user,
+    bits,
+    message: message || null,
+    text: d?.text ?? null,
+    rawMessage: d?.message ?? null,
+    ack:false
+  };
+  eventsStore.push(ev);
+  saveEvents(eventsStore);
+  renderStoredEventsIntoUI();
+  return { event: ev, user, bits, message, created: true, updated: false };
+}
+
 function appendTtsToJournal(user, msg){
   // Try common ids first
   const ids = ["tts-journal", "ttsJournal", "tts-journal-box", "tts-journal-textarea", "tts-log", "ttsLog"];
@@ -2021,17 +2169,32 @@ function extractTargetNameFromPayload(d){
 
       if (event?.source === "Twitch"){
 
+        // ===== Chat message carrying cheer bits =====
+        // Some Streamer.bot/Twitch payloads expose the cheer text on ChatMessage, not on the Cheer event itself.
+        if (event.type === "ChatMessage" || event.type === "Message" || event.type === "Chat"){
+          const d = mergePayloadWithRaw(payload, data);
+          const bits = extractBits(d);
+          const message = extractCheerMessage(d);
+          if (bits > 0 && message){
+            const cheer = recordCheerEvent(d, { allowCreateWithoutMessage: false });
+            if (cheer){
+              appendLogDebug("twitch.cheer.chatFallback", { user: cheer.user, bits: cheer.bits, message: cheer.message, created: cheer.created, updated: cheer.updated });
+              appendLog("#events-log", `Cheer message — ${cheer.user} (${cheer.bits} bits) : ${cheer.message}`);
+              return;
+            }
+          }
+        }
+
         // ===== Cheer (bits) =====
         if (event.type === "Cheer"){
-          logSbTwitchEventToConsole(event, data);
-          const d = data || {};
-          const user = extractUserName(d.user || d);
-          const bits = extractBits(d);
-          eventsStore.push({ id: Date.now(), type:"Cheer", user, bits, ack:false });
-          saveEvents(eventsStore);
-          renderStoredEventsIntoUI();
-          appendLog("#events-log", `Cheer — ${user} (${bits} bits)`);
-          appendLogDebug("twitch.cheer", { user, bits });
+          const d = mergePayloadWithRaw(payload, data);
+          logSbTwitchEventToConsole(event, d);
+          const cheer = recordCheerEvent(d, { allowCreateWithoutMessage: true });
+          const user = cheer?.user || extractUserName(d.user || d);
+          const bits = cheer?.bits ?? extractBits(d);
+          const message = cheer?.message || extractCheerMessage(d);
+          appendLog("#events-log", `Cheer — ${user} (${bits} bits)${message ? ` : ${message}` : ""}`);
+          appendLogDebug("twitch.cheer", { user, bits, message, deduped: !!cheer?.updated });
           return;
         }
 
