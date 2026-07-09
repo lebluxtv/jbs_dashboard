@@ -67,6 +67,74 @@ function updateOverviewTtsLast(user, msg){
   return false;
 }
 
+
+function mergePayloadWithRaw(payload, raw){
+  try{
+    if (payload && typeof payload === "object" && raw && typeof raw === "object" && payload !== raw) {
+      return Object.assign({}, raw, payload);
+    }
+    if (payload && typeof payload === "object") return payload;
+  } catch {}
+  return raw || {};
+}
+
+function recordCheerEvent(d, opts){
+  opts = opts || {};
+  const user = extractUserName(d?.user || d);
+  const bits = extractBits(d);
+  const message = extractCheerMessage(d);
+
+  // Chat fallback: don't create a pseudo-cheer without both bits and text.
+  if (opts.allowCreateWithoutMessage === false && (!bits || !message)) return null;
+
+  const now = Date.now();
+  const dedupeMs = Number.isFinite(Number(opts.dedupeMs)) ? Number(opts.dedupeMs) : 15000;
+  const norm = (v)=> String(v || "").trim().toLowerCase();
+
+  let existing = null;
+  try{
+    if (Array.isArray(eventsStore)){
+      for (let i = eventsStore.length - 1; i >= 0; i--){
+        const e = eventsStore[i];
+        if (!e || e.type !== "Cheer") continue;
+        const age = now - Number(e.id || 0);
+        if (!Number.isFinite(age) || age < 0 || age > dedupeMs) continue;
+
+        const userKnown = user && user !== "—" && e.user && e.user !== "—";
+        const sameUser = userKnown ? norm(e.user) === norm(user) : true;
+        const sameBits = (bits > 0 && Number(e.bits) > 0) ? Number(e.bits) === bits : true;
+        if (sameUser && sameBits){ existing = e; break; }
+      }
+    }
+  } catch {}
+
+  if (existing){
+    if ((!existing.user || existing.user === "—") && user) existing.user = user;
+    if (bits > 0) existing.bits = bits;
+    if (message && !existing.message) existing.message = message;
+    if (d?.text != null && existing.text == null) existing.text = d.text;
+    if (d?.message != null && existing.rawMessage == null) existing.rawMessage = d.message;
+    saveEvents(eventsStore);
+    renderStoredEventsIntoUI();
+    return { event: existing, user: existing.user || user, bits: Number(existing.bits) || bits, message: existing.message || message || "", created: false, updated: true };
+  }
+
+  const ev = {
+    id: now,
+    type:"Cheer",
+    user,
+    bits,
+    message: message || null,
+    text: d?.text ?? null,
+    rawMessage: d?.message ?? null,
+    ack:false
+  };
+  eventsStore.push(ev);
+  saveEvents(eventsStore);
+  renderStoredEventsIntoUI();
+  return { event: ev, user, bits, message, created: true, updated: false };
+}
+
 function appendTtsToJournal(user, msg){
   // Try common ids first
   const ids = ["tts-journal", "ttsJournal", "tts-journal-box", "tts-journal-textarea", "tts-log", "ttsLog"];
@@ -232,17 +300,32 @@ if (widgetName === "modswhispers" || widgetName === "mods_whispers" || widgetNam
 
       if (event?.source === "Twitch"){
 
+        // ===== Chat message carrying cheer bits =====
+        // Some Streamer.bot/Twitch payloads expose the cheer text on ChatMessage, not on the Cheer event itself.
+        if (event.type === "ChatMessage" || event.type === "Message" || event.type === "Chat"){
+          const d = mergePayloadWithRaw(payload, data);
+          const bits = extractBits(d);
+          const message = extractCheerMessage(d);
+          if (bits > 0 && message){
+            const cheer = recordCheerEvent(d, { allowCreateWithoutMessage: false });
+            if (cheer){
+              appendLogDebug("twitch.cheer.chatFallback", { user: cheer.user, bits: cheer.bits, message: cheer.message, created: cheer.created, updated: cheer.updated });
+              appendLog("#events-log", `Cheer message — ${cheer.user} (${cheer.bits} bits) : ${cheer.message}`);
+              return;
+            }
+          }
+        }
+
         // ===== Cheer (bits) =====
         if (event.type === "Cheer"){
-          logSbTwitchEventToConsole(event, data);
-          const d = data || {};
-          const user = extractUserName(d.user || d);
-          const bits = extractBits(d);
-          eventsStore.push({ id: Date.now(), type:"Cheer", user, bits, ack:false });
-          saveEvents(eventsStore);
-          renderStoredEventsIntoUI();
-          appendLog("#events-log", `Cheer — ${user} (${bits} bits)`);
-          appendLogDebug("twitch.cheer", { user, bits });
+          const d = mergePayloadWithRaw(payload, data);
+          logSbTwitchEventToConsole(event, d);
+          const cheer = recordCheerEvent(d, { allowCreateWithoutMessage: true });
+          const user = cheer?.user || extractUserName(d.user || d);
+          const bits = cheer?.bits ?? extractBits(d);
+          const message = cheer?.message || extractCheerMessage(d);
+          appendLog("#events-log", `Cheer — ${user} (${bits} bits)${message ? ` : ${message}` : ""}`);
+          appendLogDebug("twitch.cheer", { user, bits, message, deduped: !!cheer?.updated });
           return;
         }
 
