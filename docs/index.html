@@ -77,6 +77,44 @@
 
     <!-- Overview -->
     <section id="tab-overview" class="tab-panel" style="display:none">
+      <div class="stream-overview-control">
+        <div class="stream-control-row">
+          <div class="stream-control-current">
+            Titre actuel du stream : &quot;<strong id="stream-current-title">—</strong>&quot;
+          </div>
+          <div class="stream-control-edit">
+            <label for="stream-title-input">Modifier le titre du stream :</label>
+            <input id="stream-title-input" type="text" maxlength="140" autocomplete="off" disabled />
+            <button id="stream-title-update" class="btn" type="button" disabled>Mettre à jour le Titre du stream</button>
+          </div>
+        </div>
+
+        <div class="stream-control-row">
+          <div class="stream-control-current">
+            Catégorie actuelle du stream : &quot;<strong id="stream-current-category">—</strong>&quot;
+          </div>
+          <div class="stream-control-edit">
+            <label for="stream-category-input">Modifier la catégorie du stream :</label>
+            <div class="stream-category-field">
+              <input
+                id="stream-category-input"
+                type="text"
+                autocomplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="stream-category-suggestions"
+                disabled
+              />
+              <div id="stream-category-suggestions" class="stream-category-suggestions" role="listbox" hidden></div>
+            </div>
+            <button id="stream-category-update" class="btn" type="button" disabled>Mettre à jour la catégorie</button>
+          </div>
+        </div>
+
+        <div id="stream-control-feedback" class="stream-control-feedback" aria-live="polite"></div>
+      </div>
+
       <div class="overview-grid">
         <article class="qv-card" data-goto="events">
           <div class="qv-head">
@@ -545,6 +583,7 @@
 <script src="js/modules/ttsEvent.js"></script>
 <script src="js/modules/gtgModule.js"></script>
 <script src="js/modules/modsWhispers.js"></script>
+<script src="js/modules/twitchChannel.js"></script>
 <script src="js/main.js"></script>
 
   
