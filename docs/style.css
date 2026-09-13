@@ -127,6 +127,37 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);lin
   margin:12px 0 8px 0;font-size:14px;color:#cfd2d6
 }
 
+/* Overview - Twitch channel controls */
+.stream-overview-control{
+  margin-bottom:16px;padding:14px;background:var(--panel);
+  border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)
+}
+.stream-control-row + .stream-control-row{
+  margin-top:14px;padding-top:14px;border-top:1px solid var(--border)
+}
+.stream-control-current{margin-bottom:9px;color:var(--muted)}
+.stream-control-current strong{color:var(--text)}
+.stream-control-edit{
+  display:grid;grid-template-columns:max-content minmax(220px,1fr) auto;
+  gap:10px;align-items:center
+}
+.stream-control-edit label{font-weight:600;color:#d9d9d9}
+.stream-category-field{position:relative;min-width:0}
+.stream-category-suggestions{
+  position:absolute;z-index:20;top:calc(100% + 5px);left:0;right:0;
+  max-height:320px;overflow:auto;background:#111113;border:1px solid var(--border);
+  border-radius:10px;box-shadow:var(--shadow);padding:4px
+}
+.stream-category-option{
+  display:block;width:100%;padding:8px 10px;border:0;border-radius:7px;
+  background:transparent;color:var(--text);text-align:left;cursor:pointer
+}
+.stream-category-option:hover,
+.stream-category-option.active{background:rgba(255,255,255,.07)}
+.stream-control-feedback{margin-top:10px;color:var(--muted);font-size:13px;min-height:19px}
+.stream-control-feedback.error{color:#ff8d78}
+.stream-control-feedback.ok{color:#73dda5}
+
 /* Overview quick view grid */
 .overview-grid{
   display:grid;grid-template-columns:repeat(12,1fr);gap:16px
@@ -503,6 +534,8 @@ body.gtg-running #filters button{
 
 /* ≤ 900px : champs plus compacts */
 @media (max-width:900px){
+  .stream-control-edit{grid-template-columns:1fr}
+  .stream-control-edit .btn{justify-self:start}
   .form-group{min-width:150px;flex:1 1 200px}
   .form-group.sm{min-width:120px;max-width:160px;flex:1 1 160px}
 }
