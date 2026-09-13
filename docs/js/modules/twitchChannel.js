@@ -474,11 +474,64 @@
     }
   }
 
+  function parseJsonObject(value){
+    if (value && typeof value === "object") return value;
+    if (typeof value !== "string") return null;
+
+    const text = value.trim();
+    if (!text) return null;
+
+    try {
+      const parsed = JSON.parse(text);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // CPH.WebsocketBroadcastJson() est reçu par le serveur WebSocket Streamer.bot
+  // sous forme d'événement General.Custom. Suivant la version, le JSON custom
+  // peut être directement dans data, dans data.data, ou être une chaîne JSON.
+  // On accepte volontairement ces formes pour ne pas dépendre d'une seule
+  // représentation interne du payload.
+  function extractCustomWidgetPayload(payload){
+    if (!payload || typeof payload !== "object") return null;
+
+    if (normalizeText(payload.widget) === "jbs-twitch-channel") return payload;
+
+    if (payload.event?.source !== "General" || payload.event?.type !== "Custom") return null;
+
+    const candidates = [payload.data];
+    if (payload.data && typeof payload.data === "object") candidates.push(payload.data.data);
+
+    for (const candidate of candidates){
+      let current = candidate;
+
+      for (let depth = 0; depth < 3; depth++){
+        const parsed = parseJsonObject(current);
+        if (!parsed) break;
+
+        if (normalizeText(parsed.widget) === "jbs-twitch-channel") return parsed;
+
+        // Certaines versions encapsulent encore le contenu custom sous `data`.
+        if (Object.prototype.hasOwnProperty.call(parsed, "data")){
+          current = parsed.data;
+          continue;
+        }
+
+        break;
+      }
+    }
+
+    return null;
+  }
+
   function handleRawData(payload){
     if (!payload || typeof payload !== "object") return;
 
-    if (normalizeText(payload.widget) === "jbs-twitch-channel"){
-      handleWidget(payload);
+    const widgetPayload = extractCustomWidgetPayload(payload);
+    if (widgetPayload){
+      handleWidget(widgetPayload);
       return;
     }
 
