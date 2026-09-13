@@ -6,6 +6,8 @@
   const SEARCH_DEBOUNCE_MS = 350;
   const MIN_SEARCH_LENGTH = 2;
   const ACTION_RECHECK_MS = 3000;
+  const STATUS_REFRESH_MS = 15000;
+  const STATUS_RESPONSE_TIMEOUT_MS = 8000;
 
   let titleCurrent;
   let titleInput;
@@ -20,6 +22,9 @@
   let actionReady = false;
   let actionId = "";
   let actionCheckTimer = null;
+  let statusRefreshTimer = null;
+  let statusResponseTimer = null;
+  let pendingStatusRequestId = "";
   let selectedCategory = null;
   let searchTimer = null;
   let lastSearchRequestId = "";
@@ -115,6 +120,35 @@
     }
   }
 
+  function clearStatusResponseTimer(){
+    if (statusResponseTimer != null){
+      clearTimeout(statusResponseTimer);
+      statusResponseTimer = null;
+    }
+  }
+
+  function clearPendingStatus(){
+    pendingStatusRequestId = "";
+    clearStatusResponseTimer();
+  }
+
+  function stopStatusRefreshTimer(){
+    if (statusRefreshTimer != null){
+      clearInterval(statusRefreshTimer);
+      statusRefreshTimer = null;
+    }
+    clearPendingStatus();
+  }
+
+  function startStatusRefreshTimer(){
+    if (!connected || !actionReady || statusRefreshTimer != null) return;
+
+    statusRefreshTimer = setInterval(() => {
+      if (document.hidden) return;
+      requestStatus("poll");
+    }, STATUS_REFRESH_MS);
+  }
+
   function ensureActionCheckTimer(){
     if (!connected || actionReady || actionCheckTimer != null) return;
 
@@ -154,6 +188,7 @@
     updateControlState();
 
     if (!actionReady){
+      stopStatusRefreshTimer();
       if (!silent || wasReady){
         setFeedback(`Action Streamer.bot « ${ACTION_NAME} » introuvable ou désactivée.`, "error");
       }
@@ -165,9 +200,10 @@
 
     if (!wasReady){
       setFeedback("");
-      await requestStatus();
+      await requestStatus("initial", true);
     }
 
+    startStatusRefreshTimer();
     return true;
   }
 
@@ -267,8 +303,29 @@
     }
   }
 
-  function requestStatus(){
-    return sendOperation("status", { requestId:makeRequestId("status") });
+  async function requestStatus(reason, force){
+    if (!connected || !actionReady) return false;
+    if (document.hidden && reason === "poll") return false;
+    if (pendingStatusRequestId && !force) return false;
+
+    const requestId = makeRequestId(`status-${reason || "manual"}`);
+    pendingStatusRequestId = requestId;
+    clearStatusResponseTimer();
+
+    statusResponseTimer = setTimeout(() => {
+      if (pendingStatusRequestId !== requestId) return;
+      pendingStatusRequestId = "";
+      statusResponseTimer = null;
+      if (reason === "initial") {
+        setFeedback("Le statut Twitch n'a pas répondu dans le délai attendu.", "error");
+      }
+    }, STATUS_RESPONSE_TIMEOUT_MS);
+
+    const sent = await sendOperation("status", { requestId });
+    if (!sent && pendingStatusRequestId === requestId){
+      clearPendingStatus();
+    }
+    return sent;
   }
 
   async function onConnected(){
@@ -291,6 +348,7 @@
     clearTimeout(searchTimer);
     searchTimer = null;
     clearActionCheckTimer();
+    stopStatusRefreshTimer();
     updateControlState();
     setFeedback("Connexion Streamer.bot indisponible.", "error");
   }
@@ -346,6 +404,9 @@
 
       if (payload.operation === "setTitle") titlePending = false;
       if (payload.operation === "setCategory") categoryPending = false;
+      if (payload.operation === "status" && (!payload.requestId || payload.requestId === pendingStatusRequestId)) {
+        clearPendingStatus();
+      }
       updateControlState();
       return;
     }
@@ -379,6 +440,9 @@
     }
 
     if (payload.type === "status"){
+      if (!payload.requestId || payload.requestId === pendingStatusRequestId){
+        clearPendingStatus();
+      }
       applyStatus(payload);
 
       if (payload.action === "setTitle"){
@@ -531,6 +595,12 @@
     document.addEventListener("click", event => {
       if (!categorySuggestions.contains(event.target) && event.target !== categoryInput){
         hideSuggestions();
+      }
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && connected && actionReady){
+        requestStatus("visible");
       }
     });
   }
