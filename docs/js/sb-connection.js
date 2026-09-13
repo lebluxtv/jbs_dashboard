@@ -110,11 +110,15 @@
         autoReconnect: true,
         retries: -1,
         log: false,
+        onData: (payload) => {
+          try { window.JBSTwitchChannel?.handleRawData?.(payload); } catch {}
+        },
         onConnect: () => {
           window.sbClient = sbClient;
           window.client   = sbClient;
           setConnected(true);
           appendLog("#guess-log", `Connecté à Streamer.bot (${host}:${port})`);
+          try { window.JBSTwitchChannel?.onConnected?.(); } catch {}
 // NOTE: no manual subscribe here; the client is initialized with subscribe:"*".
           // Re-sync complet à chaque connexion
           safeDoAction("GTG Bootstrap Genres & Years & Ratings", {});
@@ -165,6 +169,7 @@
         },
         onDisconnect: () => {
           setConnected(false);
+          try { window.JBSTwitchChannel?.onDisconnected?.(); } catch {}
           appendLog("#guess-log", "Déconnecté de Streamer.bot.");
         },
         onError: (e) => {
