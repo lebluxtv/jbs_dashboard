@@ -107,7 +107,7 @@ function appendLogDebug(tag, obj){
 
   function setRoundNote(running){
     const txt = running ? "Manche lancée" : "Manche terminée";
-    let targets = $$("#guess-round-note, #gtg-round-note, .round-note");
+    let targets = $$("#gtg-round-note");
     if (!targets.length) {
       const scope = $("#guess-start")?.closest("#filters, .filters, form, .panel, .card, section") || document;
       const candidates = Array.from(scope.querySelectorAll("small, .muted, .hint, span, div"))
