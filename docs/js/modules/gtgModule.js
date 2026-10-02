@@ -666,6 +666,21 @@ if (perGameGoalInput){
     });
 
 
+    // Attribution manuelle : +1 à une seule équipe, sans transfert.
+    function addPointToTeam(team){
+      if (!GTG_PARTIE_ACTIVE){
+        appendLog("#guess-log", "Ajout de point refusé : aucune partie active.");
+        return;
+      }
+      const teamLabel = team === "streamer" ? "Streamer" : "Viewers";
+      if (!confirm(`Ajouter 1 point à ${teamLabel}, sans retirer de point à l'autre équipe ?`)) return;
+      appendLog("#guess-log", `[UI] Ajout manuel : +1 ${teamLabel}`);
+      safeDoAction("GTG Scores Add", { team });
+    }
+
+    $("#gtg-add-streamer")?.addEventListener("click", ()=>addPointToTeam("streamer"));
+    $("#gtg-add-viewers")?.addEventListener("click", ()=>addPointToTeam("viewers"));
+
     // Annulation protégée + interdite si objectif atteint
     seriesCancelBtn?.addEventListener("click", ()=>{
       const canCancel = (GTG_PARTIE_ACTIVE || GTG_RUNNING)
