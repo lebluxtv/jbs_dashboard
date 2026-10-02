@@ -740,3 +740,15 @@ li.event.modwhisper:not(.acked){
   border-color: rgba(255,204,0,0.35);
   background: rgba(255,204,0,0.10);
 }
+
+/* GTG : ajout manuel de points, sans transfert */
+.gtg-add-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.btn.gtg-add-point {
+  border-color: rgba(0, 205, 252, 0.4);
+  background: rgba(0, 205, 252, 0.1);
+}
