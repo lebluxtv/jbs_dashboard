@@ -248,7 +248,8 @@ function extractTargetNameFromPayload(d){
         const widgetName = (payload.widget || "").toString().toLowerCase();
 
         // ✅ Noms "legacy" déjà supportés
-        if (widgetName === "ttsreader"
+        if (widgetName === "tts-reader"
+          || widgetName === "ttsreader"
           || widgetName === "tts_dashboard"
           || widgetName === "tts-autoreader"
           || widgetName === "tts_auto_message_reader"
@@ -262,7 +263,8 @@ function extractTargetNameFromPayload(d){
           handleTtsWidgetEvent({
             type: "lastread",
             lastUser: (payload.user ?? payload.selectedUser ?? payload.lastUser ?? payload.lastSender ?? payload.author ?? ""),
-            lastMessage: (payload.message ?? payload.text ?? payload.lastMessage ?? payload.lastText ?? payload.content ?? "")
+            lastMessage: (payload.message ?? payload.text ?? payload.lastMessage ?? payload.lastText ?? payload.content ?? ""),
+            time: payload.time ?? payload.timeStamp ?? ""
           });
           return;
         }

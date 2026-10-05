@@ -15,10 +15,78 @@
   const ttsTimerInput = document.getElementById('tts-timer');
   const ttsTimerLabel = document.getElementById('tts-timer-label');
 
-  // ID d'action côté Streamer.bot pour "TTS Timer Set"
-  let TTS_TIMER_ACTION_ID = null;
-  // Dernière valeur envoyée au script pour éviter le spam
+  // Compatibilité transitoire Dashboard V1 ↔ TTS Reader V1 / V2.
+  // Détection automatique : V2 est privilégié si les deux backends sont présents.
+  const TTS_V2_CORE_ACTION = "TTS Reader - CORE";
+  const TTS_V1_SWITCH_ACTION = "TTS Auto Message Reader Switch ON OFF";
+  const TTS_V1_TIMER_ACTION = "TTS Timer Set";
+  const TTS_V1_READER_ACTION = "TTS Reader";
+
+  let TTS_BACKEND_MODE = "unknown"; // unknown | v1 | v2 | none
   let lastSentTimer = null;
+
+  function setTtsBackendMode(mode){
+    TTS_BACKEND_MODE = mode || "none";
+    window.JBS_TTS_BACKEND_MODE = TTS_BACKEND_MODE;
+
+    // Le backend V1 historique est limité à 1–10 min.
+    // Le backend V2 accepte toute valeur entière >= 1.
+    if (ttsTimerInput){
+      ttsTimerInput.min = "1";
+      ttsTimerInput.step = "1";
+      if (TTS_BACKEND_MODE === "v1") ttsTimerInput.max = "10";
+      else ttsTimerInput.removeAttribute("max");
+    }
+
+    appendLogDebug?.("tts.backend", { mode: TTS_BACKEND_MODE });
+  }
+
+  async function detectTtsBackend(){
+    if (!sbClient) return "none";
+
+    try {
+      const actionsObj = await sbClient.getActions();
+      const actions = Array.isArray(actionsObj?.actions) ? actionsObj.actions : [];
+      const byName = new Map(actions.map(a => [a.name, a]));
+
+      const v2 = byName.get(TTS_V2_CORE_ACTION);
+      const v1Switch = byName.get(TTS_V1_SWITCH_ACTION);
+      const v1Timer = byName.get(TTS_V1_TIMER_ACTION);
+
+      if (v2){
+        ACTION_ID_CACHE?.set?.(TTS_V2_CORE_ACTION, v2.id);
+        setTtsBackendMode("v2");
+        if (v1Switch || v1Timer){
+          console.info("[TTS] Backends V1 et V2 détectés : le Dashboard V1 pilote V2 par priorité.");
+        }
+        return "v2";
+      }
+
+      if (v1Switch && v1Timer){
+        ACTION_ID_CACHE?.set?.(TTS_V1_SWITCH_ACTION, v1Switch.id);
+        ACTION_ID_CACHE?.set?.(TTS_V1_TIMER_ACTION, v1Timer.id);
+        const v1Reader = byName.get(TTS_V1_READER_ACTION);
+        if (v1Reader) ACTION_ID_CACHE?.set?.(TTS_V1_READER_ACTION, v1Reader.id);
+        setTtsBackendMode("v1");
+        return "v1";
+      }
+
+      setTtsBackendMode("none");
+      console.warn("[TTS] Aucun backend TTS Reader V1 ou V2 complet détecté.");
+      return "none";
+    } catch (e) {
+      setTtsBackendMode("none");
+      console.warn("[TTS] Détection backend impossible :", e);
+      return "none";
+    }
+  }
+
+  async function ensureTtsBackend(){
+    if (TTS_BACKEND_MODE === "unknown" || TTS_BACKEND_MODE === "none"){
+      return await detectTtsBackend();
+    }
+    return TTS_BACKEND_MODE;
+  }
 
   // --- Mise à jour du texte + points de statut ---
   function setTtsStatusUI(enabled) {
@@ -38,52 +106,73 @@
 
     if (ttsSwitchInput)      ttsSwitchInput.checked = val;
     if (ttsSwitchLabelText) setText(ttsSwitchLabelText, val ? 'TTS ON' : 'TTS OFF');
-    if (ttsSwitchLabel)      ttsSwitchLabel.style.opacity   = val ? '1' : '0.55';
+    if (ttsSwitchLabel)      ttsSwitchLabel.style.opacity = val ? '1' : '0.55';
 
-    // toujours synchroniser les textes + pastilles
     setTtsStatusUI(val);
   }
 
-  // --- Sync initial depuis la globale "ttsAutoReaderEnabled" ---
-  async function syncTtsSwitchFromBackend() {
-    if (!sbClient) return;
+  async function readLegacyTtsGlobal(name, fallback){
     try {
-      const resp = await sbClient.getGlobal("ttsAutoReaderEnabled");
-      let val = false;
-      if (resp && resp.status === "ok") {
-        val = !!resp.variable?.value;
-      }
-      updateTtsSwitchUI(val);
+      const resp = await sbClient.getGlobal(name);
+      if (resp && resp.status === "ok" && resp.variable) return resp.variable.value;
     } catch (e) {
-      console.warn("Erreur récupération ttsAutoReaderEnabled:", e);
-      updateTtsSwitchUI(false);
+      console.warn(`[TTS V1] Lecture globale ${name} impossible:`, e);
     }
+    return fallback;
   }
 
-  // --- Envoi ON/OFF vers Streamer.bot ---
+  // --- Synchronisation initiale avec le backend détecté ---
+  async function syncTtsSwitchFromBackend() {
+    if (!sbClient) return;
+    const mode = await ensureTtsBackend();
+
+    if (mode === "v2"){
+      await safeDoAction(TTS_V2_CORE_ACTION, { op: "status" });
+      return;
+    }
+
+    if (mode === "v1"){
+      const enabled = !!(await readLegacyTtsGlobal("ttsAutoReaderEnabled", false));
+      const cooldownRaw = Number(await readLegacyTtsGlobal("ttsCooldownMinutes", 3));
+      const cooldown = Number.isFinite(cooldownRaw) ? Math.min(10, Math.max(1, Math.round(cooldownRaw))) : 3;
+      lastSentTimer = cooldown;
+      updateTtsSwitchUI(enabled);
+      if (ttsTimerInput) ttsTimerInput.value = cooldown;
+      if (ttsTimerLabel) setText(ttsTimerLabel, cooldown + " min");
+      return;
+    }
+
+    updateTtsSwitchUI(false);
+  }
+
+  // --- Envoi ON/OFF vers V1 ou V2 ---
   async function setTtsAutoReader(enabled) {
     if (!sbClient) return;
+    const mode = await ensureTtsBackend();
 
-    try {
-      const args = { mode: enabled ? "on" : "off" };
-      const wire = Object.assign({}, args, { _json: JSON.stringify(args) });
-      const actionId = await resolveActionIdByName("TTS Auto Message Reader Switch ON OFF");
-
-      try {
-        await sbClient.doAction(actionId, wire);
-        updateTtsSwitchUI(enabled);
-        return;
-      } catch (e) {
-        console.error("Erreur doAction Switch ON/OFF (client):", e);
-        const ok = sendRawDoActionById(actionId, args);
-        if (!ok) throw e;
-        updateTtsSwitchUI(enabled);
-      }
-    } catch (e) {
-      console.error("Erreur Switch ON/OFF:", e);
-      updateTtsSwitchUI(!enabled);
-      alert("Erreur lors du changement d'état du TTS Auto Reader.");
+    if (mode === "v2"){
+      updateTtsSwitchUI(enabled); // feedback instantané, puis state V2 fait autorité
+      await safeDoAction(TTS_V2_CORE_ACTION, {
+        op: "setEnabled",
+        enabled: !!enabled
+      });
+      return;
     }
+
+    if (mode === "v1"){
+      // L'action V1 historique est un TOGGLE même si elle reçoit mode=on/off.
+      // On lit donc d'abord l'état réel pour éviter un basculement involontaire.
+      const current = !!(await readLegacyTtsGlobal("ttsAutoReaderEnabled", false));
+      if (current !== !!enabled){
+        await safeDoAction(TTS_V1_SWITCH_ACTION, { mode: enabled ? "on" : "off" });
+      }
+      const actual = !!(await readLegacyTtsGlobal("ttsAutoReaderEnabled", enabled));
+      updateTtsSwitchUI(actual);
+      return;
+    }
+
+    updateTtsSwitchUI(false);
+    alert("Aucun backend TTS Reader V1 ou V2 détecté dans Streamer.bot.");
   }
 
   if (ttsSwitchInput) {
@@ -92,42 +181,51 @@
     });
   }
 
-  // --- Envoi du timer (cooldown en minutes) ---
-  function sendTtsTimer(timerValue) {
+  // --- Envoi du cooldown vers V1 ou V2 ---
+  async function sendTtsTimer(timerValue) {
     if (!sbClient) return;
-    if (!TTS_TIMER_ACTION_ID) {
-      console.warn("TTS_TIMER_ACTION_ID non initialisé, on ignore.");
-      return;
-    }
+    const mode = await ensureTtsBackend();
 
     const v = Number(timerValue);
     if (!Number.isFinite(v)) return;
 
-    const clamped = Math.min(10, Math.max(1, Math.round(v)));
-    if (clamped === lastSentTimer) return;
+    let normalized = Math.max(1, Math.round(v));
+    if (mode === "v1") normalized = Math.min(10, normalized);
+    if (normalized === lastSentTimer) return;
 
-    lastSentTimer = clamped;
+    lastSentTimer = normalized;
+    if (ttsTimerInput) ttsTimerInput.value = normalized;
+    if (ttsTimerLabel) setText(ttsTimerLabel, normalized + " min");
 
-    const args = { timer: clamped };
-    const wire = Object.assign({}, args, { _json: JSON.stringify(args) });
+    if (mode === "v2"){
+      await safeDoAction(TTS_V2_CORE_ACTION, {
+        op: "setCooldown",
+        minutes: normalized
+      });
+      return;
+    }
 
-    sbClient
-      .doAction(TTS_TIMER_ACTION_ID, wire)
-      .catch(e => console.error("Erreur doAction TTS Timer Set :", e));
+    if (mode === "v1"){
+      await safeDoAction(TTS_V1_TIMER_ACTION, { timer: normalized });
+      return;
+    }
 
-    if (ttsTimerInput)  ttsTimerInput.value = clamped;
-    if (ttsTimerLabel) setText(ttsTimerLabel, clamped + " min");
+    alert("Aucun backend TTS Reader V1 ou V2 détecté dans Streamer.bot.");
   }
 
   if (ttsTimerInput) {
-    const applyTimer = () => {
-      const v = ttsTimerInput.value;
-      sendTtsTimer(v);
-    };
-
+    const applyTimer = () => sendTtsTimer(ttsTimerInput.value);
     ttsTimerInput.addEventListener('change', applyTimer);
     ttsTimerInput.addEventListener('blur', applyTimer);
   }
+
+  // Appelée par sb-connection.js après chaque connexion / reconnexion.
+  async function initTtsBackendCompat(){
+    TTS_BACKEND_MODE = "unknown";
+    await detectTtsBackend();
+    await syncTtsSwitchFromBackend();
+  }
+  window.initTtsBackendCompat = initTtsBackendCompat;
 
   /******************************************************************
    *                 🎙️ TTS AUTO MESSAGE READER (mini-dashboard)
@@ -159,6 +257,49 @@
   function setTtsQueueCount(n){
     const el = $("#tts-queue-count");
     if (el) setText(el, Number.isFinite(n) ? String(n) : "—");
+
+    const pill = document.getElementById("tts-counter");
+    if (pill){
+      const count = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+      pill.textContent = String(count);
+      pill.style.display = count > 0 ? "inline-flex" : "none";
+    }
+
+    const overviewPill = document.getElementById("qv-tts-counter");
+    if (overviewPill){
+      const count = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+      overviewPill.textContent = String(count);
+      overviewPill.style.display = count > 0 ? "inline-flex" : "none";
+    }
+  }
+
+  function renderTtsQueue(queue){
+    const list = document.getElementById("tts-queue-list");
+    if (!list) return;
+
+    const items = Array.isArray(queue) ? queue : [];
+    list.innerHTML = "";
+
+    if (!items.length){
+      const li = document.createElement("li");
+      li.className = "tts-empty";
+      li.textContent = "Aucun message en file d’attente";
+      list.appendChild(li);
+      setTtsQueueCount(0);
+      return;
+    }
+
+    items.slice(0, 20).forEach(item => {
+      const li = document.createElement("li");
+      const user = (item?.user ?? item?.username ?? "").toString().trim();
+      const msg = (item?.message ?? item?.text ?? "").toString().trim();
+      const activity = Number(item?.messagesCount ?? item?.activityCount ?? 0);
+      const tokens = Number(item?.tokens ?? 0);
+      li.textContent = `${user || "—"} — ${msg || "—"}${activity > 1 ? ` · ${activity} msg` : ""}${tokens > 0 ? ` · +${tokens} priorité` : ""}`;
+      list.appendChild(li);
+    });
+
+    setTtsQueueCount(items.length);
   }
 
   
@@ -320,8 +461,12 @@ function setTtsLastMessage(user, msg, opts){
       forceBtn._bound = true;
       forceBtn.addEventListener("click", (e)=>{
         e.preventDefault();
-        // Lecture forcée immédiate
-        safeDoAction("TTS Reader", { reason: "manualDashboardTrigger" });
+        // Lecture forcée immédiate, compatible V1/V2.
+        (async () => {
+          const mode = await ensureTtsBackend();
+          if (mode === "v2") await safeDoAction(TTS_V2_CORE_ACTION, { op: "readNow", reason: "manualDashboardTrigger" });
+          else if (mode === "v1") await safeDoAction(TTS_V1_READER_ACTION, { reason: "manualDashboardTrigger" });
+        })();
       });
     }
 
@@ -331,72 +476,108 @@ function setTtsLastMessage(user, msg, opts){
         e.preventDefault();
         const newState = !TTS_AUTO_ENABLED;
         setTtsEnabledUI(newState); // feedback instantané
-        safeDoAction("TTS Timer Set", {
-          enabled: newState
-        });
+        setTtsAutoReader(newState);
       });
     }
   }
 
+  let __ttsLastRecordedKey = "";
+
+  function recordTtsLastOnce(user, msg, time){
+    const u = (user ?? "").toString().trim();
+    const m = (msg ?? "").toString().trim();
+    if (!u && !m) return;
+    const key = `${u}\n${m}\n${time || ""}`;
+    if (key === __ttsLastRecordedKey) return;
+    __ttsLastRecordedKey = key;
+    setTtsLastMessage(u, m);
+  }
+
+  function applyTtsConfigFromPayload(d){
+    const cooldownMinutes = Number(d.cooldownMinutes ?? d.cooldownMin ?? 0);
+    if (Number.isFinite(cooldownMinutes) && cooldownMinutes >= 1){
+      const clamped = Math.max(1, Math.round(cooldownMinutes));
+      lastSentTimer = clamped;
+      if (ttsTimerInput) ttsTimerInput.value = clamped;
+      if (ttsTimerLabel) setText(ttsTimerLabel, `${clamped} min`);
+      return clamped * 60;
+    }
+    return Number(d.cooldownSec ?? d.cooldownSeconds ?? d.cooldown ?? 0);
+  }
+
+  function parseTtsNextTs(d){
+    const direct = Number(d.nextRunUtcMs ?? d.nextRunTs ?? d.nextTs ?? 0);
+    if (Number.isFinite(direct) && direct > 0) return direct;
+    const iso = d.nextReadAt ?? d.nextRunAt ?? "";
+    const parsed = Date.parse(iso);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
   function handleTtsWidgetEvent(raw){
     const d = raw || {};
-    // On accepte plusieurs formes de payload pour être tolérant
     const type = (d.type || d.eventType || d.event_type || "").toString().toLowerCase();
     const widget = (d.widget || "").toString().toLowerCase();
 
-    // Support the payload format used by the standalone TTS dashboard
-    // (Supports widget="tts-reader-selection" + eventType="ttsSelection")
+    // Legacy TTS Reader : conservé pendant la transition V2.
     if (widget === "tts-reader-selection" || type === "ttsselection") {
       const u = d.selectedUser || d.user || d.username || d.displayName || d.display_name || "";
       const msg = d.message || d.text || "";
-      if (u || msg) setTtsLastMessage(u, msg);
-      if (Array.isArray(d.candidatesPanel)) setTtsQueueCount(d.candidatesPanel.length);
-      if (typeof d.queueCount === "number") setTtsQueueCount(d.queueCount);
-      try { console.debug("[TTS] selection payload:", d); } catch (e) {}
+      recordTtsLastOnce(u, msg, d.time || "");
+      if (Array.isArray(d.candidatesPanel)) renderTtsQueue(d.candidatesPanel);
+      else if (typeof d.queueCount === "number") setTtsQueueCount(d.queueCount);
+      appendLogDebug("tts.selection.legacy", d);
       return;
     }
 
-
     if (!type || type === "state" || type === "fullstate"){
       const enabled = !!(d.enabled ?? d.autoEnabled ?? d.isEnabled);
-      const queue   = Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? d.bufferSize ?? 0);
-      const nextTs  = Number(d.nextRunUtcMs ?? d.nextRunTs ?? d.nextTs ?? 0);
-      const cooldownSec = Number(d.cooldownSec ?? d.cooldownSeconds ?? d.cooldown ?? 0);
-      const lastUser = d.lastUser ?? d.lastSender ?? d.lastAuthor ?? "";
-      const lastMsg  = d.lastMessage ?? d.lastText ?? d.lastContent ?? "";
+      const queueItems = Array.isArray(d.queue) ? d.queue : (Array.isArray(d.candidatesPanel) ? d.candidatesPanel : null);
+      const queueCount = Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? d.bufferSize ?? (queueItems ? queueItems.length : 0));
+      const nextTs = parseTtsNextTs(d);
+      const cooldownSec = applyTtsConfigFromPayload(d);
+      const lastUser = d.lastUser ?? d.lastSender ?? d.lastAuthor ?? d.user ?? "";
+      const lastMsg = d.lastMessage ?? d.lastText ?? d.lastContent ?? d.message ?? "";
 
       setTtsEnabledUI(enabled);
-      setTtsQueueCount(queue);
+      if (queueItems) renderTtsQueue(queueItems);
+      else setTtsQueueCount(queueCount);
       setTtsNextRun(nextTs, cooldownSec);
       applyTtsLastEverywhere(lastUser, lastMsg);
 
       appendLogDebug("tts.state", {
-        enabled, queue, nextTs, cooldownSec, lastUser, lastMsg
+        enabled, queueCount, nextTs, cooldownSec, lastUser, lastMsg, reason: d.reason
       });
       return;
     }
 
     if (type === "queue" || type === "queueupdate"){
-      const queue   = Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? 0);
-      setTtsQueueCount(queue);
-      appendLogDebug("tts.queue", { queue });
+      const queueItems = Array.isArray(d.queue) ? d.queue : (Array.isArray(d.candidatesPanel) ? d.candidatesPanel : []);
+      if (queueItems.length || Array.isArray(d.queue)) renderTtsQueue(queueItems);
+      else setTtsQueueCount(Number(d.queueCount ?? d.queuedCount ?? d.pendingCount ?? 0));
+      appendLogDebug("tts.queue", { queueCount: d.queueCount, reason: d.reason });
       return;
     }
 
     if (type === "last" || type === "lastread"){
-      const lastUser = d.lastUser ?? d.lastSender ?? d.lastAuthor ?? "";
-      const lastMsg  = d.lastMessage ?? d.lastText ?? d.lastContent ?? "";
-      setTtsLastMessage(lastUser, lastMsg);
-      appendLogDebug("tts.last", { lastUser, lastMsg });
+      const lastUser = d.lastUser ?? d.lastSender ?? d.lastAuthor ?? d.user ?? "";
+      const lastMsg = d.lastMessage ?? d.lastText ?? d.lastContent ?? d.message ?? "";
+      recordTtsLastOnce(lastUser, lastMsg, d.time || "");
+      appendLogDebug("tts.last", { lastUser, lastMsg, reason: d.reason, isBreakSilence: d.isBreakSilence });
       return;
     }
 
     if (type === "config" || type === "cooldown"){
-      const cooldownSec = Number(d.cooldownSec ?? d.cooldownSeconds ?? d.cooldown ?? 0);
-      setTtsNextRun(Number.NaN, cooldownSec);
+      const cooldownSec = applyTtsConfigFromPayload(d);
+      setTtsNextRun(parseTtsNextTs(d), cooldownSec);
       appendLogDebug("tts.config", { cooldownSec });
+      return;
+    }
+
+    if (type === "log"){
+      const message = (d.message ?? d.text ?? "").toString();
+      if (message) appendLog("#tts-log", message);
+      appendLogDebug("tts.log", d);
       return;
     }
   }
 
-  

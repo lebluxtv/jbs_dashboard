@@ -124,48 +124,13 @@
           safeDoAction("GTG Bootstrap Genres & Years & Ratings", {});
           safeDoAction("GTG Scores Get", {});
 
-          // --- Extension TTS (async encapsulé) ---
-          (async () => {
-            const client = sbClient;
-            if (!client) return;
-
-            // 1) Récupération de l'ID de l'action "TTS Timer Set"
-            try {
-              const actionsObj = await client.getActions();
-              const ttsTimerAction = actionsObj.actions?.find(
-                a => a.name === "TTS Timer Set"
-              );
-              if (ttsTimerAction) {
-                TTS_TIMER_ACTION_ID = ttsTimerAction.id;
-              } else {
-                console.warn('Action "TTS Timer Set" non trouvée dans Streamer.bot');
-              }
-            } catch (e) {
-              console.warn("Erreur récupération des actions Streamer.bot :", e);
-            }
-
-            // 2) Récupération de la globale "ttsCooldownMinutes" pour l'UI
-            if (ttsTimerInput && ttsTimerLabel) {
-              try {
-                const cooldownResp = await client.getGlobal("ttsCooldownMinutes");
-                if (
-                  cooldownResp &&
-                  cooldownResp.status === "ok" &&
-                  typeof cooldownResp.variable?.value === "number"
-                ) {
-                  const v = cooldownResp.variable.value;
-                  lastSentTimer = v;
-                  ttsTimerInput.value = v;
-                  ttsTimerLabel.textContent = v + " min";
-                }
-              } catch (e) {
-                console.warn("Erreur récupération ttsCooldownMinutes :", e);
-              }
-            }
-
-            // 3) Sync initial du switch TTS ON/OFF
-            await syncTtsSwitchFromBackend();
-          })();
+          // --- TTS Reader : compatibilité automatique V1 / V2 ---
+          // Détecte le backend disponible, puis synchronise switch + cooldown.
+          // Si V1 et V2 sont présents, V2 est privilégié.
+          setTimeout(() => {
+            try { window.initTtsBackendCompat?.(); }
+            catch (e) { console.warn("[TTS] Init compat V1/V2 impossible:", e); }
+          }, 100);
         },
         onDisconnect: () => {
           setConnected(false);
