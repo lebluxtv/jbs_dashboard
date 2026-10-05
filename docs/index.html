@@ -265,8 +265,11 @@
       <!-- 🔁 Réglage de la fréquence du loop TTS (cooldown en minutes) -->
       <div class="tts-settings">
         <h3 style="margin:10px 0 6px 0;font-size:14px;">Intervalle de lecture automatique</h3>
+        <div id="tts-backend-info" style="font-size:12px;opacity:0.82;margin:0 0 7px 0;">
+          Backend détecté : <strong id="tts-backend-mode">Détection…</strong>
+        </div>
         <div class="tts-settings-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-size:13px;opacity:0.8;">Cooldown (minutes, min. 1)</span>
+          <span id="tts-cooldown-help" style="font-size:13px;opacity:0.8;">Cooldown (minutes)</span>
           <div class="tts-settings-input" style="display:flex;align-items:center;gap:6px;">
             <input
               id="tts-timer"

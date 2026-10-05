@@ -14,6 +14,8 @@
 
   const ttsTimerInput = document.getElementById('tts-timer');
   const ttsTimerLabel = document.getElementById('tts-timer-label');
+  const ttsBackendModeText = document.getElementById('tts-backend-mode');
+  const ttsCooldownHelp = document.getElementById('tts-cooldown-help');
 
   // Compatibilité transitoire Dashboard V1 ↔ TTS Reader V1 / V2.
   // Détection automatique : V2 est privilégié si les deux backends sont présents.
@@ -25,20 +27,58 @@
   let TTS_BACKEND_MODE = "unknown"; // unknown | v1 | v2 | none
   let lastSentTimer = null;
 
+  function normalizeTtsActionName(value){
+    return (value ?? "")
+      .toString()
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  }
+
   function setTtsBackendMode(mode){
     TTS_BACKEND_MODE = mode || "none";
     window.JBS_TTS_BACKEND_MODE = TTS_BACKEND_MODE;
 
-    // Le backend V1 historique est limité à 1–10 min.
-    // Le backend V2 accepte toute valeur entière >= 1.
+    // V1 historique : 1–10 min. V2 : entier >= 1, sans maximum.
     if (ttsTimerInput){
       ttsTimerInput.min = "1";
       ttsTimerInput.step = "1";
-      if (TTS_BACKEND_MODE === "v1") ttsTimerInput.max = "10";
-      else ttsTimerInput.removeAttribute("max");
+      if (TTS_BACKEND_MODE === "v1") {
+        ttsTimerInput.max = "10";
+        const current = Number(ttsTimerInput.value);
+        if (Number.isFinite(current) && current > 10) ttsTimerInput.value = "10";
+      } else {
+        ttsTimerInput.removeAttribute("max");
+      }
     }
 
-    appendLogDebug?.("tts.backend", { mode: TTS_BACKEND_MODE });
+    if (ttsBackendModeText){
+      if (TTS_BACKEND_MODE === "v2") {
+        setText(ttsBackendModeText, "TTS Reader V2");
+        ttsBackendModeText.style.color = "#64d98b";
+      } else if (TTS_BACKEND_MODE === "v1") {
+        setText(ttsBackendModeText, "TTS Reader V1 (legacy)");
+        ttsBackendModeText.style.color = "#d9a35f";
+      } else if (TTS_BACKEND_MODE === "none") {
+        setText(ttsBackendModeText, "Aucun backend TTS détecté");
+        ttsBackendModeText.style.color = "#e06a55";
+      } else {
+        setText(ttsBackendModeText, "Détection…");
+        ttsBackendModeText.style.color = "";
+      }
+    }
+
+    if (ttsCooldownHelp){
+      if (TTS_BACKEND_MODE === "v1") {
+        setText(ttsCooldownHelp, "Cooldown (1–10 minutes)");
+      } else if (TTS_BACKEND_MODE === "v2") {
+        setText(ttsCooldownHelp, "Cooldown (minimum 1 minute, sans maximum)");
+      } else {
+        setText(ttsCooldownHelp, "Cooldown (minutes)");
+      }
+    }
+
+    try { appendLogDebug?.("tts.backend", { mode: TTS_BACKEND_MODE }); } catch {}
   }
 
   async function detectTtsBackend(){
@@ -47,11 +87,11 @@
     try {
       const actionsObj = await sbClient.getActions();
       const actions = Array.isArray(actionsObj?.actions) ? actionsObj.actions : [];
-      const byName = new Map(actions.map(a => [a.name, a]));
+      const byName = new Map(actions.map(a => [normalizeTtsActionName(a?.name), a]));
 
-      const v2 = byName.get(TTS_V2_CORE_ACTION);
-      const v1Switch = byName.get(TTS_V1_SWITCH_ACTION);
-      const v1Timer = byName.get(TTS_V1_TIMER_ACTION);
+      const v2 = byName.get(normalizeTtsActionName(TTS_V2_CORE_ACTION));
+      const v1Switch = byName.get(normalizeTtsActionName(TTS_V1_SWITCH_ACTION));
+      const v1Timer = byName.get(normalizeTtsActionName(TTS_V1_TIMER_ACTION));
 
       if (v2){
         ACTION_ID_CACHE?.set?.(TTS_V2_CORE_ACTION, v2.id);
@@ -65,7 +105,7 @@
       if (v1Switch && v1Timer){
         ACTION_ID_CACHE?.set?.(TTS_V1_SWITCH_ACTION, v1Switch.id);
         ACTION_ID_CACHE?.set?.(TTS_V1_TIMER_ACTION, v1Timer.id);
-        const v1Reader = byName.get(TTS_V1_READER_ACTION);
+        const v1Reader = byName.get(normalizeTtsActionName(TTS_V1_READER_ACTION));
         if (v1Reader) ACTION_ID_CACHE?.set?.(TTS_V1_READER_ACTION, v1Reader.id);
         setTtsBackendMode("v1");
         return "v1";
@@ -517,6 +557,12 @@ function setTtsLastMessage(user, msg, opts){
     const d = raw || {};
     const type = (d.type || d.eventType || d.event_type || "").toString().toLowerCase();
     const widget = (d.widget || "").toString().toLowerCase();
+
+    // Un événement canonique V2 est une preuve directe que le backend V2 est actif.
+    // Cela rend l'UI robuste même si getActions() est temporairement indisponible.
+    if (widget === "tts-reader" && TTS_BACKEND_MODE !== "v2") {
+      setTtsBackendMode("v2");
+    }
 
     // Legacy TTS Reader : conservé pendant la transition V2.
     if (widget === "tts-reader-selection" || type === "ttsselection") {
